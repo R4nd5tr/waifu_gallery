@@ -1,2 +1,4 @@
 .vscode/
 notes/
+build/
+CMakePresets.json

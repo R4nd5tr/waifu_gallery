@@ -1,9 +1,11 @@
 #ifndef DATABASE_H
 #define DATABASE_H
-#include<unordered_set>
-#include<cstdint>
-#include<QtSql/QSqlDatabase>
-#include<QString>
+#include <unordered_set>
+#include <unordered_map>
+#include <vector>
+#include <cstdint>
+#include <QtSql/QSqlDatabase>
+#include <QString>
 
 class PicDatabase{
 public:
@@ -12,33 +14,40 @@ public:
     const PicInfo getPicInfo(uint64_t id);
     const TweetInfo getTweetInfo(uint64_t tweetID);
     const PixivInfo getPixivInfo(uint64_t pixivID);
-    bool insertPicInfo(PicInfo picInfo);
-    bool insertTweetInfo(TweetInfo tweetInfo);
-    bool insertPixivInfo(PixivInfo pixivInfo);
+
+    bool insertPicInfo(const PicInfo& picInfo);
+    bool insertPicture(const PicInfo& picInfo);
+    bool insertPictureFilePath(const PicInfo& picInfo);
+    bool insertPictureTags(const PicInfo& picInfo);
+
+    bool insertTweetInfo(const TweetInfo& tweetInfo);
+    bool insertTweet(const TweetInfo& tweetInfo);
+    bool insertTweetHashtags(const TweetInfo& tweetInfo);
+    
+    bool insertPixivInfo(const PixivInfo& pixivInfo);
+    bool insertPixivArtwork(const PixivInfo& pixivInfo);
+    bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
 private:
     QSqlDatabase database;  //SQLite
 
     void initDatabase(QString databaseFile);
     bool createTables();
-
 };
 
 struct PicInfo{
     uint64_t id;     //xxhash64
-    uint64_t tweetID;
+    uint64_t tweetID;//TODO: duplicate id
     uint tweetNum;
-    uint32_t pixivID;
+    uint32_t pixivID;//TODO: duplicate id
     uint pixivNum;
-    std::unordered_set<std::string> tags;
-    std::string directory;
-    std::string fileName;
-    std::string fileType;
+    std::unordered_map<std::string, char> tags; //{tag, source}
+    std::unordered_set<std::string> filePaths;
     uint width;
     uint height;
     uint size;
     char xRestrict;
 
-    const std::string getFilePath();
+    const std::string getFileType();
     const float getRatio();
 };
 
@@ -61,8 +70,8 @@ struct TweetInfo{
 struct PixivInfo{
     uint32_t pixivID;
     std::string date;
-    std::unordered_set<std::string> tags;
-    std::unordered_set<std::string> tagsTransl;
+    std::vector<std::string> tags;
+    std::vector<std::string> tagsTransl;
     std::string authorName;
     uint32_t authorID;
     std::string title;
