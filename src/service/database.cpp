@@ -9,11 +9,9 @@
 PicDatabase::PicDatabase(QString databaseFile) {
     initDatabase(databaseFile);
 }
-
 PicDatabase::~PicDatabase() {
     database.close();
 }
-
 void PicDatabase::initDatabase(QString databaseFile){
     bool databaseExists = QFile::exists(databaseFile);
     database = QSqlDatabase::addDatabase("QSQLITE");
@@ -34,7 +32,6 @@ void PicDatabase::initDatabase(QString databaseFile){
     }
     qInfo() << "database initialized";
 }
-
 bool PicDatabase::createTables() {
     QSqlQuery query(database);
     const QString picturesTable = R"(
@@ -73,7 +70,6 @@ bool PicDatabase::createTables() {
             PRIMARY KEY (pixiv_id, pixiv_index),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
-            FOREIGN KEY (pixiv_id) REFERENCES pixiv_artworks(pixiv_id) ON DELETE CASCADE
         )
     )";
     const QString pictureTweetIdsTable = R"(
@@ -84,7 +80,6 @@ bool PicDatabase::createTables() {
             PRIMARY KEY (tweet_id, tweet_index),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
-            FOREIGN KEY (tweet_id) REFERENCES tweets(tweet_id) ON DELETE CASCADE
         )
     )";
     const QString tweetsTable = R"(
@@ -95,11 +90,14 @@ bool PicDatabase::createTables() {
             author_name TEXT NOT NULL,
             author_nick TEXT,
             author_description TEXT,
+            author_profile_image TEXT,
+            author_profile_banner TEXT,
             favorite_count INTEGER DEFAULT 0,
             quote_count INTEGER DEFAULT 0,
             reply_count INTEGER DEFAULT 0,
             retweet_count INTEGER DEFAULT 0,
             bookmark_count INTEGER DEFAULT 0,
+            view_count INTEGER DEFAULT 0
             description TEXT
         )
     )";
@@ -122,9 +120,10 @@ bool PicDatabase::createTables() {
             description TEXT,
             like_count INTEGER DEFAULT 0,
             view_count INTEGER DEFAULT 0,
-            x_restrict INTEGER
+            x_restrict INTEGER,
+            ai_type INTEGER DEFAULT 0 
         )
-    )";
+    )";// ai_type: 0-unknown, 1-not ai, 2-ai
     const QString pixivArtworksTagsTable = R"(
         CREATE TABLE IF NOT EXISTS pixiv_artworks_tags (
             pixiv_id INTEGER NOT NULL,
@@ -190,7 +189,6 @@ bool PicDatabase::createTables() {
     database.commit();
     return true;
 }
-    
 bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
     if (!database.transaction()) {
         qCritical() << "Failed to begin transaction:" << database.lastError().text();
@@ -233,7 +231,6 @@ bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     QSqlQuery query(database);
     query.prepare(R"(
@@ -254,7 +251,6 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
     QSqlQuery query(database);
     for (const auto& filePath : picInfo.filePaths) {
@@ -274,7 +270,6 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     QSqlQuery query(database);
     for (const auto& tagPair : picInfo.tags) {
@@ -295,7 +290,6 @@ bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPicturePixivId(const PicInfo& picInfo) {
     QSqlQuery query(database);
     for (const auto& pair : picInfo.pixivIdIndices) {
@@ -318,7 +312,6 @@ bool PicDatabase::insertPicturePixivId(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
     QSqlQuery query(database);
     for (const auto& pair : picInfo.tweetIdIndices) {
@@ -341,7 +334,6 @@ bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertTweetInfo(const TweetInfo& tweetInfo) {
     if (!database.transaction()) {
         qCritical() << "Failed to begin transaction:" << database.lastError().text();
@@ -363,16 +355,17 @@ bool PicDatabase::insertTweetInfo(const TweetInfo& tweetInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
     QSqlQuery query(database);
     query.prepare(R"(
         INSERT OR IGNORE INTO tweets(
-            tweet_id, date, author_id, author_name, author_nick, author_description,
-            favorite_count, quote_count, reply_count, retweet_count, bookmark_count, description
+            tweet_id, date, author_id, author_name, author_nick, 
+            author_description, author_profile_image, author_profile_banner,
+            favorite_count, quote_count, reply_count, retweet_count, bookmark_count, view_count, description
         ) VALUES (
-            :tweet_id, :date, :author_id, :author_name, :author_nick, :author_description,
-            :favorite_count, :quote_count, :reply_count, :retweet_count, :bookmark_count, :description
+            :tweet_id, :date, :author_id, :author_name, :author_nick, 
+            :author_description, :author_profile_image, :author_profile_banner,
+            :favorite_count, :quote_count, :reply_count, :retweet_count, :bookmark_count, :view_count, :description
         )
     )");
     query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
@@ -381,11 +374,14 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
     query.bindValue(":author_name", QString::fromStdString(tweetInfo.authorName));
     query.bindValue(":author_nick", QString::fromStdString(tweetInfo.authorNick));
     query.bindValue(":author_description", QString::fromStdString(tweetInfo.authorDescription));
+    query.bindValue(":author_profile_image", QString::fromStdString(tweetInfo.authorProfileImage));
+    query.bindValue(":author_profile_banner", QString::fromStdString(tweetInfo.authorProfileBanner));
     query.bindValue(":favorite_count", QVariant::fromValue(tweetInfo.favoriteCount));
     query.bindValue(":quote_count", QVariant::fromValue(tweetInfo.quoteCount));
     query.bindValue(":reply_count", QVariant::fromValue(tweetInfo.replyCount));
     query.bindValue(":retweet_count", QVariant::fromValue(tweetInfo.retweetCount));
     query.bindValue(":bookmark_count", QVariant::fromValue(tweetInfo.bookmarkCount));
+    query.bindValue(":view_count", QVariant::fromValue(tweetInfo.viewCount));
     query.bindValue(":description", QString::fromStdString(tweetInfo.description));
     if (!query.exec()) {
         qCritical() << "Failed to insert tweet: " << query.lastError().text();
@@ -393,7 +389,6 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
     QSqlQuery query(database);
     for (const auto& hashtag : tweetInfo.hashtags) {
@@ -413,7 +408,6 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPixivInfo(const PixivInfo& pixivInfo) {
     if (!database.transaction()) {
         qCritical() << "Failed to begin transaction:" << database.lastError().text();
@@ -435,16 +429,15 @@ bool PicDatabase::insertPixivInfo(const PixivInfo& pixivInfo) {
     }
     return true;
 }
-
 bool PicDatabase::insertPixivArtwork(const PixivInfo& pixivInfo) {
     QSqlQuery query(database);
     query.prepare(R"(
         INSERT OR IGNORE INTO pixiv_artworks(
             pixiv_id, date, author_name, author_id, title, description,
-            like_count, view_count, x_restrict
+            like_count, view_count, x_restrict, ai_type
         ) VALUES (
             :pixiv_id, :date, :author_name, :author_id, :title, :description,
-            :like_count, :view_count, :x_restrict
+            :like_count, :view_count, :x_restrict, :ai_type
         )
     )");
     query.bindValue(":pixiv_id", QVariant::fromValue(pixivInfo.pixivID));
@@ -456,13 +449,13 @@ bool PicDatabase::insertPixivArtwork(const PixivInfo& pixivInfo) {
     query.bindValue(":like_count", QVariant::fromValue(pixivInfo.likeCount));
     query.bindValue(":view_count", QVariant::fromValue(pixivInfo.viewCount));
     query.bindValue(":x_restrict", static_cast<int>(pixivInfo.xRestrict));
+    query.bindValue(":ai_type", static_cast<int>(pixivInfo.aiType));
     if (!query.exec()) {
         qCritical() << "Failed to insert pixiv_artwork: " << query.lastError().text();
         return false;
     }
     return true;
 }
-
 bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
     QSqlQuery query(database);
     for (const auto& tag : pixivInfo.tags) {
@@ -482,7 +475,84 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
     }
     return true;
 }
-
+bool PicDatabase::updatePixivInfo(const PixivInfo& pixivInfo) {
+    if (!database.transaction()) {
+        qCritical() << "Failed to begin transaction:" << database.lastError().text();
+        return false;
+    }
+    if (!updatePixivArtwork(pixivInfo)) {
+        database.rollback();
+        qCritical() << "updatePixivArtwork failed, transaction rolled back.";
+        return false;
+    }
+    if (!updatePixivArtworkTags(pixivInfo)) {
+        database.rollback();
+        qCritical() << "updatePixivArtworkTags failed, transaction rolled back.";
+        return false;
+    }
+    if (!database.commit()) {
+        qCritical() << "Failed to commit transaction:" << database.lastError().text();
+        return false;
+    }
+    return true;
+}
+bool PicDatabase::updatePixivArtwork(const PixivInfo& pixivInfo) {
+    QSqlQuery query(database);
+    query.prepare(R"(
+        INSERT INTO pixiv_artworks(
+            pixiv_id, date, author_name, author_id, title, description,
+            like_count, view_count, x_restrict, ai_type
+        ) VALUES (
+            :pixiv_id, :date, :author_name, :author_id, :title, :description,
+            :like_count, :view_count, :x_restrict, :ai_type
+        )
+        ON CONFLICT(pixiv_id) DO UPDATE SET
+            date=excluded.date,
+            author_name=excluded.author_name,
+            author_id=excluded.author_id,
+            title=excluded.title,
+            description=excluded.description,
+            like_count=excluded.like_count,
+            view_count=excluded.view_count,
+            x_restrict=excluded.x_restrict,
+            ai_type=excluded.ai_type
+    )");
+    query.bindValue(":pixiv_id", QVariant::fromValue(pixivInfo.pixivID));
+    query.bindValue(":date", QString::fromStdString(pixivInfo.date));
+    query.bindValue(":author_name", QString::fromStdString(pixivInfo.authorName));
+    query.bindValue(":author_id", QVariant::fromValue(pixivInfo.authorID));
+    query.bindValue(":title", QString::fromStdString(pixivInfo.title));
+    query.bindValue(":description", QString::fromStdString(pixivInfo.description));
+    query.bindValue(":like_count", QVariant::fromValue(pixivInfo.likeCount));
+    query.bindValue(":view_count", QVariant::fromValue(pixivInfo.viewCount));
+    query.bindValue(":x_restrict", static_cast<int>(pixivInfo.xRestrict));
+    query.bindValue(":ai_type", static_cast<int>(pixivInfo.aiType));
+    if (!query.exec()) {
+        qCritical() << "Failed to update pixiv_artwork: " << query.lastError().text();
+        return false;
+    }
+    return true;
+}
+bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
+    QSqlQuery query(database);
+    for (const auto& tag : pixivInfo.tags) {
+        query.prepare(R"(
+            INSERT INTO pixiv_artworks_tags(
+                pixiv_id, tag
+            ) VALUES (
+                :pixiv_id, :tag
+            )
+            ON CONFLICT(pixiv_id, tag) DO NOTHING
+        )");
+        query.bindValue(":pixiv_id", QVariant::fromValue(pixivInfo.pixivID));
+        query.bindValue(":tag", QString::fromStdString(tag));
+        if (!query.exec()) {
+            qCritical() << "Failed to update pixiv_artworks_tag: " << query.lastError().text();
+            return false;
+        }
+    }
+    return true;
+}
 PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     PicInfo info{};
     QSqlQuery query(database);
@@ -495,7 +565,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
         info.width = query.value(0).toUInt();
         info.height = query.value(1).toUInt();
         info.size = query.value(2).toUInt();
-        info.xRestrict = static_cast<uint8_t>(query.value(3).toInt());
+        info.xRestrict = static_cast<XRestrictType>(query.value(3).toInt());
     } else {
         return info; // id 不存在，返回空对象
     }
@@ -538,13 +608,12 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     return info;
 }
-
 TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
     TweetInfo info{};
     QSqlQuery query(database);
 
     // 查询主表
-    query.prepare("SELECT date, author_id, author_name, author_nick, author_description, favorite_count, quote_count, reply_count, retweet_count, bookmark_count, description FROM tweets WHERE tweet_id = :tweet_id");
+    query.prepare("SELECT date, author_id, author_name, author_nick, author_description, favorite_count, quote_count, reply_count, retweet_count, bookmark_count, view_count, description FROM tweets WHERE tweet_id = :tweet_id");
     query.bindValue(":tweet_id", QVariant::fromValue(tweetID));
     if (query.exec() && query.next()) {
         info.tweetID = tweetID;
@@ -553,12 +622,15 @@ TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
         info.authorName = query.value(2).toString().toStdString();
         info.authorNick = query.value(3).toString().toStdString();
         info.authorDescription = query.value(4).toString().toStdString();
-        info.favoriteCount = query.value(5).toUInt();
-        info.quoteCount = query.value(6).toUInt();
-        info.replyCount = query.value(7).toUInt();
-        info.retweetCount = query.value(8).toUInt();
-        info.bookmarkCount = query.value(9).toUInt();
-        info.description = query.value(10).toString().toStdString();
+        info.authorProfileImage = query.value(5).toString().toStdString();
+        info.authorProfileBanner = query.value(6).toString().toStdString();
+        info.favoriteCount = query.value(7).toUInt();
+        info.quoteCount = query.value(8).toUInt();
+        info.replyCount = query.value(9).toUInt();
+        info.retweetCount = query.value(10).toUInt();
+        info.bookmarkCount = query.value(11).toUInt();
+        info.viewCount = query.value(12).toUInt();
+        info.description = query.value(13).toString().toStdString();
     } else {
         return info;
     }
@@ -574,7 +646,6 @@ TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
 
     return info;
 }
-
 PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
     PixivInfo info{};
     QSqlQuery query(database);
@@ -591,7 +662,8 @@ PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
         info.description = query.value(4).toString().toStdString();
         info.likeCount = query.value(5).toUInt();
         info.viewCount = query.value(6).toUInt();
-        info.xRestrict = static_cast<uint8_t>(query.value(7).toInt());
+        info.xRestrict = static_cast<XRestrictType>(query.value(7).toInt());
+        info.aiType = static_cast<AIType>(query.value(8).toInt());
     } else {
         return info;
     }
