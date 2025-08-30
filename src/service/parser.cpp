@@ -10,8 +10,45 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <xxhash.h>
-#include <csv.h>
+#include <fast-cpp-csv-parser/csv.h>
 
+std::vector<std::string> splitAndTrim(const std::string& str) {
+    std::vector<std::string> result;
+    std::stringstream ss(str);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }));
+        item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), item.end());
+        if (!item.empty()) {
+            result.push_back(item);
+        }
+    }
+    return result;
+}
+XRestrictType toXRestrictTypeEnum (const std::string& xRestrictStr) {
+    if (xRestrictStr == "AllAges") {
+        return XRestrictType::AllAges;
+    } else if (xRestrictStr == "R-18") {
+        return XRestrictType::R18;
+    } else if (xRestrictStr == "R-18G") {
+        return XRestrictType::R18G;
+    }
+    return XRestrictType::Unknown;
+}
+AIType toAITypeEnum (const std::string& aiTypeStr) {
+    if (aiTypeStr == "No") {
+        return AIType::NotAI;
+    } else if (aiTypeStr == "Unknown") {
+        return AIType::Unknown;
+    } else if (aiTypeStr == "Yes") {
+        return AIType::AI;
+    }
+    return AIType::Unknown;
+}
 PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser) {
     QString qStrPath = QString::fromStdString(pictureFilePath);
     QImage img(qStrPath);
@@ -123,7 +160,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath) {
     std::string date;
 
     if (headerCount == 21) {
-        io::CSVReader<21> in(pixivCsvFilePath);
+        io::CSVReader<11> in(pixivCsvFilePath);
         in.read_header(io::ignore_extra_column, "id", "tags", "tags_transl", "user", "userId", 
             "title", "description", "likeCount", "viewCount", "xRestrict", "date"
         );
@@ -145,7 +182,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath) {
             result.push_back(info);
         }
     } else if (headerCount == 22) {
-        io::CSVReader<22> in(pixivCsvFilePath);
+        io::CSVReader<12> in(pixivCsvFilePath);
         in.read_header(io::ignore_extra_column, "id", "tags", "tags_transl", "user", "userId", 
             "title", "description", "likeCount", "viewCount", "xRestrict", "AI", "date"
         );
@@ -252,7 +289,7 @@ TweetInfo parseTweetJson(const std::string& tweetJsonFilePath) {
     // 解析 author 对象
     if (obj.contains("author") && obj.value("author").isObject()) {
         QJsonObject authorObj = obj.value("author").toObject();
-        info.authorID = authorObj.value("id").toVariant().toULongLong();
+        info.authorID = authorObj.value("id").toVariant().toInt();
         info.authorName = authorObj.value("name").toString().toStdString();
         info.authorNick = authorObj.value("nick").toString().toStdString();
         info.authorDescription = authorObj.value("description").toString().toStdString();
@@ -289,41 +326,4 @@ uint64_t calcFileHash(const std::string& filePath) {
     uint64_t hash = XXH64_digest(state);
     XXH64_freeState(state);
     return hash;
-}
-std::vector<std::string> splitAndTrim(const std::string& str) {
-    std::vector<std::string> result;
-    std::stringstream ss(str);
-    std::string item;
-    while (std::getline(ss, item, ',')) {
-        item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }));
-        item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }).base(), item.end());
-        if (!item.empty()) {
-            result.push_back(item);
-        }
-    }
-    return result;
-}
-XRestrictType toXRestrictTypeEnum (const std::string& xRestrictStr) {
-    if (xRestrictStr == "AllAges") {
-        return XRestrictType::AllAges;
-    } else if (xRestrictStr == "R-18") {
-        return XRestrictType::R18;
-    } else if (xRestrictStr == "R-18G") {
-        return XRestrictType::R18G;
-    }
-    return XRestrictType::Unknown;
-}
-AIType toAITypeEnum (const std::string& aiTypeStr) {
-    if (aiTypeStr == "No") {
-        return AIType::NotAI;
-    } else if (aiTypeStr == "Unknown") {
-        return AIType::Unknown;
-    } else if (aiTypeStr == "Yes") {
-        return AIType::AI;
-    }
-    return AIType::Unknown;
 }

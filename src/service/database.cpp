@@ -1,11 +1,26 @@
+#include "database.h"
+#include "parser.h"
+#include "model.h"
+#include <filesystem>
+#include <cstring>
+#include <cstdint>
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlError>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlRecord>
 #include <QString>
 #include <QFile>
-#include "database.h"
 
+int64_t uint64_to_int64(uint64_t u) {
+    int64_t i;
+    std::memcpy(&i, &u, sizeof(u));
+    return i;
+}
+uint64_t int64_to_uint64(int64_t i) {
+    uint64_t u;
+    std::memcpy(&u, &i, sizeof(i));
+    return u;
+}
 PicDatabase::PicDatabase(QString databaseFile) {
     initDatabase(databaseFile);
 }
@@ -42,7 +57,7 @@ bool PicDatabase::createTables() {
             size INTEGER,
             x_restrict INTEGER DEFAULT NULL
         )
-    )";//xRestrict: 0 - all ages, 1 - R18, 2 - R18G TODO: add feature vector from deep learning models
+    )";//TODO: add feature vector from deep learning models
     const QString pictureTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
@@ -69,7 +84,7 @@ bool PicDatabase::createTables() {
             pixiv_index INTEGER NOT NULL,
             PRIMARY KEY (pixiv_id, pixiv_index),
 
-            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
+            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
     )";
     const QString pictureTweetIdsTable = R"(
@@ -79,7 +94,7 @@ bool PicDatabase::createTables() {
             tweet_index INTEGER NOT NULL,
             PRIMARY KEY (tweet_id, tweet_index),
 
-            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
+            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
     )";
     const QString tweetsTable = R"(
@@ -97,7 +112,7 @@ bool PicDatabase::createTables() {
             reply_count INTEGER DEFAULT 0,
             retweet_count INTEGER DEFAULT 0,
             bookmark_count INTEGER DEFAULT 0,
-            view_count INTEGER DEFAULT 0
+            view_count INTEGER DEFAULT 0,
             description TEXT
         )
     )";
@@ -240,8 +255,8 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
             :id, :width, :height, :size, :x_restrict
         )
     )");
-    query.bindValue(":id", QVariant::fromValue(picInfo.id));
-    query.bindValue(":width", QVariant::fromValue(picInfo.width));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));// SQLite database does not support uint64 as integer primary key,
+    query.bindValue(":width", QVariant::fromValue(picInfo.width));           // convert to a signed integer with the same binary representation for storage
     query.bindValue(":height", QVariant::fromValue(picInfo.height));
     query.bindValue(":size", QVariant::fromValue(picInfo.size));
     query.bindValue(":x_restrict", static_cast<int>(picInfo.xRestrict));
@@ -261,7 +276,7 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
                 :id, :file_path
             )
         )");
-        query.bindValue(":id", QVariant::fromValue(picInfo.id));
+        query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
         query.bindValue(":file_path", QString::fromStdString(filePath));
         if (!query.exec()) {
             qCritical() << "Failed to insert picture_file_path: " << query.lastError().text();
@@ -280,7 +295,7 @@ bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
                 :id, :tag, :source
             )
         )");
-        query.bindValue(":id", QVariant::fromValue(picInfo.id));
+        query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
         query.bindValue(":tag", QString::fromStdString(tagPair.first));
         query.bindValue(":source", static_cast<int>(tagPair.second));
         if (!query.exec()) {
@@ -302,7 +317,7 @@ bool PicDatabase::insertPicturePixivId(const PicInfo& picInfo) {
                 :id, :pixiv_id, :pixiv_index
             )
         )");
-        query.bindValue(":id", QVariant::fromValue(picInfo.id));
+        query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
         query.bindValue(":pixiv_id", QVariant::fromValue(pixivId));
         query.bindValue(":pixiv_index", pixivIndex);
         if (!query.exec()) {
@@ -324,7 +339,7 @@ bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
                 :id, :tweet_id, :tweet_index
             )
         )");
-        query.bindValue(":id", QVariant::fromValue(picInfo.id));
+        query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
         query.bindValue(":tweet_id", QVariant::fromValue(tweetId));
         query.bindValue(":tweet_index", tweetIndex);
         if (!query.exec()) {
@@ -368,7 +383,7 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
             :favorite_count, :quote_count, :reply_count, :retweet_count, :bookmark_count, :view_count, :description
         )
     )");
-    query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
+    query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetInfo.tweetID)));
     query.bindValue(":date", QString::fromStdString(tweetInfo.date));
     query.bindValue(":author_id", QVariant::fromValue(tweetInfo.authorID));
     query.bindValue(":author_name", QString::fromStdString(tweetInfo.authorName));
@@ -399,7 +414,7 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
                 :tweet_id, :hashtag
             )
         )");
-        query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
+        query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetInfo.tweetID)));
         query.bindValue(":hashtag", QString::fromStdString(hashtag));
         if (!query.exec()) {
             qCritical() << "Failed to insert tweet_hashtag: " << query.lastError().text();
@@ -559,7 +574,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     // 查询主表
     query.prepare("SELECT width, height, size, x_restrict FROM pictures WHERE id = :id");
-    query.bindValue(":id", QVariant::fromValue(id));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec() && query.next()) {
         info.id = id;
         info.width = query.value(0).toUInt();
@@ -572,7 +587,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     // 查询文件路径
     query.prepare("SELECT file_path FROM picture_file_paths WHERE id = :id");
-    query.bindValue(":id", QVariant::fromValue(id));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
             info.filePaths.insert(query.value(0).toString().toStdString());
@@ -581,7 +596,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     // 查询标签
     query.prepare("SELECT tag, source FROM picture_tags WHERE id = :id");
-    query.bindValue(":id", QVariant::fromValue(id));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
             info.tags.insert(std::make_pair(query.value(0).toString().toStdString(), static_cast<uint8_t>(query.value(1).toInt())));
@@ -590,7 +605,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     // 查询 Pixiv 关联
     query.prepare("SELECT pixiv_id, pixiv_index FROM picture_pixiv_ids WHERE id = :id");
-    query.bindValue(":id", QVariant::fromValue(id));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
             info.pixivIdIndices.insert({query.value(0).toULongLong(), query.value(1).toInt()});
@@ -599,7 +614,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
 
     // 查询 Tweet 关联
     query.prepare("SELECT tweet_id, tweet_index FROM picture_tweet_ids WHERE id = :id");
-    query.bindValue(":id", QVariant::fromValue(id));
+    query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
             info.tweetIdIndices.insert({query.value(0).toULongLong(), query.value(1).toInt()});
@@ -614,7 +629,7 @@ TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
 
     // 查询主表
     query.prepare("SELECT date, author_id, author_name, author_nick, author_description, favorite_count, quote_count, reply_count, retweet_count, bookmark_count, view_count, description FROM tweets WHERE tweet_id = :tweet_id");
-    query.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+    query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetID)));
     if (query.exec() && query.next()) {
         info.tweetID = tweetID;
         info.date = query.value(0).toString().toStdString();
@@ -687,4 +702,41 @@ PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
     }
 
     return info;
+}
+void PicDatabase::scanDirectory(const std::string& directory, ParserType parser){
+    int fileCount = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        ++fileCount;
+        if (fileCount % 1000 == 0) {
+            qInfo() << "Scanned files:" << fileCount;
+        }
+        auto path = entry.path();
+        auto ext = path.extension().string();
+        auto pathStr = path.string();
+        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg") {
+            PicInfo picInfo = parsePicture(pathStr, parser);
+            insertPicInfo(picInfo);
+        } else if (ext == ".txt" && parser == ParserType::Pixiv) {
+            PixivInfo pixivInfo = parsePixivMetadata(pathStr);
+            insertPixivInfo(pixivInfo);
+        } else if (ext == ".json") {
+            if (parser == ParserType::Pixiv){
+                PixivInfo pixivInfo = parsePixivJson(pathStr);
+                updatePixivInfo(pixivInfo);
+            } else if (parser == ParserType::Twitter) {
+                TweetInfo tweetInfo = parseTweetJson(pathStr);
+                insertTweetInfo(tweetInfo);
+            } else {
+                continue;
+            }
+        } else if (ext == ".csv") {
+            std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(pathStr);
+            for (const auto& pixivInfo : pixivInfoVec) {
+                updatePixivInfo(pixivInfo);
+            }
+        }
+    }
 }

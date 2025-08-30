@@ -1,3 +1,6 @@
+#ifndef MODEL_H
+#define MODEL_H
+
 #include <cstdint>
 #include <set>
 #include <vector>
@@ -63,3 +66,5 @@ struct PixivInfo{
     XRestrictType xRestrict = XRestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 };
+
+#endif

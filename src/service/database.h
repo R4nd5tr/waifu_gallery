@@ -17,7 +17,7 @@ public:
     TweetInfo getTweetInfo(uint64_t tweetID) const;
     PixivInfo getPixivInfo(uint64_t pixivID) const;
     //insert picture
-    bool insertPicInfo(const PicInfo& picInfo); //transaction
+    bool insertPicInfo(const PicInfo& picInfo); //transaction TODO: REMOVE TRANSACTIONS FOR BATCH TASK
     bool insertPicture(const PicInfo& picInfo);
     bool insertPictureFilePath(const PicInfo& picInfo);
     bool insertPictureTags(const PicInfo& picInfo);
@@ -39,7 +39,7 @@ public:
 
 
 
-    void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);
+    void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);// TODO: TOO SLOW
 private:
     QSqlDatabase database; //SQLite
 
