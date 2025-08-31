@@ -13,8 +13,8 @@ enum class ParserType {
 };
 
 PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser=ParserType::None);
-PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath); //TODO: FIX THIS
-std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath);
+PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath);
+std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath); // TODO: FIX THIS
 PixivInfo parsePixivJson(const std::string& pixivJsonFilePath);
 TweetInfo parseTweetJson(const std::string& tweetJsonFilePath);
 
