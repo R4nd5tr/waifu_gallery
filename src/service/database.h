@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <filesystem>
 #include <QtSql/QSqlDatabase>
 #include <QString>
 #include "model.h"
@@ -37,7 +38,7 @@ public:
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
 
-
+    void processSingleFile(const std::filesystem::path& path, ParserType parser);
 
     void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);// TODO: TOO SLOW
 private:

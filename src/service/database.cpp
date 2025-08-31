@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "model.h"
 #include <filesystem>
+#include <iostream>
 #include <cstring>
 #include <cstdint>
 #include <QtSql/QSqlDatabase>
@@ -20,6 +21,22 @@ uint64_t int64_to_uint64(int64_t i) {
     uint64_t u;
     std::memcpy(&u, &i, sizeof(i));
     return u;
+}
+std::vector<std::filesystem::path> collectAllFiles(const std::string& directory) {
+    std::vector<std::filesystem::path> files;
+    int fileCount = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        files.push_back(entry.path());
+        if (++fileCount % 1000 == 0) {
+            qInfo() << "Collected files:" << fileCount;
+        }
+        
+    }
+    qInfo() << "Total files collected:" << fileCount;
+    return files;
 }
 PicDatabase::PicDatabase(QString databaseFile) {
     initDatabase(databaseFile);
@@ -205,43 +222,24 @@ bool PicDatabase::createTables() {
     return true;
 }
 bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
-    if (!database.transaction()) {
-        qCritical() << "Failed to begin transaction:" << database.lastError().text();
-        return false;
-    }
-
     if (!insertPicture(picInfo)) {
-        database.rollback();
-        qCritical() << "insertPicture failed, transaction rolled back.";
+        qCritical() << "insertPicture failed.";
         return false;
     }
-
     if (!insertPictureFilePath(picInfo)) {
-        database.rollback();
-        qCritical() << "insertPictureFilePath failed, transaction rolled back.";
+        qCritical() << "insertPictureFilePath failed.";
         return false;
     }
-
     if (!insertPictureTags(picInfo)) {
-        database.rollback();
-        qCritical() << "insertPictureTags failed, transaction rolled back.";
+        qCritical() << "insertPictureTags failed.";
         return false;
     }
-
     if (!insertPicturePixivId(picInfo)) {
-        database.rollback();
-        qCritical() << "insertPicturePixivId failed, transaction rolled back.";
+        qCritical() << "insertPicturePixivId failed.";
         return false;
     }
-
     if (!insertPictureTweetId(picInfo)) {
-        database.rollback();
-        qCritical() << "insertPictureTweetId failed, transaction rolled back.";
-        return false;
-    }
-
-    if (!database.commit()) {
-        qCritical() << "Failed to commit transaction:" << database.lastError().text();
+        qCritical() << "insertPictureTweetId failed.";
         return false;
     }
     return true;
@@ -350,22 +348,12 @@ bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
     return true;
 }
 bool PicDatabase::insertTweetInfo(const TweetInfo& tweetInfo) {
-    if (!database.transaction()) {
-        qCritical() << "Failed to begin transaction:" << database.lastError().text();
-        return false;
-    }
     if (!insertTweet(tweetInfo)) {
-        database.rollback();
-        qCritical() << "insertTweet failed, transaction rolled back.";
+        qCritical() << "insertTweet failed.";
         return false;
     }
     if (!insertTweetHashtags(tweetInfo)) {
-        database.rollback();
-        qCritical() << "insertTweetHashtags failed, transaction rolled back.";
-        return false;
-    }
-    if (!database.commit()) {
-        qCritical() << "Failed to commit transaction:" << database.lastError().text();
+        qCritical() << "insertTweetHashtags failed.";
         return false;
     }
     return true;
@@ -383,7 +371,7 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
             :favorite_count, :quote_count, :reply_count, :retweet_count, :bookmark_count, :view_count, :description
         )
     )");
-    query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetInfo.tweetID)));
+    query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
     query.bindValue(":date", QString::fromStdString(tweetInfo.date));
     query.bindValue(":author_id", QVariant::fromValue(tweetInfo.authorID));
     query.bindValue(":author_name", QString::fromStdString(tweetInfo.authorName));
@@ -414,7 +402,7 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
                 :tweet_id, :hashtag
             )
         )");
-        query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetInfo.tweetID)));
+        query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
         query.bindValue(":hashtag", QString::fromStdString(hashtag));
         if (!query.exec()) {
             qCritical() << "Failed to insert tweet_hashtag: " << query.lastError().text();
@@ -424,22 +412,12 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
     return true;
 }
 bool PicDatabase::insertPixivInfo(const PixivInfo& pixivInfo) {
-    if (!database.transaction()) {
-        qCritical() << "Failed to begin transaction:" << database.lastError().text();
-        return false;
-    }
     if (!insertPixivArtwork(pixivInfo)) {
-        database.rollback();
-        qCritical() << "insertPixivArtwork failed, transaction rolled back.";
+        qCritical() << "insertPixivArtwork failed.";
         return false;
     }
     if (!insertPixivArtworkTags(pixivInfo)) {
-        database.rollback();
-        qCritical() << "insertPixivArtworkTags failed, transaction rolled back.";
-        return false;
-    }
-    if (!database.commit()) {
-        qCritical() << "Failed to commit transaction:" << database.lastError().text();
+        qCritical() << "insertPixivArtworkTags failed.";
         return false;
     }
     return true;
@@ -491,22 +469,12 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
     return true;
 }
 bool PicDatabase::updatePixivInfo(const PixivInfo& pixivInfo) {
-    if (!database.transaction()) {
-        qCritical() << "Failed to begin transaction:" << database.lastError().text();
-        return false;
-    }
     if (!updatePixivArtwork(pixivInfo)) {
-        database.rollback();
-        qCritical() << "updatePixivArtwork failed, transaction rolled back.";
+        qCritical() << "updatePixivArtwork failed.";
         return false;
     }
     if (!updatePixivArtworkTags(pixivInfo)) {
-        database.rollback();
-        qCritical() << "updatePixivArtworkTags failed, transaction rolled back.";
-        return false;
-    }
-    if (!database.commit()) {
-        qCritical() << "Failed to commit transaction:" << database.lastError().text();
+        qCritical() << "updatePixivArtworkTags failed.";
         return false;
     }
     return true;
@@ -629,7 +597,7 @@ TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
 
     // 查询主表
     query.prepare("SELECT date, author_id, author_name, author_nick, author_description, favorite_count, quote_count, reply_count, retweet_count, bookmark_count, view_count, description FROM tweets WHERE tweet_id = :tweet_id");
-    query.bindValue(":tweet_id", QVariant::fromValue(uint64_to_int64(tweetID)));
+    query.bindValue(":tweet_id", QVariant::fromValue(tweetID));
     if (query.exec() && query.next()) {
         info.tweetID = tweetID;
         info.date = query.value(0).toString().toStdString();
@@ -703,40 +671,57 @@ PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
 
     return info;
 }
-void PicDatabase::scanDirectory(const std::string& directory, ParserType parser){
-    int fileCount = 0;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
-        if (!entry.is_regular_file()) {
-            continue;
-        }
-        ++fileCount;
-        if (fileCount % 1000 == 0) {
-            qInfo() << "Scanned files:" << fileCount;
-        }
-        auto path = entry.path();
-        auto ext = path.extension().string();
-        auto pathStr = path.string();
-        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg") {
+void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserType parser) {
+    std::string ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    const std::string pathStr = path.string();
+    try {
+        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif") {
             PicInfo picInfo = parsePicture(pathStr, parser);
             insertPicInfo(picInfo);
-        } else if (ext == ".txt" && parser == ParserType::Pixiv) {
+        } 
+        else if (ext == ".txt" && parser == ParserType::Pixiv) {
             PixivInfo pixivInfo = parsePixivMetadata(pathStr);
             insertPixivInfo(pixivInfo);
-        } else if (ext == ".json") {
-            if (parser == ParserType::Pixiv){
+        }
+        else if (ext == ".json") {
+            if (parser == ParserType::Pixiv) {
                 PixivInfo pixivInfo = parsePixivJson(pathStr);
                 updatePixivInfo(pixivInfo);
-            } else if (parser == ParserType::Twitter) {
+            } 
+            else if (parser == ParserType::Twitter) {
                 TweetInfo tweetInfo = parseTweetJson(pathStr);
                 insertTweetInfo(tweetInfo);
-            } else {
-                continue;
             }
-        } else if (ext == ".csv") {
+        }
+        else if (ext == ".csv") {
             std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(pathStr);
             for (const auto& pixivInfo : pixivInfoVec) {
                 updatePixivInfo(pixivInfo);
             }
         }
+    } catch (const std::exception& e) {
+        qWarning() << "Error processing file:" << pathStr.c_str() << "Error:" << e.what();
     }
+}
+void PicDatabase::scanDirectory(const std::string& directory, ParserType parser){
+    auto files = collectAllFiles(directory);
+    qInfo() << "Collected" << files.size() << "files";
+    const size_t BATCH_SIZE = 1000;
+    size_t processed = 0;
+    for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
+        QSqlDatabase::database().transaction();
+        auto batch_end = std::min(i + BATCH_SIZE, files.size());
+        for (size_t j = i; j < batch_end; j++) {
+            processSingleFile(files[j], parser);
+            processed++;
+            std::cout << "\rProcessed files: " << std::setw(8) << processed << std::flush;
+            
+        }
+        if (!QSqlDatabase::database().commit()) {
+            qWarning() << "Batch commit failed, rolling back";
+            QSqlDatabase::database().rollback();
+        }
+    }
+    qInfo() << "Scan completed. Total files processed:" << processed;
 }

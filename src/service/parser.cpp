@@ -1,9 +1,10 @@
 #include "parser.h"
 #include <fstream>
+#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <cctype>
-#include <QImage>
+#include <QImageReader>
 #include <QString>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -51,8 +52,9 @@ AIType toAITypeEnum (const std::string& aiTypeStr) {
 }
 PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser) {
     QString qStrPath = QString::fromStdString(pictureFilePath);
-    QImage img(qStrPath);
-    if (img.isNull()) {
+    QImageReader reader(qStrPath);
+    QSize size = reader.size();
+    if (size.isNull()) {
         qCritical() << "failed to load image: " << pictureFilePath;
     }
     QFileInfo fileInfo(qStrPath);
@@ -61,8 +63,8 @@ PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser) {
     PicInfo picInfo;
     picInfo.id = calcFileHash(pictureFilePath);
     picInfo.filePaths.insert(pictureFilePath);
-    picInfo.height = img.height();
-    picInfo.width = img.width();
+    picInfo.height = size.height();
+    picInfo.width = size.width();
     picInfo.size = fileInfo.size();
     if (parser == ParserType::Pixiv) {
         QStringList parts = name.split("_p");
@@ -87,9 +89,9 @@ PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath) {
     std::string line;
     PixivInfo info{};
     while (std::getline(file, line)) {
-        if (line == "ID") {
+        if (line == "Id" || line == "ID") {
             std::getline(file, line);
-            info.pixivID = static_cast<uint64_t>(std::stoll(line));
+            info.pixivID = static_cast<int64_t>(std::stoll(line));
         } else if (line == "xRestrict") {
             std::getline(file, line);
             info.xRestrict = toXRestrictTypeEnum(line);
@@ -99,7 +101,7 @@ PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath) {
         } else if (line == "User") {
             std::getline(file, line);
             info.authorName = line;
-        } else if (line == "UserID") {
+        } else if (line == "UserID" || line == "UserId") {
             std::getline(file, line);
             info.authorID = static_cast<uint32_t>(std::stoi(line));
         } else if (line == "Title") {
@@ -146,7 +148,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath) {
             ++headerCount;
         }
     }
-    uint64_t pixivID;
+    int64_t pixivID;
     std::string tagsStr;
     std::string tagsTranslStr;
     std::string authorName;
@@ -277,7 +279,7 @@ TweetInfo parseTweetJson(const std::string& tweetJsonFilePath) {
     }
     QJsonObject obj = doc.object();
 
-    info.tweetID = obj.value("tweet_id").toVariant().toULongLong();
+    info.tweetID = obj.value("tweet_id").toVariant().toLongLong();
     info.date = obj.value("date").toString().toStdString();
     info.description = obj.value("content").toString().toStdString();
     info.favoriteCount = obj.value("favorite_count").toInt();
@@ -306,24 +308,25 @@ TweetInfo parseTweetJson(const std::string& tweetJsonFilePath) {
     return info;
 }
 uint64_t calcFileHash(const std::string& filePath) {
-    constexpr size_t BUF_SIZE = 1024 * 1024; // 1MB
-    char buffer[BUF_SIZE];
-    XXH64_state_t* state = XXH64_createState();
-    XXH64_reset(state, 0);
-
-    std::ifstream file(filePath, std::ios::binary);
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
     if (!file) {
-        XXH64_freeState(state);
+        qWarning() << "Failed to open file:" << filePath.c_str();
         return 0;
     }
-    while (file) {
-        file.read(buffer, BUF_SIZE);
-        std::streamsize bytesRead = file.gcount();
-        if (bytesRead > 0) {
-            XXH64_update(state, buffer, static_cast<size_t>(bytesRead));
-        }
+    std::streamsize fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+    if (fileSize > 100 * 1024 * 1024) {  // 100MB Max
+        qWarning() << "File too large:" << filePath.c_str() << "size:" << fileSize;
+        return 0;
     }
-    uint64_t hash = XXH64_digest(state);
-    XXH64_freeState(state);
-    return hash;
+    if (fileSize == 0) {
+        qWarning() << "Empty file:" << filePath.c_str();
+        return 0;
+    }
+    std::vector<char> buffer(static_cast<size_t>(fileSize));
+    if (!file.read(buffer.data(), fileSize)) {
+        qWarning() << "Failed to read file:" << filePath.c_str();
+        return 0;
+    }
+    return XXH64(buffer.data(), static_cast<size_t>(fileSize), 0);
 }

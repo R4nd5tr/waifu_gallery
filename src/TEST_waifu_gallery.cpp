@@ -2,10 +2,19 @@
 #include <iostream>
 #include <Qstring>
 #include <QCoreApplication>
+#include <QLoggingCategory>
 
 void databaseScanTest ();
 
 int main(int argc, char *argv[]) {
+    QLoggingCategory::setFilterRules(
+        // "qt.gui.imageio.warning=false\n"
+        // "qt.gui.icc.warning=false\n"
+        "qt.gui.imageio=false\n"
+        "qt.gui.icc=false"
+    );
+
+
     QCoreApplication app(argc, argv);
 
     databaseScanTest();
@@ -16,7 +25,7 @@ int main(int argc, char *argv[]) {
 void databaseScanTest () {
     PicDatabase pixivDatabase = PicDatabase(QString("pixiv.db"));
     std::cout << "start scan pixiv pictures" << std::endl;
-    pixivDatabase.scanDirectory("C:/Users/Exusiai/Pictures/pixiv", ParserType::Pixiv);
+    pixivDatabase.scanDirectory("C:/Users/Exusiai/Downloads/pixiv", ParserType::Pixiv);
     std::cout << "pixiv pictures finished" << std::endl;
 
     PicDatabase twitterDatabase = PicDatabase(QString("twitter.db"));
