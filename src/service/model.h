@@ -34,7 +34,7 @@ struct PicInfo{
 };
 
 struct TweetInfo{
-    uint64_t tweetID;
+    int64_t tweetID;
     std::string date;
     uint32_t authorID;
     std::string authorName;
@@ -53,7 +53,7 @@ struct TweetInfo{
 };
 
 struct PixivInfo{
-    uint64_t pixivID;
+    int64_t pixivID;
     std::string date;
     std::vector<std::string> tags;
     std::vector<std::string> tagsTransl;
