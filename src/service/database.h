@@ -18,29 +18,29 @@ public:
     TweetInfo getTweetInfo(uint64_t tweetID) const;
     PixivInfo getPixivInfo(uint64_t pixivID) const;
     //insert picture
-    bool insertPicInfo(const PicInfo& picInfo); //transaction TODO: REMOVE TRANSACTIONS FOR BATCH TASK
+    bool insertPicInfo(const PicInfo& picInfo);
     bool insertPicture(const PicInfo& picInfo);
     bool insertPictureFilePath(const PicInfo& picInfo);
     bool insertPictureTags(const PicInfo& picInfo);
     bool insertPicturePixivId(const PicInfo& picInfo);
     bool insertPictureTweetId(const PicInfo& picInfo);
     //insert tweet
-    bool insertTweetInfo(const TweetInfo& tweetInfo); //transaction
+    bool insertTweetInfo(const TweetInfo& tweetInfo);
     bool insertTweet(const TweetInfo& tweetInfo);
     bool insertTweetHashtags(const TweetInfo& tweetInfo);
     //insert pixiv
-    bool insertPixivInfo(const PixivInfo& pixivInfo); //transaction
+    bool insertPixivInfo(const PixivInfo& pixivInfo);
     bool insertPixivArtwork(const PixivInfo& pixivInfo);
     bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
 
     //update pixiv
-    bool updatePixivInfo(const PixivInfo& pixivInfo); //transaction
+    bool updatePixivInfo(const PixivInfo& pixivInfo);
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
 
     void processSingleFile(const std::filesystem::path& path, ParserType parser);
 
-    void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);// TODO: TOO SLOW
+    void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);// TODO: multithreading?
 private:
     QSqlDatabase database; //SQLite
 
