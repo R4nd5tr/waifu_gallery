@@ -22,7 +22,7 @@ uint64_t int64_to_uint64(int64_t i) {
     std::memcpy(&u, &i, sizeof(i));
     return u;
 }
-std::vector<std::filesystem::path> collectAllFiles(const std::string& directory) {
+std::vector<std::filesystem::path> collectAllFiles(const std::filesystem::path& directory) {
     std::vector<std::filesystem::path> files;
     int fileCount = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
@@ -30,10 +30,7 @@ std::vector<std::filesystem::path> collectAllFiles(const std::string& directory)
             continue;
         }
         files.push_back(entry.path());
-        if (++fileCount % 1000 == 0) {
-            qInfo() << "Collected files:" << fileCount;
-        }
-        
+        fileCount++;
     }
     qInfo() << "Total files collected:" << fileCount;
     return files;
@@ -275,7 +272,7 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
             )
         )");
         query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
-        query.bindValue(":file_path", QString::fromStdString(filePath));
+        query.bindValue(":file_path", QString::fromStdString(filePath.string()));
         if (!query.exec()) {
             qCritical() << "Failed to insert picture_file_path: " << query.lastError().text();
             return false;
@@ -558,7 +555,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.filePaths.insert(query.value(0).toString().toStdString());
+            info.filePaths.insert(std::filesystem::path(query.value(0).toString().toStdString()));
         }
     }
 
@@ -671,57 +668,57 @@ PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
 
     return info;
 }
-void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserType parser) {
+void PicDatabase::processSingleFile(const std::filesystem::path& path) {
     std::string ext = path.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    const std::string pathStr = path.string();
     try {
-        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif") {
-            PicInfo picInfo = parsePicture(pathStr, parser);
+        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
+            PicInfo picInfo = parsePicture(path);
             insertPicInfo(picInfo);
         } 
-        else if (ext == ".txt" && parser == ParserType::Pixiv) {
-            PixivInfo pixivInfo = parsePixivMetadata(pathStr);
+        else if (ext == ".txt") {
+            PixivInfo pixivInfo = parsePixivMetadata(path);
             insertPixivInfo(pixivInfo);
         }
         else if (ext == ".json") {
-            if (parser == ParserType::Pixiv) {
-                PixivInfo pixivInfo = parsePixivJson(pathStr);
+            QByteArray data = readJsonFile(path);
+            JsonType jsonType = detectJsonType(data);
+            if (jsonType == JsonType::Pixiv) {
+                PixivInfo pixivInfo = parsePixivJson(data);
                 updatePixivInfo(pixivInfo);
             } 
-            else if (parser == ParserType::Twitter) {
-                TweetInfo tweetInfo = parseTweetJson(pathStr);
+            else if (jsonType == JsonType::Tweet) {
+                TweetInfo tweetInfo = parseTweetJson(data);
                 insertTweetInfo(tweetInfo);
             }
         }
         else if (ext == ".csv") {
-            std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(pathStr);
+            std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(path);
             for (const auto& pixivInfo : pixivInfoVec) {
                 updatePixivInfo(pixivInfo);
             }
         }
     } catch (const std::exception& e) {
-        qWarning() << "Error processing file:" << pathStr.c_str() << "Error:" << e.what();
+        qWarning() << "Error processing file:" << path.c_str() << "Error:" << e.what();
     }
 }
-void PicDatabase::scanDirectory(const std::string& directory, ParserType parser){
+void PicDatabase::scanDirectory(const std::filesystem::path& directory){
     auto files = collectAllFiles(directory);
-    qInfo() << "Collected" << files.size() << "files";
     const size_t BATCH_SIZE = 1000;
     size_t processed = 0;
     for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
         QSqlDatabase::database().transaction();
         auto batch_end = std::min(i + BATCH_SIZE, files.size());
         for (size_t j = i; j < batch_end; j++) {
-            processSingleFile(files[j], parser);
+            processSingleFile(files[j]);
             processed++;
             std::cout << "\rProcessed files: " << std::setw(8) << processed << std::flush;
-            
         }
         if (!QSqlDatabase::database().commit()) {
             qWarning() << "Batch commit failed, rolling back";
             QSqlDatabase::database().rollback();
         }
     }
+    std::cout << std::endl;
     qInfo() << "Scan completed. Total files processed:" << processed;
 }

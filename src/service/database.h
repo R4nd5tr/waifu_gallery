@@ -32,15 +32,14 @@ public:
     bool insertPixivInfo(const PixivInfo& pixivInfo);
     bool insertPixivArtwork(const PixivInfo& pixivInfo);
     bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
-
     //update pixiv
     bool updatePixivInfo(const PixivInfo& pixivInfo);
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
 
-    void processSingleFile(const std::filesystem::path& path, ParserType parser);
+    void processSingleFile(const std::filesystem::path& path);
 
-    void scanDirectory(const std::string& directory, ParserType parser=ParserType::None);// TODO: multithreading?
+    void scanDirectory(const std::filesystem::path& directory);// TODO: multithreading?
 private:
     QSqlDatabase database; //SQLite
 

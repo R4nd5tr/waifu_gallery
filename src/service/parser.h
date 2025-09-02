@@ -1,23 +1,24 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "model.h"
 #include <string>
 #include <vector>
 #include <cstdint>
-#include "model.h"
+#include <QByteArray>
 
-enum class ParserType {
-    None,
-    Pixiv,
-    Twitter
-};
+enum class JsonType { Unknown, Pixiv, Tweet };
 
-PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser=ParserType::None);
-PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath);
-std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath); // TODO: FIX THIS
-PixivInfo parsePixivJson(const std::string& pixivJsonFilePath);
-TweetInfo parseTweetJson(const std::string& tweetJsonFilePath);
+PicInfo parsePicture(const std::filesystem::path& pictureFilePath);
 
-uint64_t calcFileHash(const std::string& filePath);
+PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath);
+std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath);
 
-#endif // PARSER_H
+QByteArray readJsonFile (const std::filesystem::path& jsonFilePath);
+JsonType detectJsonType(const QByteArray& data);
+PixivInfo parsePixivJson(const QByteArray& data);
+TweetInfo parseTweetJson(const QByteArray& data);
+
+uint64_t calcFileHash(const std::filesystem::path& filePath);
+
+#endif
