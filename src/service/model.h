@@ -5,6 +5,7 @@
 #include <set>
 #include <vector>
 #include <string>
+#include <filesystem>
 
 enum class XRestrictType {
     Unknown,
@@ -20,16 +21,16 @@ enum class AIType {
 
 struct PicInfo{
     uint64_t id;     //xxhash64
-    std::set<std::pair<uint64_t, int>> tweetIdIndices; //(tweetID, index)
-    std::set<std::pair<uint64_t, int>> pixivIdIndices; //(pixivID, index)
+    std::set<std::pair<int64_t, int>> tweetIdIndices; //(tweetID, index)
+    std::set<std::pair<int64_t, int>> pixivIdIndices; //(pixivID, index)
     std::set<std::pair<std::string, uint8_t>> tags; //(tag, source)
-    std::set<std::string> filePaths;
+    std::set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
     uint32_t width;
     uint32_t height;
     uint32_t size;
+    std::string fileType;
     XRestrictType xRestrict = XRestrictType::Unknown;
 
-    std::string getFileType() const;
     float getRatio() const;
 };
 

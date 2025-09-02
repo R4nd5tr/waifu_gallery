@@ -5,13 +5,15 @@
 #include <algorithm>
 #include <cctype>
 #include <QImageReader>
+#include <QFile>
 #include <QString>
+#include <QByteArray>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <xxhash.h>
-#include <fast-cpp-csv-parser/csv.h>
+#include <rapidcsv.h>
 
 std::vector<std::string> splitAndTrim(const std::string& str) {
     std::vector<std::string> result;
@@ -50,12 +52,14 @@ AIType toAITypeEnum (const std::string& aiTypeStr) {
     }
     return AIType::Unknown;
 }
-PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser) {
-    QString qStrPath = QString::fromStdString(pictureFilePath);
+
+PicInfo parsePicture(const std::filesystem::path& pictureFilePath) {
+    QString qStrPath = QString::fromStdString(pictureFilePath.string());
+    QString qStrDirectory = QString::fromStdString(pictureFilePath.parent_path().string());
     QImageReader reader(qStrPath);
     QSize size = reader.size();
     if (size.isNull()) {
-        qCritical() << "failed to load image: " << pictureFilePath;
+        qCritical() << "failed to load image: " << pictureFilePath.string();
     }
     QFileInfo fileInfo(qStrPath);
     QString name = fileInfo.baseName();
@@ -66,24 +70,25 @@ PicInfo parsePicture(const std::string& pictureFilePath, ParserType parser) {
     picInfo.height = size.height();
     picInfo.width = size.width();
     picInfo.size = fileInfo.size();
-    if (parser == ParserType::Pixiv) {
-        QStringList parts = name.split("_p");
-        uint64_t pid = static_cast<uint64_t>(parts[0].toLongLong());
-        int index = (parts.size() > 1) ? parts[1].toInt() : 0;
-        picInfo.pixivIdIndices.insert({pid, index});
-    }
-    if (parser == ParserType::Twitter) {
+    picInfo.fileType = reader.format().toStdString();
+    if (qStrDirectory.contains("pixiv", Qt::CaseInsensitive)) {      // parse pid only when the file is in a directory with "pixiv"
+        QStringList parts = name.split("_p");                        //        ^
+        uint64_t pid = static_cast<uint64_t>(parts[0].toLongLong()); //        |
+        int index = (parts.size() > 1) ? parts[1].toInt() : 0;       // I do these is because it is hard to distinguish between different types of files just by their names
+        picInfo.pixivIdIndices.insert({pid, index});                 //        |
+    }                                                                //        v
+    if (qStrDirectory.contains("twitter", Qt::CaseInsensitive)) {    // parse tweetID only when the file is in a directory with "twitter"
         QStringList parts = name.split("_");
         uint64_t tweetId = static_cast<uint64_t>(parts[0].toLongLong());
-        int index = (parts.size() > 1) ? parts[1].toInt() : 0;
+        int index = parts[1].toInt() - 1;
         picInfo.tweetIdIndices.insert({tweetId, index});
     }
     return picInfo;
-};
-PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath) {
+}
+PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath) {
     std::ifstream file(pixivMetadataFilePath);
     if (!file.is_open()) {
-        qCritical() << "Failed to open file:" << pixivMetadataFilePath;
+        qCritical() << "Failed to open file:" << pixivMetadataFilePath.string();
         return PixivInfo{};
     }
     std::string line;
@@ -129,99 +134,72 @@ PixivInfo parsePixivMetadata(const std::string& pixivMetadataFilePath) {
             info.date = line;
         }
     }
+    for (auto& tag : info.tags) {
+        if (!tag.empty() && tag[0] == '#') {
+            tag.erase(0, 1);
+        }
+    }
     return info;
 }
-std::vector<PixivInfo> parsePixivCsv(const std::string& pixivCsvFilePath) {
+std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath) {
+    std::vector<PixivInfo> result;
     std::ifstream file(pixivCsvFilePath);
     if (!file.is_open()) {
-        qCritical() << "Failed to open file:" << pixivCsvFilePath;
-        return {};
-    }
-    std::string headerLine;
-    size_t headerCount = 0;
-    std::vector<PixivInfo> result;
-    //get header count
-    if (std::getline(file, headerLine)) {
-        std::stringstream ss(headerLine);
-        std::string cell;
-        while (std::getline(ss, cell, ',')) {
-            ++headerCount;
-        }
-    }
-    int64_t pixivID;
-    std::string tagsStr;
-    std::string tagsTranslStr;
-    std::string authorName;
-    uint32_t authorID;
-    std::string title;
-    std::string description;
-    uint32_t likeCount;
-    uint32_t viewCount;
-    std::string xRestrictStr;
-    std::string aiTypeStr;
-    std::string date;
-
-    if (headerCount == 21) {
-        io::CSVReader<11> in(pixivCsvFilePath);
-        in.read_header(io::ignore_extra_column, "id", "tags", "tags_transl", "user", "userId", 
-            "title", "description", "likeCount", "viewCount", "xRestrict", "date"
-        );
-        while (in.read_row(pixivID, tagsStr, tagsTranslStr, authorName, authorID, 
-            title, description, likeCount, viewCount, xRestrictStr, date
-        )) {
-            PixivInfo info;
-            info.pixivID = pixivID;
-            info.tags = splitAndTrim(tagsStr);
-            info.tagsTransl = splitAndTrim(tagsTranslStr);
-            info.authorName = authorName;
-            info.authorID = authorID;
-            info.title = title;
-            info.description = description;
-            info.likeCount = likeCount;
-            info.viewCount = viewCount;
-            info.xRestrict = toXRestrictTypeEnum(xRestrictStr);
-            info.date = date;
-            result.push_back(info);
-        }
-    } else if (headerCount == 22) {
-        io::CSVReader<12> in(pixivCsvFilePath);
-        in.read_header(io::ignore_extra_column, "id", "tags", "tags_transl", "user", "userId", 
-            "title", "description", "likeCount", "viewCount", "xRestrict", "AI", "date"
-        );
-        while (in.read_row(pixivID, tagsStr, tagsTranslStr, authorName, authorID, 
-            title, description, likeCount, viewCount, xRestrictStr, aiTypeStr, date
-        )) {
-            PixivInfo info;
-            info.pixivID = pixivID;
-            info.tags = splitAndTrim(tagsStr);
-            info.tagsTransl = splitAndTrim(tagsTranslStr);
-            info.authorName = authorName;
-            info.authorID = authorID;
-            info.title = title;
-            info.description = description;
-            info.likeCount = likeCount;
-            info.viewCount = viewCount;
-            info.xRestrict = toXRestrictTypeEnum(xRestrictStr);
-            info.aiType = toAITypeEnum(aiTypeStr);
-            info.date = date;
-            result.push_back(info);
-        }
-    } else {
-        qCritical() << "incompatible csv file header count: " << pixivCsvFilePath;
+        std::cerr << "Failed to open file: " << pixivCsvFilePath << std::endl;
         return result;
+    }
+    rapidcsv::Document doc(file, rapidcsv::LabelParams(0, -1), rapidcsv::SeparatorParams(',', '"', false));
+    size_t rowCount = doc.GetRowCount();
+
+    auto colNames = doc.GetColumnNames();
+    bool hasAI = std::find(colNames.begin(), colNames.end(), "AI") != colNames.end();
+
+    for (size_t i = 0; i < rowCount; ++i) {
+        PixivInfo info;
+        info.pixivID = doc.GetCell<int64_t>("id", i);
+        info.tags = splitAndTrim(doc.GetCell<std::string>("tags", i));
+        info.tagsTransl = splitAndTrim(doc.GetCell<std::string>("tags_transl", i));
+        info.authorName = doc.GetCell<std::string>("user", i);
+        info.authorID = doc.GetCell<uint32_t>("userId", i);
+        info.title = doc.GetCell<std::string>("title", i);
+        info.description = doc.GetCell<std::string>("description", i);
+        if (std::find(colNames.begin(), colNames.end(), "likeCount") != colNames.end()) info.likeCount = doc.GetCell<uint32_t>("likeCount", i);
+        if (std::find(colNames.begin(), colNames.end(), "viewCount") != colNames.end()) info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
+        info.xRestrict = toXRestrictTypeEnum(doc.GetCell<std::string>("xRestrict", i));
+        if (hasAI) info.aiType = toAITypeEnum(doc.GetCell<std::string>("AI", i));
+        info.date = doc.GetCell<std::string>("date", i);
+        result.push_back(info);
     }
     return result;
 }
-PixivInfo parsePixivJson(const std::string& pixivJsonFilePath) {
-    PixivInfo info{};
-    QFile file(QString::fromStdString(pixivJsonFilePath));
+QByteArray readJsonFile (const std::filesystem::path& jsonFilePath) {
+    QFile file(QString::fromStdString(jsonFilePath.string()));
     if (!file.open(QIODevice::ReadOnly)) {
-        qCritical() << "Failed to open file:" << QString::fromStdString(pixivJsonFilePath);
-        return info;
+        qCritical() << "Failed to open file:" << jsonFilePath.string();
+        return QByteArray();
     }
     QByteArray data = file.readAll();
     file.close();
-
+    return data;
+}
+JsonType detectJsonType(const QByteArray& data) {
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError) return JsonType::Unknown;
+    if (doc.isArray()) {
+        QJsonArray arr = doc.array();
+        if (!arr.isEmpty() && arr[0].isObject()) {
+            QJsonObject obj = arr[0].toObject();
+            if (obj.contains("idNum")) return JsonType::Pixiv;
+        }
+    } else if (doc.isObject()) {
+        QJsonObject obj = doc.object();
+        if (obj.contains("tweet_id")) return JsonType::Tweet;
+    }
+    return JsonType::Unknown;
+}
+PixivInfo parsePixivJson(const QByteArray& data) {
+    PixivInfo info{};
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(data, &err);
     if (err.error != QJsonParseError::NoError || !doc.isArray()) {
@@ -261,16 +239,8 @@ PixivInfo parsePixivJson(const std::string& pixivJsonFilePath) {
     }
     return info;
 }
-TweetInfo parseTweetJson(const std::string& tweetJsonFilePath) {
+TweetInfo parseTweetJson(const QByteArray& data) {
     TweetInfo info;
-    QFile file(QString::fromStdString(tweetJsonFilePath));
-    if (!file.open(QIODevice::ReadOnly)) {
-        qCritical() << "Failed to open file:" << QString::fromStdString(tweetJsonFilePath);
-        return info;
-    }
-    QByteArray data = file.readAll();
-    file.close();
-
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(data, &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
@@ -307,7 +277,7 @@ TweetInfo parseTweetJson(const std::string& tweetJsonFilePath) {
     }
     return info;
 }
-uint64_t calcFileHash(const std::string& filePath) {
+uint64_t calcFileHash(const std::filesystem::path& filePath) {
     std::ifstream file(filePath, std::ios::binary | std::ios::ate);
     if (!file) {
         qWarning() << "Failed to open file:" << filePath.c_str();

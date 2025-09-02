@@ -3,6 +3,6 @@
     "version": "0.0.0",
     "dependencies": [
         "xxhash",
-        "fast-cpp-csv-parser"
+        "rapidcsv"
     ]
 }
