@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <unordered_set>
 
 enum class XRestrictType {
     Unknown,
@@ -19,19 +20,13 @@ enum class AIType {
     AI
 };
 
-struct PicInfo{
-    uint64_t id;     //xxhash64
-    std::set<std::pair<int64_t, int>> tweetIdIndices; //(tweetID, index)
-    std::set<std::pair<int64_t, int>> pixivIdIndices; //(pixivID, index)
-    std::set<std::pair<std::string, uint8_t>> tags; //(tag, source)
-    std::set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
-    uint32_t width;
-    uint32_t height;
-    uint32_t size;
-    std::string fileType;
-    XRestrictType xRestrict = XRestrictType::Unknown;
-
-    float getRatio() const;
+struct PairHash {
+    template <typename T1, typename T2>
+    std::size_t operator()(const std::pair<T1, T2>& p) const {
+        std::size_t h1 = std::hash<T1>{}(p.first);
+        std::size_t h2 = std::hash<T2>{}(p.second);
+        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
+    }
 };
 
 struct TweetInfo{
@@ -49,7 +44,7 @@ struct TweetInfo{
     uint32_t retweetCount = 0;
     uint32_t bookmarkCount = 0;
     uint32_t viewCount = 0;
-    std::set<std::string> hashtags;
+    std::unordered_set<std::string> hashtags;
     std::string description;
 };
 
@@ -68,4 +63,20 @@ struct PixivInfo{
     AIType aiType = AIType::Unknown;
 };
 
+struct PicInfo{
+    uint64_t id;     //xxhash64
+    std::unordered_set<std::pair<int64_t, int>, PairHash> tweetIdIndices; //(tweetID, index)
+    std::unordered_set<std::pair<int64_t, int>, PairHash> pixivIdIndices; //(pixivID, index)
+    std::unordered_set<std::string> tags;
+    std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
+    std::vector<TweetInfo> tweetInfo;
+    std::vector<PixivInfo> pixivInfo;
+    uint32_t width;
+    uint32_t height;
+    uint32_t size;
+    std::string fileType;
+    XRestrictType xRestrict = XRestrictType::Unknown;
+
+    float getRatio() const;
+};
 #endif

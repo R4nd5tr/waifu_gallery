@@ -10,38 +10,59 @@
 #include "model.h"
 #include "parser.h"
 
+enum SearchField {
+    None,
+    PicID,
+    PixivID,
+    PixivUserID,
+    PixivUserName,
+    PixivTitle,
+    PixivDescription,
+    TweetID,
+    TweetUserID,
+    TweetUserName,
+    TweetUserNick,
+    TweetDescription
+};
+
 class PicDatabase{
 public:
-    PicDatabase(QString databaseFile="database.db");
+    PicDatabase(const QString& connectionName = QString(), const QString& databaseFile="database.db");
     ~PicDatabase();
     PicInfo getPicInfo(uint64_t id) const;
-    TweetInfo getTweetInfo(uint64_t tweetID) const;
-    PixivInfo getPixivInfo(uint64_t pixivID) const;
-    //insert picture
+    TweetInfo getTweetInfo(int64_t tweetID) const;
+    PixivInfo getPixivInfo(int64_t pixivID) const;
+    // insert picture
     bool insertPicInfo(const PicInfo& picInfo);
     bool insertPicture(const PicInfo& picInfo);
     bool insertPictureFilePath(const PicInfo& picInfo);
     bool insertPictureTags(const PicInfo& picInfo);
     bool insertPicturePixivId(const PicInfo& picInfo);
     bool insertPictureTweetId(const PicInfo& picInfo);
-    //insert tweet
+    // insert tweet
     bool insertTweetInfo(const TweetInfo& tweetInfo);
     bool insertTweet(const TweetInfo& tweetInfo);
     bool insertTweetHashtags(const TweetInfo& tweetInfo);
-    //insert pixiv
+    // insert pixiv
     bool insertPixivInfo(const PixivInfo& pixivInfo);
     bool insertPixivArtwork(const PixivInfo& pixivInfo);
     bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
-    //update pixiv
+    // update pixiv
     bool updatePixivInfo(const PixivInfo& pixivInfo);
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
 
-    void processSingleFile(const std::filesystem::path& path);
+    // search functions
+    std::vector<PicInfo> tagSearch(std::unordered_set<std::string> includedTags, std::unordered_set<std::string> excludedTags);
+    std::vector<PicInfo> pixivTagSearch(std::unordered_set<std::string> includedTags, std::unordered_set<std::string> excludedTags);
+    std::vector<PicInfo> tweetTagSearch(std::unordered_set<std::string> includedTags, std::unordered_set<std::string> excludedTags);
+    std::vector<PicInfo> textSearch(std::string searchText, SearchField searchField);// TODO: FTS5
 
+    void processSingleFile(const std::filesystem::path& path);
     void scanDirectory(const std::filesystem::path& directory);// TODO: multithreading?
 private:
     QSqlDatabase database; //SQLite
+    QString connectionName;
 
     void initDatabase(QString databaseFile);
     bool createTables();
