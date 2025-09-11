@@ -35,7 +35,12 @@ std::vector<std::filesystem::path> collectAllFiles(const std::filesystem::path& 
     qInfo() << "Total files collected:" << fileCount;
     return files;
 }
-PicDatabase::PicDatabase(QString databaseFile) {
+PicDatabase::PicDatabase(const QString& connectionName, const QString& databaseFile) {
+    if (connectionName.isEmpty()) {
+        this->connectionName = QString("db_conn_%1").arg(reinterpret_cast<quintptr>(this));
+    } else {
+        this->connectionName = connectionName;
+    }
     initDatabase(databaseFile);
 }
 PicDatabase::~PicDatabase() {
@@ -43,7 +48,7 @@ PicDatabase::~PicDatabase() {
 }
 void PicDatabase::initDatabase(QString databaseFile){
     bool databaseExists = QFile::exists(databaseFile);
-    database = QSqlDatabase::addDatabase("QSQLITE");
+    database = QSqlDatabase::addDatabase("QSQLITE", connectionName);
     database.setDatabaseName(databaseFile);
     if (!database.open()) {
         qCritical() << "Error opening database:" << database.lastError().text();
@@ -76,7 +81,6 @@ bool PicDatabase::createTables() {
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
             tag TEXT NOT NULL,
-            source INTEGER NOT NULL,
             PRIMARY KEY (id, tag),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
@@ -282,17 +286,16 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
 }
 bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     QSqlQuery query(database);
-    for (const auto& tagPair : picInfo.tags) {
+    for (const auto& tag : picInfo.tags) {
         query.prepare(R"(
             INSERT OR IGNORE INTO picture_tags(
-                id, tag, source
+                id, tag
             ) VALUES (
-                :id, :tag, :source
+                :id, :tag
             )
         )");
         query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
-        query.bindValue(":tag", QString::fromStdString(tagPair.first));
-        query.bindValue(":source", static_cast<int>(tagPair.second));
+        query.bindValue(":tag", QString::fromStdString(tag));
         if (!query.exec()) {
             qCritical() << "Failed to insert picture_tag: " << query.lastError().text();
             return false;
@@ -560,11 +563,11 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     }
 
     // 查询标签
-    query.prepare("SELECT tag, source FROM picture_tags WHERE id = :id");
+    query.prepare("SELECT tag FROM picture_tags WHERE id = :id");
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.tags.insert(std::make_pair(query.value(0).toString().toStdString(), static_cast<uint8_t>(query.value(1).toInt())));
+            info.tags.insert(query.value(0).toString().toStdString());
         }
     }
 
@@ -586,9 +589,27 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
         }
     }
 
+    // 查询 TweetInfo
+    for (const auto& pair : info.tweetIdIndices) {
+        int64_t tweetID = pair.first;
+        TweetInfo tweetInfo = getTweetInfo(tweetID);
+        if (tweetInfo.tweetID != 0) { // 确保 TweetInfo 有效
+            info.tweetInfo.push_back(tweetInfo);
+        }
+    }
+
+    // 查询 PixivInfo
+    for (const auto& pair : info.pixivIdIndices) {
+        int64_t pixivID = pair.first;
+        PixivInfo pixivInfo = getPixivInfo(pixivID);
+        if (pixivInfo.pixivID != 0) { // 确保 PixivInfo 有效
+            info.pixivInfo.push_back(pixivInfo);
+        }
+    }
+
     return info;
 }
-TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
+TweetInfo PicDatabase::getTweetInfo(int64_t tweetID) const {
     TweetInfo info{};
     QSqlQuery query(database);
 
@@ -626,7 +647,7 @@ TweetInfo PicDatabase::getTweetInfo(uint64_t tweetID) const {
 
     return info;
 }
-PixivInfo PicDatabase::getPixivInfo(uint64_t pixivID) const {
+PixivInfo PicDatabase::getPixivInfo(int64_t pixivID) const {
     PixivInfo info{};
     QSqlQuery query(database);
 
@@ -712,12 +733,12 @@ void PicDatabase::scanDirectory(const std::filesystem::path& directory){
         for (size_t j = i; j < batch_end; j++) {
             processSingleFile(files[j]);
             processed++;
-            std::cout << "\rProcessed files: " << std::setw(8) << processed << std::flush;
         }
         if (!QSqlDatabase::database().commit()) {
             qWarning() << "Batch commit failed, rolling back";
             QSqlDatabase::database().rollback();
         }
+        qInfo() << "Processed files: " << processed;
     }
     std::cout << std::endl;
     qInfo() << "Scan completed. Total files processed:" << processed;
