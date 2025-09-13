@@ -85,12 +85,13 @@ bool PicDatabase::createTables() {
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
-    )";//source: 0 - pixiv, 1 - completed tags, 2 - ai predicted tags
+    )";
     const QString pictureFilesTable = R"(
         CREATE TABLE IF NOT EXISTS picture_file_paths (
             id INTEGER NOT NULL,
             file_path TEXT NOT NULL,
             PRIMARY KEY (id, file_path),
+            UNIQUE (file_path),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
@@ -190,8 +191,10 @@ bool PicDatabase::createTables() {
     };
     const QStringList indexes = {
         // foreign key indexes
-        "CREATE INDEX IF NOT EXISTS idx_picture_pixiv_id ON picture_pixiv_ids(id)",
-        "CREATE INDEX IF NOT EXISTS idx_picture_tweet_id ON picture_tweet_ids(id)",
+        "CREATE INDEX IF NOT EXISTS idx_picture_pixiv_ids_id ON picture_pixiv_ids(id)",
+        "CREATE INDEX IF NOT EXISTS idx_picture_pixiv_ids_pixiv_id ON picture_pixiv_ids(pixiv_id)",
+        "CREATE INDEX IF NOT EXISTS idx_picture_tweet_ids_id ON picture_tweet_ids(id)",
+        "CREATE INDEX IF NOT EXISTS idx_picture_tweet_ids_tweet_id ON picture_tweet_ids(tweet_id)",
         "CREATE INDEX IF NOT EXISTS idx_picture_tags_id ON picture_tags(id)",
         "CREATE INDEX IF NOT EXISTS idx_picture_file_paths_id ON picture_file_paths(id)",
         "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_id ON tweet_hashtags(tweet_id)",
@@ -202,7 +205,11 @@ bool PicDatabase::createTables() {
         "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags ON pixiv_artworks_tags(tag)",
         // author indexes
         "CREATE INDEX IF NOT EXISTS idx_tweets_author_id ON tweets(author_id)",
-        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_author_id ON pixiv_artworks(author_id)"
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_author_id ON pixiv_artworks(author_id)",
+        // tag search indexes
+        "CREATE INDEX IF NOT EXISTS idx_picture_tags_id ON picture_tags(tag, id)",
+        "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_tweet_id ON tweet_hashtags(hashtag, tweet_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_pixiv_id ON pixiv_artworks_tags(tag, pixiv_id)"
     };
     database.transaction();
     for (const QString &tableSql : tables) {
@@ -742,4 +749,137 @@ void PicDatabase::scanDirectory(const std::filesystem::path& directory){
     }
     std::cout << std::endl;
     qInfo() << "Scan completed. Total files processed:" << processed;
+}
+std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+    std::vector<uint64_t> results;
+    if (includedTags.empty() && excludedTags.empty()) return results;
+    
+    QString sql = "SELECT id FROM picture_tags WHERE 1=1";
+    if (!includedTags.empty()) {
+        sql += " AND tag IN (";
+        int idx = 0;
+        for (const auto& tag : includedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += ")";
+    }
+    if (!excludedTags.empty()) {
+        sql += " AND id NOT IN (SELECT id FROM picture_tags WHERE tag IN (";
+        int idx = 0;
+        for (const auto& tag : excludedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += "))";
+    }
+    if (!includedTags.empty()) {
+        sql += QString(" GROUP BY id HAVING COUNT(DISTINCT tag) = %1").arg(includedTags.size());
+    } else {
+        sql += " GROUP BY id";
+    }
+
+    QSqlQuery query(database);
+    if (!query.exec(sql)) {
+        qWarning() << "Tag search failed:" << query.lastError().text();
+        return results;
+    }
+    while (query.next()) {
+        results.push_back(int64_to_uint64(query.value(0).toLongLong()));
+    }
+    return results;
+}
+std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+    std::vector<uint64_t> results;
+    if (includedTags.empty() && excludedTags.empty()) return results;
+    
+    QString sql = "SELECT pixiv_id FROM pixiv_artworks_tags WHERE 1=1";
+    if (!includedTags.empty()) {
+        sql += " AND tag IN (";
+        int idx = 0;
+        for (const auto& tag : includedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += ")";
+    }
+    if (!excludedTags.empty()) {
+        sql += " AND pixiv_id NOT IN (SELECT pixiv_id FROM pixiv_artworks_tags WHERE tag IN (";
+        int idx = 0;
+        for (const auto& tag : excludedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += "))";
+    }
+    if (!includedTags.empty()) {
+        sql += QString(" GROUP BY pixiv_id HAVING COUNT(DISTINCT tag) = %1").arg(includedTags.size());
+    } else {
+        sql += " GROUP BY pixiv_id";
+    }
+
+    QSqlQuery query(database);
+    if (!query.exec(sql)) {
+        qWarning() << "Pixiv tag search failed:" << query.lastError().text();
+        return results;
+    }
+    while (query.next()) {
+        int64_t pixivID = query.value(0).toLongLong();
+        QSqlQuery picQuery(database);
+        picQuery.prepare(R"(
+            SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+        )");
+        picQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+        if (picQuery.exec() && picQuery.next()) {
+            results.push_back(int64_to_uint64(picQuery.value(0).toLongLong()));
+        }
+    }
+    return results;
+}
+std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+    std::vector<uint64_t> results;
+    if (includedTags.empty() && excludedTags.empty()) return results;
+    
+    QString sql = "SELECT tweet_id FROM tweet_hashtags WHERE 1=1";
+    if (!includedTags.empty()) {
+        sql += " AND hashtag IN (";
+        int idx = 0;
+        for (const auto& tag : includedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += ")";
+    }
+    if (!excludedTags.empty()) {
+        sql += " AND tweet_id NOT IN (SELECT tweet_id FROM tweet_hashtags WHERE hashtag IN (";
+        int idx = 0;
+        for (const auto& tag : excludedTags) {
+            if (idx++) sql += ",";
+            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+        }
+        sql += "))";
+    }
+    if (!includedTags.empty()) {
+        sql += QString(" GROUP BY tweet_id HAVING COUNT(DISTINCT hashtag) = %1").arg(includedTags.size());
+    } else {
+        sql += " GROUP BY tweet_id";
+    }
+
+    QSqlQuery query(database);
+    if (!query.exec(sql)) {
+        qWarning() << "Tweet hashtag search failed:" << query.lastError().text();
+        return results;
+    }
+    while (query.next()) {
+        int64_t tweetID = query.value(0).toLongLong();
+        QSqlQuery picQuery(database);
+        picQuery.prepare(R"(
+            SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+        )");
+        picQuery.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+        if (picQuery.exec() && picQuery.next()) {
+            results.push_back(int64_to_uint64(picQuery.value(0).toLongLong()));
+        }
+    }
+    return results;
 }

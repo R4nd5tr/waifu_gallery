@@ -14,17 +14,20 @@ namespace Ui {
     class MainWindow;
 }
 
-enum SortBy {
-    NoSorting,
-    Id,
+enum class SortBy {
+    None,
+    ID,
     Date,
     Size
 };
 
-enum SortOrder {
-    Increasing,
-    Decreasing
+enum class SortOrder {
+    Ascending,
+    Descending
 };
+
+const size_t MAX_PIC_CACHE = 1000; // max number of pictures in cache
+const size_t LOAD_PIC_BATCH = 50; // number of pictures to load each time
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -33,7 +36,7 @@ public:
     ~MainWindow();
 
 signals:
-    void loadImage(uint64_t id, PictureFrame* picFramePtr, std::filesystem::path filePath); // load image in another thread
+    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // load image in another thread
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -44,23 +47,33 @@ private:
     PicDatabase database;
     QThread* loaderWorkerThread = nullptr;
     QThread* databaseWorkerThread = nullptr;
-    void connectSignalSlots();
     void initInterface();
     void fillComboBox();
+    void initWorkerThreads();
+    void connectSignalSlots();
     void loadTags();
     
     // context
     uint widgetsPerRow;
+    uint currentColumn;
+    uint currentRow;
     bool showPNG = true;
     bool showJPG = true;
     bool showGIF = true;
     bool showWEBP = true;
+    bool showUnknowRestrict = true;
+    bool showAllAge = true;
+    bool showR18 = false;
+    bool showR18g = false;
+    bool showUnknowAI = true;
+    bool showAI = true;
+    bool showNonAI = true;
     uint maxHeight;
     uint minHeight;
     uint maxWidth;
     uint minWidth;
-    SortBy sortBy;
-    SortOrder sortOrder = Increasing;
+    SortBy sortBy = SortBy::None;
+    SortOrder sortOrder = SortOrder::Descending;
     int ratioSliderValue;
     double widthRatioSpinBoxValue;
     double heightRatioSpinBoxValue;
@@ -80,38 +93,61 @@ private:
     void updateShowJPG(bool checked);
     void updateShowGIF(bool checked);
     void updateShowWEBP(bool checked);
+    void updateShowUnknowRestrict(bool checked);
+    void updateShowAllAge(bool checked);
+    void updateShowR18(bool checked);
+    void updateShowR18g(bool checked);
+    void updateShowUnknowAI(bool checked);
+    void updateShowAI(bool checked);
+    void updateShowNonAI(bool checked);
+
+    void updateMaxWidth(const QString& text);
+    void updateMaxHeight(const QString& text);
+    void updateMinWidth(const QString& text);
+    void updateMinHeight(const QString& text);
+
     void updateSortBy(int index);
     void updateSortOrder(int index);
     void updateEnableRatioSort(bool checked);
     void updateRatioSlider(int value);
     void updateRatioSpinBox(double value);
+
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
-    void updateWidthHeightLimit();
-    void handleWindowSizeChange();
     
+    void updateIncludedTags(const QStringList& tags);
+    void updateExcludedTags(const QStringList& tags);
+    void updateIncludedPixivTags(const QStringList& tags);
+    void updateExcludedPixivTags(const QStringList& tags);
+    void updateIncludedTweetTags(const QStringList& tags);
+    void updateExcludedTweetTags(const QStringList& tags);
+    void handleWindowSizeChange();
+
     // searching
     bool selectedTagChanged = false;
-    std::vector<PicInfo> lastTagSearchResult;
+    std::vector<uint64_t> lastTagSearchResult;
     bool selectedPixivTagChanged = false;
-    std::vector<PicInfo> lastPixivTagSearchResult;
+    std::vector<uint64_t> lastPixivTagSearchResult;
     bool selectedTweetTagChanged = false;
-    std::vector<PicInfo> lastTweetTagSearchResult;
+    std::vector<uint64_t> lastTweetTagSearchResult;
     bool searchTextChanged = false;
-    std::vector<PicInfo> lastTextSearchResult;
-    void picSearch();         // add search result into displayingPics vector
-
-    // displaying
-    uint displayIndex;
-    std::vector<PicInfo> displayingPics;
-    std::unordered_set<uint64_t> displayingPicIds; // For cache cleanup, images not in this set will be deleted from the cache.
+    std::vector<uint64_t> lastTextSearchResult;
+    void picSearch(); // clear and add search result into resultPics vector(ONLY FUNCTION THAT CLEAR AND REFILL THIS VECTOR)
+                      //                                                                                                   |                                                   
+    // displaying                                                                                                          |
+    uint displayIndex;//                                                                                                   |
+    std::vector<PicInfo> resultPics;//  <-----------------------------------------------------------------------------------
+    std::vector<uint64_t> displayingPicIds;
+    std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // remember to clear this when clearing resultPics vector, also use for clearing cache
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;
-    std::vector<PictureFrame*> displayingPicFrames;
-    void sortPics();          // sort displayingPics vector
     void refreshPicDisplay(); // clear widget, set displayIndex to 0, and call loadMorePics()
-    void loadMorePics();      // check pictures match filter or not, add PictureFrame into widget, load image
-    void displayImage(uint64_t picId, PictureFrame* picFramePtr, QPixmap img);
-    void rearrangePicFrames();// rearrange PictureFrame based on window size change
+    bool matchFilter(const PicInfo& pic);
+    void loadMorePics();      // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
+    void displayImage(uint64_t picId, const QPixmap& img); // slot for signal loadComplete
+    void sortPics();          // sort resultPics vector
+    void rearrangePicFrames();// rearrange PictureFrame based on window size change, use displayingPicIds and idToFrameMap
+    void clearAllPicFrames();
+    void removePicFramesFromLayout();
     
 };
 

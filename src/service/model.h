@@ -76,6 +76,7 @@ struct PicInfo{
     uint32_t size;
     std::string fileType;
     XRestrictType xRestrict = XRestrictType::Unknown;
+    AIType aiType = AIType::Unknown;
 
     float getRatio() const;
 };
