@@ -7,11 +7,6 @@
 #include <QObject>
 #include <QPixmap>
 
-struct ImageData {
-    uint64_t id;
-    QPixmap img;
-};
-
 class DatabaseWorker : public QObject {
     Q_OBJECT
 public:
@@ -27,12 +22,12 @@ private:
 class LoaderWorker : public QObject {
     Q_OBJECT
 public:
-    explicit LoaderWorker();
+    explicit LoaderWorker(QObject* parent = nullptr);
     ~LoaderWorker();
 public slots:
-    void loadImage(uint64_t id, PictureFrame* picFramePtr, std::filesystem::path filePath);
+    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths);
 signals:
-    void loadComplete(uint64_t id, PictureFrame* picFramePtr, QPixmap img);
+    void loadComplete(uint64_t id, const QPixmap& img);
 private:
 };
 

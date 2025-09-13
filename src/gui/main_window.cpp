@@ -7,13 +7,24 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
     database = PicDatabase(QString("main_thread"));
+    initInterface();
+    initWorkerThreads();
+    connectSignalSlots();
 
 }
 MainWindow::~MainWindow() {
     delete ui;
+    loaderWorkerThread->quit();
+    loaderWorkerThread->wait();
+    for (const auto& [id, frame] : idToFrameMap) {
+        ui->picDisplayLayout->removeWidget(frame);
+        frame->deleteLater();
+    }
+    idToFrameMap.clear();
 }
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
+    fillComboBox();
 }
 void MainWindow::fillComboBox() {
     ui->searchComboBox->addItem("选择搜索字段");
@@ -40,11 +51,34 @@ void MainWindow::fillComboBox() {
     ui->orderComboBox->addItem("递减");
     ui->orderComboBox->setCurrentIndex(0);
 }
+void MainWindow::initWorkerThreads() {
+    loaderWorkerThread = new QThread(this);
+    LoaderWorker* loaderWorker = new LoaderWorker();
+    loaderWorker->moveToThread(loaderWorkerThread);
+    connect(this, &MainWindow::loadImage, loaderWorker, &LoaderWorker::loadImage);
+    connect(loaderWorker, &LoaderWorker::loadComplete, this, &MainWindow::displayImage);
+    connect(loaderWorkerThread, &QThread::finished, loaderWorker, &QObject::deleteLater);
+    loaderWorkerThread->start();
+
+    // databaseWorkerThread = new QThread(this);
+    // DatabaseWorker* databaseWorker = new DatabaseWorker(QString("database_thread"));
+    // databaseWorker->moveToThread(databaseWorkerThread);
+    // connect(this, &MainWindow::scanDirectory, databaseWorker, &DatabaseWorker::scanDirectory);
+    // connect(databaseWorkerThread, &QThread::finished, databaseWorker, &QObject::deleteLater);
+    // databaseWorkerThread->start();
+}
 void MainWindow::connectSignalSlots() {
     connect(ui->jpgCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowJPG);
     connect(ui->pngCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowPNG);
     connect(ui->gifCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowGIF);
     connect(ui->webpCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowWEBP);
+    connect(ui->unknowRestrictCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowRestrict);
+    connect(ui->allAgeCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowAllAge);
+    connect(ui->r18CheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowR18);
+    connect(ui->r18gCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowR18g);
+    connect(ui->unknowAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowAI);
+    connect(ui->aiCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowAI);
+    connect(ui->noAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowNonAI);
     connect(ui->sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortBy);
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
@@ -53,8 +87,10 @@ void MainWindow::connectSignalSlots() {
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
-    connect(ui->resolutionHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateWidthHeightLimit);
-    connect(ui->resolutionWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateWidthHeightLimit);
+    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxHeight);
+    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinHeight);
+    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxWidth);
+    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinWidth);
 }
 void MainWindow::updateShowJPG(bool checked) {
     showJPG = checked;
@@ -70,6 +106,34 @@ void MainWindow::updateShowGIF(bool checked) {
 }
 void MainWindow::updateShowWEBP(bool checked) {
     showWEBP = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowUnknowRestrict(bool checked) {
+    showUnknowRestrict = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowAllAge(bool checked) {
+    showAllAge = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowR18(bool checked) {
+    showR18 = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowR18g(bool checked) {
+    showR18g = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowUnknowAI(bool checked) {
+    showUnknowAI = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowAI(bool checked) {
+    showAI = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowNonAI(bool checked) {
+    showNonAI = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateSortBy(int index) {
@@ -155,41 +219,37 @@ void MainWindow::updateSearchText(const QString& text) {
     searchText = text.toStdString();
     searchTextChanged = true;
 }
-inline std::string trim(const std::string& s) {
-    auto start = s.find_first_not_of(" \t");
-    auto end = s.find_last_not_of(" \t");
-    return (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+void MainWindow::updateMaxWidth(const QString& text) {
+    bool ok;
+    uint value = text.toUInt(&ok);
+    if (ok) {
+        maxWidth = value;
+        refreshPicDisplay();
+    }
 }
-std::pair<uint, uint> parseRange(const std::string& text) {
-    std::string s = trim(text);
-    if (s.empty()) return {0, UINT_MAX};
-
-    if (s[0] == '<') {
-        uint val = std::stoul(s.substr(1));
-        return {0, val};
+void MainWindow::updateMinWidth(const QString& text) {
+    bool ok;
+    uint value = text.toUInt(&ok);
+    if (ok) {
+        minWidth = value;
+        refreshPicDisplay();
     }
-    if (s[0] == '>') {
-        uint val = std::stoul(s.substr(1));
-        return {val, UINT_MAX};
-    }
-    size_t dash = s.find('-');
-    if (dash != std::string::npos) {
-        uint a = std::stoul(s.substr(0, dash));
-        uint b = std::stoul(s.substr(dash + 1));
-        if (a > b) std::swap(a, b);
-        return {a, b};
-    }
-    uint val = std::stoul(s);
-    return {val, val};
 }
-void MainWindow::updateWidthHeightLimit() {
-    auto heightRange = parseRange(ui->resolutionHeightEdit->text().toStdString());
-    minHeight = heightRange.first;
-    maxHeight = heightRange.second;
-    auto widthRange = parseRange(ui->resolutionWidthEdit->text().toStdString());
-    minWidth = widthRange.first;
-    maxWidth = widthRange.second;
-    refreshPicDisplay();
+void MainWindow::updateMaxHeight(const QString& text) {
+    bool ok;
+    uint value = text.toUInt(&ok);
+    if (ok) {
+        maxHeight = value;
+        refreshPicDisplay();
+    }
+}
+void MainWindow::updateMinHeight(const QString& text) {
+    bool ok;
+    uint value = text.toUInt(&ok);
+    if (ok) {
+        minHeight = value;
+        refreshPicDisplay();
+    }
 }
 void MainWindow::handleWindowSizeChange() {
     int width = ui->picBrowseWidget->width();
@@ -200,4 +260,188 @@ void MainWindow::handleWindowSizeChange() {
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     handleWindowSizeChange();
+}
+void MainWindow::picSearch() {
+    clearAllPicFrames();
+    
+    ui->statusbar->showMessage("搜索中...");
+    if (selectedTagChanged) {
+        lastTagSearchResult = database.tagSearch(includedTags, excludedTags);
+        selectedTagChanged = false;
+    }
+    if (selectedPixivTagChanged) {
+        lastPixivTagSearchResult = database.pixivTagSearch(includedPixivTags, excludedPixivTags);
+        selectedPixivTagChanged = false;
+    }
+    if (selectedTweetTagChanged) {
+        lastTweetTagSearchResult = database.tweetHashtagSearch(includedTweetTags, excludedTweetTags);
+        selectedTweetTagChanged = false;
+    }
+    if (searchTextChanged) {
+        lastTextSearchResult = database.textSearch(searchText, searchField);
+        searchTextChanged = false;
+    }
+    // intersect all search results
+    std::unordered_map<uint64_t, int> idCount;
+    auto addToCount = [&idCount](const std::vector<uint64_t>& pics) {
+        for (const auto& pic : pics) {
+            idCount[pic]++;
+        }
+    };
+    addToCount(lastTagSearchResult);
+    addToCount(lastPixivTagSearchResult);
+    addToCount(lastTweetTagSearchResult);
+    addToCount(lastTextSearchResult);
+    size_t totalConditions = 0;
+    if (!includedTags.empty() || !excludedTags.empty()) totalConditions++;
+    if (!includedPixivTags.empty() || !excludedPixivTags.empty()) totalConditions++;
+    if (!includedTweetTags.empty() || !excludedTweetTags.empty()) totalConditions++;
+    if (!searchText.empty()) totalConditions++;
+
+    resultPics.clear();
+    for (const auto& [id, count] : idCount) {
+        if (count == totalConditions) {
+            resultPics.push_back(database.getPicInfo(id));
+        }
+    }
+    ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
+    sortPics();
+    refreshPicDisplay();
+}
+void MainWindow::refreshPicDisplay() {
+    removePicFramesFromLayout();
+    displayIndex = 0;
+    displayingPicIds.clear();
+    currentColumn = 0;
+    currentRow = 0;
+    loadMorePics();
+}
+bool MainWindow::matchFilter(const PicInfo& pic) {
+    if (!showJPG && pic.fileType == "jpg") return false;
+    if (!showPNG && pic.fileType == "png") return false;
+    if (!showGIF && pic.fileType == "gif") return false;
+    if (!showWEBP && pic.fileType == "webp") return false;
+    if (!showUnknowRestrict && pic.xRestrict == XRestrictType::Unknown) return false;
+    if (!showAllAge && pic.xRestrict == XRestrictType::AllAges) return false;
+    if (!showR18 && pic.xRestrict == XRestrictType::R18) return false;
+    if (!showR18g && pic.xRestrict == XRestrictType::R18G) return false;
+    if (!showUnknowAI && pic.aiType == AIType::Unknown) return false;
+    if (!showAI && pic.aiType == AIType::AI) return false;
+    if (!showNonAI && pic.aiType == AIType::NotAI) return false;
+    if (maxWidth != 0 && pic.width > maxWidth) return false;
+    if (minWidth != 0 && pic.width < minWidth) return false;
+    if (maxHeight != 0 && pic.height > maxHeight) return false;
+    if (minHeight != 0 && pic.height < minHeight) return false;
+    return true;
+}
+void MainWindow::loadMorePics() {
+    int picsLoaded = 0;
+    while (displayIndex < resultPics.size() && picsLoaded < LOAD_PIC_BATCH) {
+        const PicInfo& pic = resultPics[displayIndex];
+        displayIndex++;
+        if (!matchFilter(pic)) continue;
+        displayingPicIds.push_back(pic.id);
+        auto frame = idToFrameMap.find(pic.id);
+        if (frame != idToFrameMap.end()) {
+            ui->picDisplayLayout->addWidget(frame->second, currentRow, currentColumn);
+        } else {
+            PictureFrame* picFrame = new PictureFrame(this, pic, searchField);
+            idToFrameMap[pic.id] = picFrame;
+            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
+            auto imgIt = imageThumbCache.find(pic.id);
+            if (imgIt != imageThumbCache.end()) {
+                picFrame->setPixmap(imgIt->second);
+            } else {
+                emit loadImage(pic.id, pic.filePaths);
+            }
+        }
+        picsLoaded++;
+        currentColumn++;
+        if (currentColumn >= widgetsPerRow) {
+            currentColumn = 0;
+            currentRow++;
+        }
+    }
+}
+void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
+    if (imageThumbCache.size() >= MAX_PIC_CACHE) {
+        for (auto it = imageThumbCache.begin(); it != imageThumbCache.end(); ) {
+            if (idToFrameMap.find(it->first) == idToFrameMap.end()) {
+                it = imageThumbCache.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+    imageThumbCache[picId] = img;
+    auto frameIt = idToFrameMap.find(picId);
+    if (frameIt != idToFrameMap.end()) {
+        frameIt->second->setPixmap(img);
+    }
+}
+void MainWindow::sortPics() {
+    auto comparator = [this](const PicInfo& a, const PicInfo& b) {
+        if (ratioSortEnabled) {
+            double ratioA = (a.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(a.width) / a.height;
+            double ratioB = (b.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(b.width) / b.height;
+            double diffA = std::abs(ratioA - ratio);
+            double diffB = std::abs(ratioB - ratio);
+            if (diffA != diffB) {
+                return diffA < diffB;
+            }
+            return false; // if ratios are equally close, sort by ID to ensure consistent order
+        }
+        switch (sortBy) {
+            case SortBy::None:
+                return false;
+            case SortBy::ID:
+                if (sortOrder == SortOrder::Ascending) {
+                    return a.id < b.id;
+                } else {
+                    return a.id > b.id;
+                }
+            case SortBy::Size:
+                if (sortOrder == SortOrder::Ascending) {
+                    return (a.size) < (b.size);
+                } else {
+                    return (a.size) > (b.size);
+                }
+            default:
+                return false;
+        }
+    };
+    std::sort(resultPics.begin(), resultPics.end(), comparator);
+}
+void MainWindow::rearrangePicFrames() {
+    removePicFramesFromLayout();
+    currentColumn = 0;
+    currentRow = 0;
+    for (const auto& picId : displayingPicIds) {
+        auto frameIt = idToFrameMap.find(picId);
+        if (frameIt != idToFrameMap.end()) {
+            ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
+            currentColumn++;
+            if (currentColumn >= widgetsPerRow) {
+                currentColumn = 0;
+                currentRow++;
+            }
+        }
+    }
+}
+void MainWindow::clearAllPicFrames() {
+    for (auto& [id, frame] : idToFrameMap) {
+        frame->deleteLater();
+    }
+    idToFrameMap.clear();
+
+    QLayoutItem* child;
+    while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
+        delete child;
+    }
+}
+void MainWindow::removePicFramesFromLayout() {    
+    QLayoutItem* child;
+    while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
+        delete child;
+    }
 }
