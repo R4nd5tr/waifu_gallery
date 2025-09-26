@@ -80,10 +80,11 @@ bool PicDatabase::createTables() {
     const QString pictureTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
-            tag TEXT NOT NULL,
-            PRIMARY KEY (id, tag),
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (id, tag_id),
 
-            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
+            FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
         )
     )";
     const QString pictureFilesTable = R"(
@@ -116,6 +117,14 @@ bool PicDatabase::createTables() {
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
     )";
+    const QString tagsTable = R"(
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tag TEXT NOT NULL UNIQUE,
+            is_character BOOLEAN,
+            count INTEGER DEFAULT 0
+        )
+    )";
     const QString tweetsTable = R"(
         CREATE TABLE IF NOT EXISTS tweets (
             tweet_id INTEGER PRIMARY KEY NOT NULL,
@@ -138,10 +147,18 @@ bool PicDatabase::createTables() {
     const QString tweetHashtagsTable = R"(
         CREATE TABLE IF NOT EXISTS tweet_hashtags (
             tweet_id INTEGER NOT NULL,
-            hashtag TEXT NOT NULL,
-            PRIMARY KEY (tweet_id, hashtag),
+            hashtag_id INTEGER NOT NULL,
+            PRIMARY KEY (tweet_id, hashtag_id),
 
-            FOREIGN KEY (tweet_id) REFERENCES tweets(tweet_id) ON DELETE CASCADE
+            FOREIGN KEY (tweet_id) REFERENCES tweets(tweet_id) ON DELETE CASCADE,
+            FOREIGN KEY (hashtag_id) REFERENCES twitter_hashtags(id) ON DELETE CASCADE
+        )
+    )";
+    const QString twitterHashtagsTable = R"(
+        CREATE TABLE IF NOT EXISTS twitter_hashtags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hashtag TEXT NOT NULL UNIQUE,
+            count INTEGER DEFAULT 0
         )
     )";
     const QString pixivArtworksTable = R"(
@@ -157,21 +174,23 @@ bool PicDatabase::createTables() {
             x_restrict INTEGER,
             ai_type INTEGER DEFAULT 0 
         )
-    )";// ai_type: 0-unknown, 1-not ai, 2-ai
+    )";
     const QString pixivArtworksTagsTable = R"(
         CREATE TABLE IF NOT EXISTS pixiv_artworks_tags (
             pixiv_id INTEGER NOT NULL,
-            tag TEXT NOT NULL,
-            PRIMARY KEY (pixiv_id, tag),
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (pixiv_id, tag_id),
 
-            FOREIGN KEY (pixiv_id) REFERENCES pixiv_artworks(pixiv_id) ON DELETE CASCADE
+            FOREIGN KEY (pixiv_id) REFERENCES pixiv_artworks(pixiv_id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES pixiv_tags(id) ON DELETE CASCADE
         )
     )";
     const QString pixivTagsTable = R"(
         CREATE TABLE IF NOT EXISTS pixiv_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tag TEXT NOT NULL,
-            translated_tag TEXT
+            tag TEXT NOT NULL UNIQUE,
+            translated_tag TEXT,
+            count INTEGER DEFAULT 0
         )
     )";
     const QStringList tables = {
@@ -182,12 +201,14 @@ bool PicDatabase::createTables() {
         //tweet
         tweetsTable,
         tweetHashtagsTable,
+        twitterHashtagsTable,
         //pictures
         picturesTable, 
         pictureTagsTable,
         pictureFilesTable,
         picturePixivIdsTable,
-        pictureTweetIdsTable
+        pictureTweetIdsTable,
+        tagsTable
     };
     const QStringList indexes = {
         // foreign key indexes
@@ -200,16 +221,19 @@ bool PicDatabase::createTables() {
         "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_id ON tweet_hashtags(tweet_id)",
         "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_id ON pixiv_artworks_tags(pixiv_id)",
         // tags indexes
-        "CREATE INDEX IF NOT EXISTS idx_picture_tags ON picture_tags(tag)",
-        "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags ON tweet_hashtags(hashtag)",
-        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags ON pixiv_artworks_tags(tag)",
+        "CREATE INDEX IF NOT EXISTS idx_picture_tags ON picture_tags(tag_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags ON tweet_hashtags(hashtag_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags ON pixiv_artworks_tags(tag_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag)",
+        "CREATE INDEX IF NOT EXISTS idx_twitter_hashtags_hashtag ON twitter_hashtags(hashtag)",
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_tags_tag ON pixiv_tags(tag)",
         // author indexes
         "CREATE INDEX IF NOT EXISTS idx_tweets_author_id ON tweets(author_id)",
         "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_author_id ON pixiv_artworks(author_id)",
         // tag search indexes
-        "CREATE INDEX IF NOT EXISTS idx_picture_tags_id ON picture_tags(tag, id)",
-        "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_tweet_id ON tweet_hashtags(hashtag, tweet_id)",
-        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_pixiv_id ON pixiv_artworks_tags(tag, pixiv_id)"
+        "CREATE INDEX IF NOT EXISTS idx_picture_tags_id ON picture_tags(tag_id, id)",
+        "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_tweet_id ON tweet_hashtags(hashtag_id, tweet_id)",
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_pixiv_id ON pixiv_artworks_tags(tag_id, pixiv_id)"
     };
     database.transaction();
     for (const QString &tableSql : tables) {
@@ -226,8 +250,120 @@ bool PicDatabase::createTables() {
             return false;
         }
     }
+    if (!setupFTS5()) {
+        qCritical() << "Failed to setup FTS5";
+        database.rollback();
+        return false;
+    }
     database.commit();
     return true;
+}
+bool PicDatabase::setupFTS5() {
+    QSqlQuery query(database);
+
+    const QString pixivFtsTable = R"(
+        CREATE VIRTUAL TABLE IF NOT EXISTS pixiv_fts USING fts5(
+            title,
+            description,
+            content=pixiv_artworks,
+            content_rowid=pixiv_id
+        )
+    )";
+    const QString tweetFtsTable = R"(
+        CREATE VIRTUAL TABLE IF NOT EXISTS tweets_fts USING fts5(
+            description,
+            content=tweets,
+            content_rowid=tweet_id
+        )
+    )";
+    if (!query.exec(pixivFtsTable)) {
+        qCritical() << "Failed to create FTS5 table for pixiv_artworks:" << query.lastError().text();
+        return false;
+    }
+    if (!query.exec(tweetFtsTable)) {
+        qCritical() << "Failed to create FTS5 table for tweets:" << query.lastError().text();
+        return false;
+    }
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_ai AFTER INSERT ON pixiv_artworks BEGIN
+            INSERT INTO pixiv_fts(rowid, title, description)
+            VALUES (new.pixiv_id, new.title, new.description);
+        END;
+    )");
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_ad AFTER DELETE ON pixiv_artworks BEGIN
+            INSERT INTO pixiv_fts(pixiv_fts, rowid, title, description)
+            VALUES('delete', old.pixiv_id, old.title, old.description);
+        END;
+    )");
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_au AFTER UPDATE ON pixiv_artworks BEGIN
+            INSERT INTO pixiv_fts(pixiv_fts, rowid, title, description)
+            VALUES('delete', old.pixiv_id, old.title, old.description);
+            INSERT INTO pixiv_fts(rowid, title, description)
+            VALUES (new.pixiv_id, new.title, new.description);
+        END;
+    )");
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS tweets_ai AFTER INSERT ON tweets BEGIN
+            INSERT INTO tweets_fts(rowid, description)
+            VALUES (new.tweet_id, new.description);
+        END;
+    )");
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS tweets_ad AFTER DELETE ON tweets BEGIN
+            INSERT INTO tweets_fts(tweets_fts, rowid, description)
+            VALUES('delete', old.tweet_id, old.description);
+        END;
+    )");
+    query.exec(R"(
+        CREATE TRIGGER IF NOT EXISTS tweets_au AFTER UPDATE ON tweets BEGIN
+            INSERT INTO tweets_fts(tweets_fts, rowid, description)
+            VALUES('delete', old.tweet_id, old.description);
+            INSERT INTO tweets_fts(rowid, description)
+            VALUES (new.tweet_id, new.description);
+        END;
+    )");
+    return true;
+}
+void PicDatabase::getTagMapping() {
+    tagToId.clear();
+    twitterHashtagToId.clear();
+    pixivTagToId.clear();
+    QSqlQuery query(database);
+    if (!query.exec("SELECT id, tag FROM tags")) {
+        qWarning() << "Failed to fetch tags:" << query.lastError().text();
+        return;
+    }
+    while (query.next()) {
+        int id = query.value(0).toInt();
+        QString tag = query.value(1).toString();
+        tagToId[tag.toStdString()] = id;
+        idToTag[id] = tag.toStdString();
+    }
+    if (!query.exec("SELECT id, hashtag FROM twitter_hashtags")) {
+        qWarning() << "Failed to fetch twitter hashtags:" << query.lastError().text();
+        return;
+    }
+    while (query.next()) {
+        int id = query.value(0).toInt();
+        QString hashtag = query.value(1).toString();
+        twitterHashtagToId[hashtag.toStdString()] = id;
+        idToTwitterHashtag[id] = hashtag.toStdString();
+    }
+    if (!query.exec("SELECT id, tag FROM pixiv_tags")) {
+        qWarning() << "Failed to fetch pixiv tags:" << query.lastError().text();
+        return;
+    }
+    while (query.next()) {
+        int id = query.value(0).toInt();
+        QString tag = query.value(1).toString();
+        pixivTagToId[tag.toStdString()] = id;
+        idToPixivTag[id] = tag.toStdString();
+    }
+    qInfo() << "Tag mappings loaded. Tags:" << tagToId.size()
+            << "Twitter Hashtags:" << twitterHashtagToId.size()
+            << "Pixiv Tags:" << pixivTagToId.size();
 }
 bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
     if (!insertPicture(picInfo)) {
@@ -294,15 +430,29 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
 bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     QSqlQuery query(database);
     for (const auto& tag : picInfo.tags) {
+        if (tagToId.find(tag) == tagToId.end()) {
+            QSqlQuery insertTagQuery(database);
+            insertTagQuery.prepare(R"(
+                INSERT OR IGNORE INTO tags(tag, count) VALUES (:tag, 0)
+            )");
+            insertTagQuery.bindValue(":tag", QString::fromStdString(tag));
+            if (!insertTagQuery.exec()) {
+                qCritical() << "Failed to insert tag: " << insertTagQuery.lastError().text();
+                return false;
+            }
+            int newId = insertTagQuery.lastInsertId().toInt();
+            tagToId[tag] = newId;
+            idToTag[newId] = tag;
+        }
         query.prepare(R"(
             INSERT OR IGNORE INTO picture_tags(
-                id, tag
+                id, tag_id
             ) VALUES (
-                :id, :tag
+                :id, :tag_id
             )
         )");
         query.bindValue(":id", QVariant::fromValue(uint64_to_int64(picInfo.id)));
-        query.bindValue(":tag", QString::fromStdString(tag));
+        query.bindValue(":tag_id", tagToId[tag]);
         if (!query.exec()) {
             qCritical() << "Failed to insert picture_tag: " << query.lastError().text();
             return false;
@@ -402,15 +552,29 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
 bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
     QSqlQuery query(database);
     for (const auto& hashtag : tweetInfo.hashtags) {
+        if (twitterHashtagToId.find(hashtag) == twitterHashtagToId.end()) {
+            QSqlQuery insertHashtagQuery(database);
+            insertHashtagQuery.prepare(R"(
+                INSERT OR IGNORE INTO twitter_hashtags(hashtag, count) VALUES (:hashtag, 0)
+            )");
+            insertHashtagQuery.bindValue(":hashtag", QString::fromStdString(hashtag));
+            if (!insertHashtagQuery.exec()) {
+                qCritical() << "Failed to insert twitter hashtag: " << insertHashtagQuery.lastError().text();
+                return false;
+            }
+            int newId = insertHashtagQuery.lastInsertId().toInt();
+            twitterHashtagToId[hashtag] = newId;
+            idToTwitterHashtag[newId] = hashtag;
+        }
         query.prepare(R"(
             INSERT OR IGNORE INTO tweet_hashtags(
-                tweet_id, hashtag
+                tweet_id, hashtag_id
             ) VALUES (
-                :tweet_id, :hashtag
+                :tweet_id, :hashtag_id
             )
         )");
         query.bindValue(":tweet_id", QVariant::fromValue(tweetInfo.tweetID));
-        query.bindValue(":hashtag", QString::fromStdString(hashtag));
+        query.bindValue(":hashtag_id", QVariant::fromValue(twitterHashtagToId.at(hashtag)));
         if (!query.exec()) {
             qCritical() << "Failed to insert tweet_hashtag: " << query.lastError().text();
             return false;
@@ -454,11 +618,26 @@ bool PicDatabase::insertPixivArtwork(const PixivInfo& pixivInfo) {
         qCritical() << "Failed to insert pixiv_artwork: " << query.lastError().text();
         return false;
     }
+    newPixivIDs.insert(pixivInfo.pixivID);
     return true;
 }
 bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
     QSqlQuery query(database);
     for (const auto& tag : pixivInfo.tags) {
+        if (pixivTagToId.find(tag) == pixivTagToId.end()) {
+            QSqlQuery insertTagQuery(database);
+            insertTagQuery.prepare(R"(
+                INSERT OR IGNORE INTO pixiv_tags(tag, count) VALUES (:tag, 0)
+            )");
+            insertTagQuery.bindValue(":tag", QString::fromStdString(tag));
+            if (!insertTagQuery.exec()) {
+                qCritical() << "Failed to insert pixiv tag: " << insertTagQuery.lastError().text();
+                return false;
+            }
+            int newId = insertTagQuery.lastInsertId().toInt();
+            pixivTagToId[tag] = newId;
+            idToPixivTag[newId] = tag;
+        }
         query.prepare(R"(
             INSERT OR IGNORE INTO pixiv_artworks_tags(
                 pixiv_id, tag
@@ -471,6 +650,20 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
         if (!query.exec()) {
             qCritical() << "Failed to insert pixiv_artworks_tag: " << query.lastError().text();
             return false;
+        }
+    }
+    if (pixivInfo.tags.size() == pixivInfo.tagsTransl.size()) {
+        for (size_t i = 0; i < pixivInfo.tags.size(); ++i) {
+            QSqlQuery updateTranslQuery(database);
+            updateTranslQuery.prepare(R"(
+                UPDATE pixiv_tags SET translated_tag = :translated_tag WHERE id = :id
+            )");
+            updateTranslQuery.bindValue(":translated_tag", QString::fromStdString(pixivInfo.tagsTransl[i]));
+            updateTranslQuery.bindValue(":id", pixivTagToId[pixivInfo.tags[i]]);
+            if (!updateTranslQuery.exec()) {
+                qCritical() << "Failed to update translated_tag: " << updateTranslQuery.lastError().text();
+                return false;
+            }
         }
     }
     return true;
@@ -521,29 +714,59 @@ bool PicDatabase::updatePixivArtwork(const PixivInfo& pixivInfo) {
         qCritical() << "Failed to update pixiv_artwork: " << query.lastError().text();
         return false;
     }
+    newPixivIDs.insert(pixivInfo.pixivID);
     return true;
 }
 bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
     QSqlQuery query(database);
     for (const auto& tag : pixivInfo.tags) {
+        if (pixivTagToId.find(tag) == pixivTagToId.end()) {
+            QSqlQuery insertTagQuery(database);
+            insertTagQuery.prepare(R"(
+                INSERT INTO pixiv_tags(tag, count) VALUES (:tag, 0)
+                ON CONFLICT(tag) DO NOTHING
+            )");
+            insertTagQuery.bindValue(":tag", QString::fromStdString(tag));
+            if (!insertTagQuery.exec()) {
+                qCritical() << "Failed to insert pixiv tag: " << insertTagQuery.lastError().text();
+                return false;
+            }
+            int newId = insertTagQuery.lastInsertId().toInt();
+            pixivTagToId[tag] = newId;
+            idToPixivTag[newId] = tag;
+        }
         query.prepare(R"(
             INSERT INTO pixiv_artworks_tags(
-                pixiv_id, tag
+                pixiv_id, tag_id
             ) VALUES (
-                :pixiv_id, :tag
+                :pixiv_id, :tag_id
             )
-            ON CONFLICT(pixiv_id, tag) DO NOTHING
+            ON CONFLICT(pixiv_id, tag_id) DO NOTHING
         )");
         query.bindValue(":pixiv_id", QVariant::fromValue(pixivInfo.pixivID));
-        query.bindValue(":tag", QString::fromStdString(tag));
+        query.bindValue(":tag_id", pixivTagToId.at(tag));
         if (!query.exec()) {
             qCritical() << "Failed to update pixiv_artworks_tag: " << query.lastError().text();
             return false;
         }
     }
+    if (pixivInfo.tags.size() == pixivInfo.tagsTransl.size()) {
+        for (size_t i = 0; i < pixivInfo.tags.size(); ++i) {
+            QSqlQuery updateTranslQuery(database);
+            updateTranslQuery.prepare(R"(
+                UPDATE pixiv_tags SET translated_tag = :translated_tag WHERE id = :id
+            )");
+            updateTranslQuery.bindValue(":translated_tag", QString::fromStdString(pixivInfo.tagsTransl[i]));
+            updateTranslQuery.bindValue(":id", pixivTagToId[pixivInfo.tags[i]]);
+            if (!updateTranslQuery.exec()) {
+                qCritical() << "Failed to update translated_tag: " << updateTranslQuery.lastError().text();
+                return false;
+            }
+        }
+    }
     return true;
 }
-PicInfo PicDatabase::getPicInfo(uint64_t id) const {
+PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) const {
     PicInfo info{};
     QSqlQuery query(database);
 
@@ -570,11 +793,11 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     }
 
     // 查询标签
-    query.prepare("SELECT tag FROM picture_tags WHERE id = :id");
+    query.prepare("SELECT tag_id FROM picture_tags WHERE id = :id");
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.tags.insert(query.value(0).toString().toStdString());
+            info.tags.insert(idToTag.at(query.value(0).toInt()));
         }
     }
 
@@ -583,7 +806,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.pixivIdIndices.insert({query.value(0).toULongLong(), query.value(1).toInt()});
+            info.pixivIdIndices[query.value(0).toULongLong()] = query.value(1).toInt();
         }
     }
 
@@ -592,25 +815,39 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.tweetIdIndices.insert({query.value(0).toULongLong(), query.value(1).toInt()});
+            info.tweetIdIndices[query.value(0).toULongLong()] = query.value(1).toInt();
         }
     }
 
     // 查询 TweetInfo
-    for (const auto& pair : info.tweetIdIndices) {
-        int64_t tweetID = pair.first;
+    if (tweetID != 0) {
         TweetInfo tweetInfo = getTweetInfo(tweetID);
         if (tweetInfo.tweetID != 0) { // 确保 TweetInfo 有效
             info.tweetInfo.push_back(tweetInfo);
         }
+    } else {
+        for (const auto& pair : info.tweetIdIndices) {
+            int64_t tweetID = pair.first;
+            TweetInfo tweetInfo = getTweetInfo(tweetID);
+            if (tweetInfo.tweetID != 0) { // 确保 TweetInfo 有效
+                info.tweetInfo.push_back(tweetInfo);
+            }
+        }
     }
 
     // 查询 PixivInfo
-    for (const auto& pair : info.pixivIdIndices) {
-        int64_t pixivID = pair.first;
+    if (pixivID != 0) {
         PixivInfo pixivInfo = getPixivInfo(pixivID);
         if (pixivInfo.pixivID != 0) { // 确保 PixivInfo 有效
             info.pixivInfo.push_back(pixivInfo);
+        }
+    } else {
+        for (const auto& pair : info.pixivIdIndices) {
+            int64_t pixivID = pair.first;
+            PixivInfo pixivInfo = getPixivInfo(pixivID);
+            if (pixivInfo.pixivID != 0) { // 确保 PixivInfo 有效
+                info.pixivInfo.push_back(pixivInfo);
+            }
         }
     }
 
@@ -644,11 +881,11 @@ TweetInfo PicDatabase::getTweetInfo(int64_t tweetID) const {
     }
 
     // 查询 hashtags
-    query.prepare("SELECT hashtag FROM tweet_hashtags WHERE tweet_id = :tweet_id");
+    query.prepare("SELECT hashtag_id FROM tweet_hashtags WHERE tweet_id = :tweet_id");
     query.bindValue(":tweet_id", QVariant::fromValue(tweetID));
     if (query.exec()) {
         while (query.next()) {
-            info.hashtags.insert(query.value(0).toString().toStdString());
+            info.hashtags.insert(idToTwitterHashtag.at(query.value(0).toInt()));
         }
     }
 
@@ -677,50 +914,50 @@ PixivInfo PicDatabase::getPixivInfo(int64_t pixivID) const {
     }
 
     // 查询 tags
-    query.prepare("SELECT tag FROM pixiv_artworks_tags WHERE pixiv_id = :pixiv_id");
+    query.prepare("SELECT tag_id FROM pixiv_artworks_tags WHERE pixiv_id = :pixiv_id");
     query.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
     if (query.exec()) {
         while (query.next()) {
-            info.tags.push_back(query.value(0).toString().toStdString());
+            info.tags.push_back(idToPixivTag.at(query.value(0).toInt()));
+            // For translated tags, we need to query the pixiv_tags table
+            QSqlQuery translQuery(database);
+            translQuery.prepare("SELECT translated_tag FROM pixiv_tags WHERE id = :id");
+            translQuery.bindValue(":id", query.value(0).toInt());
+            if (translQuery.exec() && translQuery.next()) {
+                info.tagsTransl.push_back(translQuery.value(0).toString().toStdString());
+            } else {
+                info.tagsTransl.push_back(""); // No translation available
+            }
         }
     }
-
-    // 查询 tagsTransl
-    query.prepare("SELECT translated_tag FROM pixiv_tags WHERE tag IN (SELECT tag FROM pixiv_artworks_tags WHERE pixiv_id = :pixiv_id)");
-    query.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
-    if (query.exec()) {
-        while (query.next()) {
-            info.tagsTransl.push_back(query.value(0).toString().toStdString());
-        }
-    }
-
     return info;
 }
-void PicDatabase::processSingleFile(const std::filesystem::path& path) {
+void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserType parserType) {
     std::string ext = path.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
     try {
         if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
-            PicInfo picInfo = parsePicture(path);
+            PicInfo picInfo = parsePicture(path, parserType);
             insertPicInfo(picInfo);
         } 
-        else if (ext == ".txt") {
+        else if (ext == ".txt" && parserType == ParserType::Pixiv) {
             PixivInfo pixivInfo = parsePixivMetadata(path);
             insertPixivInfo(pixivInfo);
         }
         else if (ext == ".json") {
             QByteArray data = readJsonFile(path);
-            JsonType jsonType = detectJsonType(data);
-            if (jsonType == JsonType::Pixiv) {
-                PixivInfo pixivInfo = parsePixivJson(data);
-                updatePixivInfo(pixivInfo);
+            if (parserType == ParserType::Pixiv) {
+                std::vector<PixivInfo> pixivInfoVec = parsePixivJson(data);
+                for (const auto& pixivInfo : pixivInfoVec) {
+                    updatePixivInfo(pixivInfo);
+                }
             } 
-            else if (jsonType == JsonType::Tweet) {
+            else if (parserType == ParserType::Twitter) {
                 TweetInfo tweetInfo = parseTweetJson(data);
                 insertTweetInfo(tweetInfo);
             }
         }
-        else if (ext == ".csv") {
+        else if (ext == ".csv" && parserType == ParserType::Pixiv) {
             std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(path);
             for (const auto& pixivInfo : pixivInfoVec) {
                 updatePixivInfo(pixivInfo);
@@ -747,37 +984,78 @@ void PicDatabase::scanDirectory(const std::filesystem::path& directory){
         }
         qInfo() << "Processed files: " << processed;
     }
-    std::cout << std::endl;
     qInfo() << "Scan completed. Total files processed:" << processed;
 }
-std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+void PicDatabase::syncTables() {
+    QSqlQuery query(database);
+    // count tags
+    if (!query.exec(R"(
+        UPDATE tags SET count = (
+            SELECT COUNT(*) FROM picture_tags WHERE tag_id = tags.id
+        )
+    )")) {
+        qWarning() << "Failed to count tags:" << query.lastError().text();
+    }
+    if (!query.exec(R"(
+        UPDATE twitter_hashtags SET count = (
+            SELECT COUNT(*) FROM tweet_hashtags WHERE hashtag_id = twitter_hashtags.id
+        )
+    )")) {
+        qWarning() << "Failed to count twitter hashtags:" << query.lastError().text();
+    }
+    if (!query.exec(R"(
+        UPDATE pixiv_tags SET count = (
+            SELECT COUNT(*) FROM pixiv_artworks_tags WHERE tag_id = pixiv_tags.id
+        )
+    )")) {
+        qWarning() << "Failed to count pixiv tags:" << query.lastError().text();
+    }
+    // sync x_restrict and ai_type from pixiv_artworks to pictures
+    for (const auto& pixivID : newPixivIDs) {
+        QSqlQuery updateQuery(database);
+        updateQuery.prepare(R"(
+            UPDATE pictures SET x_restrict = (
+                SELECT x_restrict FROM pixiv_artworks WHERE id = :pixiv_id
+            ), ai_type = (
+                SELECT ai_type FROM pixiv_artworks WHERE id = :pixiv_id
+            ) WHERE id IN (
+                SELECT picture_id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+            )
+        )");
+        updateQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+        if (!updateQuery.exec()) {
+            qWarning() << "Failed to sync pixiv info for pixiv_id:" << pixivID << "Error:" << updateQuery.lastError().text();
+        }
+    }
+}
+std::vector<uint64_t> PicDatabase::tagSearch(
+    const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags
+) {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
-    
-    QString sql = "SELECT id FROM picture_tags WHERE 1=1";
+
+    QString includedTagIdStr;
+    QString excludedTagIdStr;
     if (!includedTags.empty()) {
-        sql += " AND tag IN (";
         int idx = 0;
         for (const auto& tag : includedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+            if (idx++) includedTagIdStr += ",";
+            includedTagIdStr += QString::number(tagToId.at(tag));
         }
-        sql += ")";
+        if (includedTagIdStr == "") return results; // No included tags found in database
     }
     if (!excludedTags.empty()) {
-        sql += " AND id NOT IN (SELECT id FROM picture_tags WHERE tag IN (";
         int idx = 0;
         for (const auto& tag : excludedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+            if (idx++) excludedTagIdStr += ",";
+            excludedTagIdStr += QString::number(tagToId.at(tag));
         }
-        sql += "))";
+        
     }
-    if (!includedTags.empty()) {
-        sql += QString(" GROUP BY id HAVING COUNT(DISTINCT tag) = %1").arg(includedTags.size());
-    } else {
-        sql += " GROUP BY id";
-    }
+    QString sql = "SELECT id FROM picture_tags WHERE 1=1 AND tag_id IN (" + 
+        includedTagIdStr + ") AND id NOT IN (SELECT id FROM picture_tags WHERE tag_id IN (" +
+        excludedTagIdStr + ")) GROUP BY id HAVING COUNT(DISTINCT tag_id) = " + 
+        QString::number(includedTags.size());
 
     QSqlQuery query(database);
     if (!query.exec(sql)) {
@@ -789,34 +1067,33 @@ std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::strin
     }
     return results;
 }
-std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+std::vector<uint64_t> PicDatabase::pixivTagSearch(
+    const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags
+) {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
     
-    QString sql = "SELECT pixiv_id FROM pixiv_artworks_tags WHERE 1=1";
+    QString includedTagIdStr;
+    QString excludedTagIdStr;
     if (!includedTags.empty()) {
-        sql += " AND tag IN (";
         int idx = 0;
         for (const auto& tag : includedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+            if (idx++) includedTagIdStr += ",";
+            includedTagIdStr += QString::number(pixivTagToId.at(tag));
         }
-        sql += ")";
+        if (includedTagIdStr == "") return results; // No included tags found in database
     }
     if (!excludedTags.empty()) {
-        sql += " AND pixiv_id NOT IN (SELECT pixiv_id FROM pixiv_artworks_tags WHERE tag IN (";
         int idx = 0;
         for (const auto& tag : excludedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
-        }
-        sql += "))";
+            if (idx++) excludedTagIdStr += ",";
+            excludedTagIdStr += QString::number(pixivTagToId.at(tag));
+        }   
     }
-    if (!includedTags.empty()) {
-        sql += QString(" GROUP BY pixiv_id HAVING COUNT(DISTINCT tag) = %1").arg(includedTags.size());
-    } else {
-        sql += " GROUP BY pixiv_id";
-    }
+    QString sql = "SELECT pixiv_id FROM pixiv_artworks_tags WHERE 1=1 AND tag_id IN (" + 
+        includedTagIdStr + ") AND pixiv_id NOT IN (SELECT pixiv_id FROM pixiv_artworks_tags WHERE tag_id IN (" +
+        excludedTagIdStr + ")) GROUP BY pixiv_id HAVING COUNT(DISTINCT tag_id) = " + 
+        QString::number(includedTags.size());
 
     QSqlQuery query(database);
     if (!query.exec(sql)) {
@@ -836,34 +1113,33 @@ std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::
     }
     return results;
 }
-std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags) {
+std::vector<uint64_t> PicDatabase::tweetHashtagSearch(
+    const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags
+) {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
     
-    QString sql = "SELECT tweet_id FROM tweet_hashtags WHERE 1=1";
+    QString includedTagIdStr;
+    QString excludedTagIdStr;
     if (!includedTags.empty()) {
-        sql += " AND hashtag IN (";
         int idx = 0;
         for (const auto& tag : includedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
+            if (idx++) includedTagIdStr += ",";
+            includedTagIdStr += QString::number(twitterHashtagToId.at(tag));
         }
-        sql += ")";
+        if (includedTagIdStr == "") return results; // No included tags found in database
     }
     if (!excludedTags.empty()) {
-        sql += " AND tweet_id NOT IN (SELECT tweet_id FROM tweet_hashtags WHERE hashtag IN (";
         int idx = 0;
         for (const auto& tag : excludedTags) {
-            if (idx++) sql += ",";
-            sql += "'" + QString::fromStdString(tag).replace("'", "''") + "'";
-        }
-        sql += "))";
+            if (idx++) excludedTagIdStr += ",";
+            excludedTagIdStr += QString::number(twitterHashtagToId.at(tag));
+        }   
     }
-    if (!includedTags.empty()) {
-        sql += QString(" GROUP BY tweet_id HAVING COUNT(DISTINCT hashtag) = %1").arg(includedTags.size());
-    } else {
-        sql += " GROUP BY tweet_id";
-    }
+    QString sql = "SELECT tweet_id FROM tweet_hashtags WHERE 1=1 AND hashtag_id IN (" + 
+        includedTagIdStr + ") AND tweet_id NOT IN (SELECT tweet_id FROM tweet_hashtags WHERE hashtag_id IN (" +
+        excludedTagIdStr + ")) GROUP BY tweet_id HAVING COUNT(DISTINCT hashtag_id) = " + 
+        QString::number(includedTags.size());
 
     QSqlQuery query(database);
     if (!query.exec(sql)) {
@@ -882,4 +1158,297 @@ std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<s
         }
     }
     return results;
+}
+std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string& searchText, SearchField searchField) {
+    std::unordered_map<uint64_t, int64_t> results; // id -> tweet_id or pixiv_id
+    if (searchText.empty() || searchField == SearchField::None) return results;
+    switch (searchField) {
+        case SearchField::PicID: {
+            uint64_t id = std::stoull(searchText);
+            QSqlQuery query(database);
+            query.prepare("SELECT id FROM pictures WHERE id = :id");
+            query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
+            if (query.exec() && query.next()) {
+                results[id] = 0;
+            }
+        }
+        break;
+        case SearchField::PixivID: {
+            int64_t pixivID = std::stoll(searchText);
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+            )");
+            query.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+            if (query.exec()) {
+                while (query.next()) {
+                    uint64_t id = int64_to_uint64(query.value(0).toLongLong());
+                    results[id] = pixivID;
+                }
+            }
+        }
+        break;
+        case SearchField::PixivAuthorID: {
+            int64_t authorID = std::stoll(searchText);
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT pixiv_id FROM pixiv_artworks WHERE author_id = :author_id
+            )");
+            query.bindValue(":author_id", QVariant::fromValue(authorID));
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t pixivID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+                    )");
+                    picQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = pixivID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::PixivAuthorName: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT pixiv_id FROM pixiv_artworks WHERE author_name LIKE ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText) + "%");
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t pixivID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+                    )");
+                    picQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = pixivID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::PixivTitle: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT pixiv_id FROM pixiv_fts WHERE title MATCH ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText));
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t pixivID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+                    )");
+                    picQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = pixivID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::PixivDescription: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT pixiv_id FROM pixiv_fts WHERE description MATCH ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText));
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t pixivID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+                    )");
+                    picQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = pixivID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::TweetID: {
+            int64_t tweetID = std::stoll(searchText);
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+            )");
+            query.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+            if (query.exec()) {
+                while (query.next()) {
+                    uint64_t id = int64_to_uint64(query.value(0).toLongLong());
+                    results[id] = tweetID;
+                }
+            }
+        }
+        break;
+        case SearchField::TweetAuthorID: {
+            int64_t authorID = std::stoll(searchText);
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT tweet_id FROM tweets WHERE author_id = :author_id
+            )");
+            query.bindValue(":author_id", QVariant::fromValue(authorID));
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t tweetID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+                    )");
+                    picQuery.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = tweetID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::TweetAuthorName: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT tweet_id FROM tweets WHERE author_name LIKE ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText) + "%");
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t tweetID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+                    )");
+                    picQuery.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = tweetID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::TweetAuthorNick: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT tweet_id FROM tweets WHERE author_nick LIKE ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText) + "%");
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t tweetID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+                    )");
+                    picQuery.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = tweetID;
+                    }
+                }
+            }
+        }
+        break;
+        case SearchField::TweetDescription: {
+            QSqlQuery query(database);
+            query.prepare(R"(
+                SELECT tweet_id FROM tweet_fts WHERE description MATCH ?
+            )");
+            query.bindValue(0, QString::fromStdString(searchText));
+            if (query.exec()) {
+                while (query.next()) {
+                    int64_t tweetID = query.value(0).toLongLong();
+                    QSqlQuery picQuery(database);
+                    picQuery.prepare(R"(
+                        SELECT id FROM picture_tweet_ids WHERE tweet_id = :tweet_id
+                    )");
+                    picQuery.bindValue(":tweet_id", QVariant::fromValue(tweetID));
+                    if (picQuery.exec() && picQuery.next()) {
+                        uint64_t id = int64_to_uint64(picQuery.value(0).toLongLong());
+                        results[id] = tweetID;
+                    }
+                }
+            }
+        }
+        break;
+    }
+    return results;
+}
+std::vector<std::pair<std::string, int>> PicDatabase::getGeneralTags() const {
+    std::vector<std::pair<std::string, int>> tagCounts;
+    QSqlQuery query(database);
+    if (!query.exec("SELECT tag, count FROM tags WHERE is_character = false")) {
+        qWarning() << "Failed to retrieve general tags:" << query.lastError().text();
+        return tagCounts;
+    }
+    while (query.next()) {
+        std::string tag = query.value(0).toString().toStdString();
+        int count = query.value(1).toInt();
+        tagCounts.push_back({tag, count});
+    }
+    std::sort(tagCounts.begin(), tagCounts.end(), [](const auto& a, const auto& b) {
+        return b.second < a.second; // 按照 count 降序排序
+    });
+    return tagCounts;
+}
+std::vector<std::pair<std::string, int>> PicDatabase::getCharacterTags() const {
+    std::vector<std::pair<std::string, int>> tagCounts;
+    QSqlQuery query(database);
+    if (!query.exec("SELECT tag, count FROM tags WHERE is_character = true")) {
+        qWarning() << "Failed to retrieve character tags:" << query.lastError().text();
+        return tagCounts;
+    }
+    while (query.next()) {
+        std::string tag = query.value(0).toString().toStdString();
+        int count = query.value(1).toInt();
+        tagCounts.push_back({tag, count});
+    }
+    std::sort(tagCounts.begin(), tagCounts.end(), [](const auto& a, const auto& b) {
+        return b.second < a.second; // 按照 count 降序排序
+    });
+    return tagCounts;
+}
+std::vector<std::pair<std::string, int>> PicDatabase::getPixivTags() const {
+    std::vector<std::pair<std::string, int>> tagCounts;
+    QSqlQuery query(database);
+    if (!query.exec("SELECT tag, count FROM pixiv_tags")) {
+        qWarning() << "Failed to retrieve pixiv tags:" << query.lastError().text();
+        return tagCounts;
+    }
+    while (query.next()) {
+        std::string tag = query.value(0).toString().toStdString();
+        int count = query.value(1).toInt();
+        tagCounts.push_back({tag, count});
+    }
+    std::sort(tagCounts.begin(), tagCounts.end(), [](const auto& a, const auto& b) {
+        return b.second < a.second; // 按照 count 降序排序
+    });
+    return tagCounts;
+}
+std::vector<std::pair<std::string, int>> PicDatabase::getTwitterHashtags() const {
+    std::vector<std::pair<std::string, int>> tagCounts;
+    QSqlQuery query(database);
+    if (!query.exec("SELECT hashtag, count FROM twitter_hashtags")) {
+        qWarning() << "Failed to retrieve twitter hashtags:" << query.lastError().text();
+        return tagCounts;
+    }
+    while (query.next()) {
+        std::string tag = query.value(0).toString().toStdString();
+        int count = query.value(1).toInt();
+        tagCounts.push_back({tag, count});
+    }
+    std::sort(tagCounts.begin(), tagCounts.end(), [](const auto& a, const auto& b) {
+        return b.second < a.second; // 按照 count 降序排序
+    });
+    return tagCounts;
 }

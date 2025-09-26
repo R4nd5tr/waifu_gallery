@@ -14,14 +14,14 @@ enum class SearchField {
     None,
     PicID,
     PixivID,
-    PixivUserID,
-    PixivUserName,
+    PixivAuthorID,
+    PixivAuthorName,
     PixivTitle,
     PixivDescription,
     TweetID,
-    TweetUserID,
-    TweetUserName,
-    TweetUserNick,
+    TweetAuthorID,
+    TweetAuthorName,
+    TweetAuthorNick,
     TweetDescription
 };
 
@@ -29,9 +29,15 @@ class PicDatabase{
 public:
     PicDatabase(const QString& connectionName = QString(), const QString& databaseFile="database.db");
     ~PicDatabase();
-    PicInfo getPicInfo(uint64_t id) const;
+    
+    // getters  TODO: batch get and merge SQL queries
+    PicInfo getPicInfo(uint64_t id, int64_t tweetID=0, int64_t pixivID=0) const;
     TweetInfo getTweetInfo(int64_t tweetID) const;
     PixivInfo getPixivInfo(int64_t pixivID) const;
+    std::vector<std::pair<std::string, int>> getGeneralTags() const;
+    std::vector<std::pair<std::string, int>> getCharacterTags() const;
+    std::vector<std::pair<std::string, int>> getTwitterHashtags() const;
+    std::vector<std::pair<std::string, int>> getPixivTags() const;
     // insert picture
     bool insertPicInfo(const PicInfo& picInfo);
     bool insertPicture(const PicInfo& picInfo);
@@ -51,22 +57,31 @@ public:
     bool updatePixivInfo(const PixivInfo& pixivInfo);
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
-
-    // search functions
+    
+    // search functions TODO: merge SQL queries
     std::vector<uint64_t> tagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags);
     std::vector<uint64_t> pixivTagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags);
     std::vector<uint64_t> tweetHashtagSearch(const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags);
-    std::vector<uint64_t> textSearch(const std::string& searchText, SearchField searchField);// TODO: FTS5
+    std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
 
-    void processSingleFile(const std::filesystem::path& path);
+    void processSingleFile(const std::filesystem::path& path, ParserType parserType=ParserType::None);
     void scanDirectory(const std::filesystem::path& directory);// TODO: multithreading?
+    void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
 private:
     QSqlDatabase database; //SQLite
     QString connectionName;
-
+    std::unordered_map<std::string, int> tagToId;
+    std::unordered_map<std::string, int> twitterHashtagToId;
+    std::unordered_map<std::string, int> pixivTagToId;
+    std::unordered_map<int, std::string> idToTag;
+    std::unordered_map<int, std::string> idToTwitterHashtag;
+    std::unordered_map<int, std::string> idToPixivTag;
+    std::unordered_set<int64_t> newPixivIDs;
+    
     void initDatabase(QString databaseFile);
-    bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash)), FTS5, tag table
-    void syncTables(); // call this after scanDirectory TODO: sync x_restrict and ai_type from pixiv to pictures, count tags
+    bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash)), FTS5
+    bool setupFTS5();
+    void getTagMapping();
 };
 
 #endif

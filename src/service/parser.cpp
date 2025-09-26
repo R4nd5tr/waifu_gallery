@@ -53,7 +53,7 @@ AIType toAITypeEnum (const std::string& aiTypeStr) {
     return AIType::Unknown;
 }
 
-PicInfo parsePicture(const std::filesystem::path& pictureFilePath) {
+PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
     QString qStrPath = QString::fromStdString(pictureFilePath.string());
     QString qStrDirectory = QString::fromStdString(pictureFilePath.parent_path().string());
     QImageReader reader(qStrPath);
@@ -71,13 +71,13 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath) {
     picInfo.width = size.width();
     picInfo.size = fileInfo.size();
     picInfo.fileType = reader.format().toStdString();
-    if (qStrDirectory.contains("pixiv", Qt::CaseInsensitive)) {      // parse pid only when the file is in a directory with "pixiv"
-        QStringList parts = name.split("_p");                        //        ^
-        uint64_t pid = static_cast<uint64_t>(parts[0].toLongLong()); //        |
-        int index = (parts.size() > 1) ? parts[1].toInt() : 0;       // I do these is because it is hard to distinguish between different types of files just by their names
-        picInfo.pixivIdIndices.insert({pid, index});                 //        |
-    }                                                                //        v
-    if (qStrDirectory.contains("twitter", Qt::CaseInsensitive)) {    // parse tweetID only when the file is in a directory with "twitter"
+    if (parserType == ParserType::Pixiv) {
+        QStringList parts = name.split("_p");
+        uint64_t pid = static_cast<uint64_t>(parts[0].toLongLong());
+        int index = (parts.size() > 1) ? parts[1].toInt() : 0;
+        picInfo.pixivIdIndices.insert({pid, index});
+    }
+    if (parserType == ParserType::Twitter) {
         QStringList parts = name.split("_");
         uint64_t tweetId = static_cast<uint64_t>(parts[0].toLongLong());
         int index = parts[1].toInt() - 1;
@@ -182,62 +182,51 @@ QByteArray readJsonFile (const std::filesystem::path& jsonFilePath) {
     file.close();
     return data;
 }
-JsonType detectJsonType(const QByteArray& data) {
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (err.error != QJsonParseError::NoError) return JsonType::Unknown;
-    if (doc.isArray()) {
-        QJsonArray arr = doc.array();
-        if (!arr.isEmpty() && arr[0].isObject()) {
-            QJsonObject obj = arr[0].toObject();
-            if (obj.contains("idNum")) return JsonType::Pixiv;
-        }
-    } else if (doc.isObject()) {
-        QJsonObject obj = doc.object();
-        if (obj.contains("tweet_id")) return JsonType::Tweet;
-    }
-    return JsonType::Unknown;
-}
-PixivInfo parsePixivJson(const QByteArray& data) {
-    PixivInfo info{};
+std::vector<PixivInfo> parsePixivJson(const QByteArray& data) {
+    std::vector<PixivInfo> result;
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(data, &err);
     if (err.error != QJsonParseError::NoError || !doc.isArray()) {
         qCritical() << "Failed to parse JSON:" << err.errorString();
-        return info;
+        return result;
     }
     QJsonArray arr = doc.array();
-    if (arr.isEmpty() || !arr[0].isObject()) {
-        qCritical() << "JSON array is empty or first element is not an object";
-        return info;
+    if (arr.isEmpty()) {
+        qCritical() << "JSON array is empty";
+        return result;
     }
-    QJsonObject obj = arr[0].toObject();
-    info.pixivID = obj.value("idNum").toVariant().toLongLong();
-    info.title = obj.value("title").toString().toStdString();
-    info.description = obj.value("description").toString().toStdString();
-    info.authorName = obj.value("user").toString().toStdString();
-    info.authorID = obj.value("userId").toString().toUInt();
-    info.likeCount = obj.value("likeCount").toInt();
-    info.viewCount = obj.value("viewCount").toInt();
-    info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict").toInt());
-    info.aiType = static_cast<AIType>(obj.value("aiType").toInt());
-    info.date = obj.value("date").toString().toStdString();
+    for (const QJsonValue& value : arr) {
+        if (!value.isObject()) continue;
+        QJsonObject obj = value.toObject();
+        PixivInfo info;
+        info.pixivID = obj.value("idNum").toVariant().toLongLong();
+        info.title = obj.value("title").toString().toStdString();
+        info.description = obj.value("description").toString().toStdString();
+        info.authorName = obj.value("user").toString().toStdString();
+        info.authorID = obj.value("userId").toString().toUInt();
+        info.likeCount = obj.value("likeCount").toInt();
+        info.viewCount = obj.value("viewCount").toInt();
+        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict").toInt());
+        info.aiType = static_cast<AIType>(obj.value("aiType").toInt());
+        info.date = obj.value("date").toString().toStdString();
 
-    // tags
-    if (obj.contains("tags") && obj.value("tags").isArray()) {
-        QJsonArray tagsArr = obj.value("tags").toArray();
-        for (const QJsonValue& tag : tagsArr) {
-            info.tags.push_back(tag.toString().toStdString());
+        // tags
+        if (obj.contains("tags") && obj.value("tags").isArray()) {
+            QJsonArray tagsArr = obj.value("tags").toArray();
+            for (const QJsonValue& tag : tagsArr) {
+                info.tags.push_back(tag.toString().toStdString());
+            }
         }
-    }
-    // tagsTransl
-    if (obj.contains("tagsWithTransl") && obj.value("tagsWithTransl").isArray()) {
-        QJsonArray tagsTranslArr = obj.value("tagsWithTransl").toArray();
-        for (const QJsonValue& tag : tagsTranslArr) {
-            info.tagsTransl.push_back(tag.toString().toStdString());
+        // tagsTransl
+        if (obj.contains("tagsWithTransl") && obj.value("tagsWithTransl").isArray()) {
+            QJsonArray tagsTranslArr = obj.value("tagsWithTransl").toArray();
+            for (const QJsonValue& tag : tagsTranslArr) {
+                info.tagsTransl.push_back(tag.toString().toStdString());
+            }
         }
+        result.push_back(info);
     }
-    return info;
+    return result;
 }
 TweetInfo parseTweetJson(const QByteArray& data) {
     TweetInfo info;

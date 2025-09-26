@@ -9,6 +9,7 @@
 #include <QThread>
 #include <QPixmap>
 #include <QWidget>
+#include <QTimer>
 
 namespace Ui {
     class MainWindow;
@@ -26,6 +27,12 @@ enum class SortOrder {
     Descending
 };
 
+enum class DisplayingItem {
+    PicInfo,
+    PixivInfo,
+    TweetInfo
+};
+
 const size_t MAX_PIC_CACHE = 1000; // max number of pictures in cache
 const size_t LOAD_PIC_BATCH = 50; // number of pictures to load each time
 
@@ -37,6 +44,24 @@ public:
 
 signals:
     void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // load image in another thread
+    void scanDirectory(const std::filesystem::path& directory);
+    void searchPics(const std::unordered_set<std::string>& includedTags,
+                    const std::unordered_set<std::string>& excludedTags,
+                    const std::unordered_set<std::string>& includedPixivTags,
+                    const std::unordered_set<std::string>& excludedPixivTags,
+                    const std::unordered_set<std::string>& includedTweetTags,
+                    const std::unordered_set<std::string>& excludedTweetTags,
+                    const std::string& searchText,
+                    SearchField searchField,
+                    bool selectedTagChanged,
+                    bool selectedPixivTagChanged,
+                    bool selectedTweetTagChanged,
+                    bool searchTextChanged,
+                    size_t requestId);
+
+public slots:
+    void displayImage(uint64_t picId, QPixmap&& img);
+    void handleSearchResults(std::vector<PicInfo>&& resultPics, size_t requestId);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -51,6 +76,10 @@ private:
     void fillComboBox();
     void initWorkerThreads();
     void connectSignalSlots();
+    std::vector<std::pair<std::string, int>> generalTags;
+    std::vector<std::pair<std::string, int>> characterTags;
+    std::vector<std::pair<std::string, int>> pixivTags;
+    std::vector<std::pair<std::string, int>> twitterHashtags;
     void loadTags();
     
     // context
@@ -105,45 +134,47 @@ private:
     void updateMaxHeight(const QString& text);
     void updateMinWidth(const QString& text);
     void updateMinHeight(const QString& text);
+    QTimer* resolutionTimer;
+    void handleResolutionTimerTimeout();
 
     void updateSortBy(int index);
     void updateSortOrder(int index);
     void updateEnableRatioSort(bool checked);
     void updateRatioSlider(int value);
     void updateRatioSpinBox(double value);
+    QTimer* ratioSortTimer;
+    void handleRatioTimerTimeout();
 
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
+    QTimer* textSearchTimer;
     
-    void updateIncludedTags(const QStringList& tags);
-    void updateExcludedTags(const QStringList& tags);
-    void updateIncludedPixivTags(const QStringList& tags);
-    void updateExcludedPixivTags(const QStringList& tags);
-    void updateIncludedTweetTags(const QStringList& tags);
-    void updateExcludedTweetTags(const QStringList& tags);
+    void addIncludedTags(QListWidgetItem* item);
+    void addExcludedTags(QListWidgetItem* item);
+    void removeIncludedTags(QListWidgetItem* item);
+    void removeExcludedTags(QListWidgetItem* item);
+    QTimer* tagClickTimer;
+    bool tagDoubleClicked = false;
+
     void handleWindowSizeChange();
 
     // searching
     bool selectedTagChanged = false;
-    std::vector<uint64_t> lastTagSearchResult;
     bool selectedPixivTagChanged = false;
-    std::vector<uint64_t> lastPixivTagSearchResult;
     bool selectedTweetTagChanged = false;
-    std::vector<uint64_t> lastTweetTagSearchResult;
     bool searchTextChanged = false;
-    std::vector<uint64_t> lastTextSearchResult;
-    void picSearch(); // clear and add search result into resultPics vector(ONLY FUNCTION THAT CLEAR AND REFILL THIS VECTOR)
-                      //                                                                                                   |                                                   
-    // displaying                                                                                                          |
-    uint displayIndex;//                                                                                                   |
-    std::vector<PicInfo> resultPics;//  <-----------------------------------------------------------------------------------
+    size_t searchRequestId = 0; // to identify latest search request
+    void picSearch();
+
+    // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
+    uint displayIndex;
+    std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // remember to clear this when clearing resultPics vector, also use for clearing cache
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;
     void refreshPicDisplay(); // clear widget, set displayIndex to 0, and call loadMorePics()
-    bool matchFilter(const PicInfo& pic);
+    bool isMatchFilter(const PicInfo& pic);
     void loadMorePics();      // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
-    void displayImage(uint64_t picId, const QPixmap& img); // slot for signal loadComplete
     void sortPics();          // sort resultPics vector
     void rearrangePicFrames();// rearrange PictureFrame based on window size change, use displayingPicIds and idToFrameMap
     void clearAllPicFrames();

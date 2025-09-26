@@ -31,7 +31,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tagSelector">
        <property name="geometry">
@@ -64,7 +64,7 @@
            <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>2</number>
           </property>
           <property name="tabsClosable">
            <bool>false</bool>
@@ -94,7 +94,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="attributeTagTab">
+          <widget class="QWidget" name="generalTagTab">
            <attribute name="title">
             <string>属性</string>
            </attribute>
@@ -115,7 +115,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QListWidget" name="attributeTagList"/>
+             <widget class="QListWidget" name="generalTagList"/>
             </item>
            </layout>
           </widget>
@@ -144,7 +144,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="twitterTagTab">
+          <widget class="QWidget" name="twitterHashtagTab">
            <attribute name="title">
             <string>Twitter</string>
            </attribute>
@@ -165,7 +165,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QListWidget" name="twitterTagList"/>
+             <widget class="QListWidget" name="twitterHashtagList"/>
             </item>
            </layout>
           </widget>
@@ -191,8 +191,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>280</width>
-         <height>654</height>
+         <width>278</width>
+         <height>561</height>
         </rect>
        </property>
        <attribute name="label">
@@ -986,6 +986,8 @@ background: rgb(0,200,200);
      <string>文件</string>
     </property>
     <addaction name="addNewPicsAction"/>
+    <addaction name="action_Powerful_Pixiv_Downloader"/>
+    <addaction name="action_gallery_dl_twitter"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -1012,6 +1014,16 @@ background: rgb(0,200,200);
   <action name="addNewPicsAction">
    <property name="text">
     <string>添加新图片...</string>
+   </property>
+  </action>
+  <action name="action_Powerful_Pixiv_Downloader">
+   <property name="text">
+    <string>添加Powerful Pixiv Downloader下载的图片</string>
+   </property>
+  </action>
+  <action name="action_gallery_dl_twitter">
+   <property name="text">
+    <string>添加gallery-dl下载的Twitter图片</string>
    </property>
   </action>
  </widget>
