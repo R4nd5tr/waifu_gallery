@@ -7,6 +7,7 @@
 #include <string>
 #include <filesystem>
 #include <unordered_set>
+#include <unordered_map>
 
 enum class XRestrictType {
     Unknown,
@@ -29,8 +30,10 @@ struct PairHash {
     }
 };
 
+struct PicInfo;
+
 struct TweetInfo{
-    int64_t tweetID;
+    int64_t tweetID = 0;
     std::string date;
     uint32_t authorID;
     std::string authorName;
@@ -46,10 +49,11 @@ struct TweetInfo{
     uint32_t viewCount = 0;
     std::unordered_set<std::string> hashtags;
     std::string description;
+    std::vector<PicInfo> pics;
 };
 
 struct PixivInfo{
-    int64_t pixivID;
+    int64_t pixivID = 0;
     std::string date;
     std::vector<std::string> tags;
     std::vector<std::string> tagsTransl;
@@ -61,12 +65,13 @@ struct PixivInfo{
     uint32_t viewCount = 0;
     XRestrictType xRestrict = XRestrictType::Unknown;
     AIType aiType = AIType::Unknown;
+    std::vector<PicInfo> pics;
 };
 
 struct PicInfo{
-    uint64_t id;     //xxhash64
-    std::unordered_set<std::pair<int64_t, int>, PairHash> tweetIdIndices; //(tweetID, index)
-    std::unordered_set<std::pair<int64_t, int>, PairHash> pixivIdIndices; //(pixivID, index)
+    uint64_t id = 0;     //xxhash64
+    std::unordered_map<int64_t, int> tweetIdIndices; //(tweetID, index)
+    std::unordered_map<int64_t, int> pixivIdIndices; //(pixivID, index)
     std::unordered_set<std::string> tags;
     std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
     std::vector<TweetInfo> tweetInfo;
