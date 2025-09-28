@@ -1,38 +1,35 @@
 #include "parser.h"
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <cctype>
-#include <QImageReader>
-#include <QFile>
-#include <QString>
 #include <QByteArray>
+#include <QFile>
 #include <QFileInfo>
+#include <QImageReader>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
-#include <xxhash.h>
+#include <QString>
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <iostream>
 #include <rapidcsv.h>
+#include <vector>
+#include <xxhash.h>
 
 std::vector<std::string> splitAndTrim(const std::string& str) {
     std::vector<std::string> result;
     std::stringstream ss(str);
     std::string item;
     while (std::getline(ss, item, ',')) {
-        item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }));
-        item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char ch) {
-            return !std::isspace(ch);
-        }).base(), item.end());
+        item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+        item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(),
+                   item.end());
         if (!item.empty()) {
             result.push_back(item);
         }
     }
     return result;
 }
-XRestrictType toXRestrictTypeEnum (const std::string& xRestrictStr) {
+XRestrictType toXRestrictTypeEnum(const std::string& xRestrictStr) {
     if (xRestrictStr == "AllAges") {
         return XRestrictType::AllAges;
     } else if (xRestrictStr == "R-18") {
@@ -42,7 +39,7 @@ XRestrictType toXRestrictTypeEnum (const std::string& xRestrictStr) {
     }
     return XRestrictType::Unknown;
 }
-AIType toAITypeEnum (const std::string& aiTypeStr) {
+AIType toAITypeEnum(const std::string& aiTypeStr) {
     if (aiTypeStr == "No") {
         return AIType::NotAI;
     } else if (aiTypeStr == "Unknown") {
@@ -112,15 +109,15 @@ PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath)
         } else if (line == "Title") {
             std::getline(file, line);
             info.title = line;
-        } else if (line == "Description") {                       
-            while (std::getline(file, line) && line != "Tags") {  
-                info.description += line + "\n";                  
-            }                                                     
-            if (line == "Tags") {                // This logic handles two formats of metadata files:
-                std::getline(file, line);        // 1. The description section is at the end of the file.
-                while (line != "") {             // 2. The description section is followed by the tags section.
-                    info.tags.push_back(line);   // This approach ensures all line breaks in the description are 
-                    std::getline(file, line);    // preserved and both formats are supported.
+        } else if (line == "Description") {
+            while (std::getline(file, line) && line != "Tags") {
+                info.description += line + "\n";
+            }
+            if (line == "Tags") {              // This logic handles two formats of metadata files:
+                std::getline(file, line);      // 1. The description section is at the end of the file.
+                while (line != "") {           // 2. The description section is followed by the tags section.
+                    info.tags.push_back(line); // This approach ensures all line breaks in the description are
+                    std::getline(file, line);  // preserved and both formats are supported.
                 }
             }
         } else if (line == "Tags") {
@@ -163,8 +160,10 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
         info.authorID = doc.GetCell<uint32_t>("userId", i);
         info.title = doc.GetCell<std::string>("title", i);
         info.description = doc.GetCell<std::string>("description", i);
-        if (std::find(colNames.begin(), colNames.end(), "likeCount") != colNames.end()) info.likeCount = doc.GetCell<uint32_t>("likeCount", i);
-        if (std::find(colNames.begin(), colNames.end(), "viewCount") != colNames.end()) info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
+        if (std::find(colNames.begin(), colNames.end(), "likeCount") != colNames.end())
+            info.likeCount = doc.GetCell<uint32_t>("likeCount", i);
+        if (std::find(colNames.begin(), colNames.end(), "viewCount") != colNames.end())
+            info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
         info.xRestrict = toXRestrictTypeEnum(doc.GetCell<std::string>("xRestrict", i));
         if (hasAI) info.aiType = toAITypeEnum(doc.GetCell<std::string>("AI", i));
         info.date = doc.GetCell<std::string>("date", i);
@@ -172,7 +171,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
     }
     return result;
 }
-QByteArray readJsonFile (const std::filesystem::path& jsonFilePath) {
+QByteArray readJsonFile(const std::filesystem::path& jsonFilePath) {
     QFile file(QString::fromStdString(jsonFilePath.string()));
     if (!file.open(QIODevice::ReadOnly)) {
         qCritical() << "Failed to open file:" << jsonFilePath.string();
@@ -274,7 +273,7 @@ uint64_t calcFileHash(const std::filesystem::path& filePath) {
     }
     std::streamsize fileSize = file.tellg();
     file.seekg(0, std::ios::beg);
-    if (fileSize > 100 * 1024 * 1024) {  // 100MB Max
+    if (fileSize > 100 * 1024 * 1024) { // 100MB Max
         qWarning() << "File too large:" << filePath.c_str() << "size:" << fileSize;
         return 0;
     }

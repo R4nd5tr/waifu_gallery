@@ -1,10 +1,9 @@
 #include "main_window.h"
-#include "ui_main_window.h"
 #include "../service/database.h"
+#include "ui_main_window.h"
 #include <QString>
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), database(QString("main_thread")) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), database(QString("main_thread")) {
     ui->setupUi(this);
     initInterface();
     initWorkerThreads();
@@ -89,31 +88,31 @@ void MainWindow::connectSignalSlots() {
     connect(ui->unknowAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowAI);
     connect(ui->aiCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowAI);
     connect(ui->noAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowNonAI);
-    
+
     connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxHeight);
-    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() {resolutionTimer->start(300);});
+    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
     connect(ui->minHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinHeight);
-    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() {resolutionTimer->start(300);});
+    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
     connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxWidth);
-    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() {resolutionTimer->start(300);});
+    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinWidth);
-    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() {resolutionTimer->start(300);});
+    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
     connect(resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
-    
+
     connect(ui->sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortBy);
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
     connect(ui->ratioSlider, &QSlider::valueChanged, this, &MainWindow::updateRatioSlider);
-    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() {ratioSortTimer->start(300);});
+    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(300); });
     connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() {ratioSortTimer->start(300);});
+    connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(300); });
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() {ratioSortTimer->start(300);});
+    connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(300); });
     connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
-    
+
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
-    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() {textSearchTimer->start(300);});
+    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() { textSearchTimer->start(300); });
     connect(textSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
     connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
@@ -155,7 +154,6 @@ void MainWindow::displayTags() { // display all tags
     for (size_t i = 0; i < generalTags.size(); i++) {
         ui->generalTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(generalTags[i].first));
     }
-    
 
     QStringList characterTagNames;
     for (const auto& tag : characterTags) {
@@ -208,7 +206,7 @@ void MainWindow::displayTags(const std::vector<std::pair<std::string, int>>& ava
     for (size_t i = 0; i < generalTagVec.size(); i++) {
         ui->generalTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(generalTagVec[i]));
     }
-    
+
     ui->characterTagList->addItems(characterTagNames);
     for (size_t i = 0; i < characterTagVec.size(); i++) {
         ui->characterTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(characterTagVec[i]));
@@ -328,7 +326,7 @@ int ratioToSliderValue(double ratio) {
         return -40;
     }
     if (ratio < 1.0) {
-        return static_cast<int>(((1/(ratio)) - 1) * 20);
+        return static_cast<int>(((1 / (ratio)) - 1) * 20);
     } else {
         return static_cast<int>((1 - ratio) * 20);
     }
@@ -478,8 +476,7 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
     selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -491,8 +488,7 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
     selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -504,8 +500,7 @@ void MainWindow::removeIncludedPixivTags(QPushButton* button) {
     selectedPixivTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -517,8 +512,7 @@ void MainWindow::removeExcludedPixivTags(QPushButton* button) {
     selectedPixivTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -530,8 +524,7 @@ void MainWindow::removeIncludedTweetTags(QPushButton* button) {
     selectedTweetTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -543,8 +536,7 @@ void MainWindow::removeExcludedTweetTags(QPushButton* button) {
     selectedTweetTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
@@ -556,26 +548,31 @@ void MainWindow::handleWindowSizeChange() {
     if (widgetsPerRow < 1) widgetsPerRow = 1;
     rearrangePicFrames();
 }
-void MainWindow::resizeEvent(QResizeEvent *event) {
+void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     handleWindowSizeChange();
 }
 void MainWindow::picSearch() {
     clearAllPicFrames();
-    if (includedTags.empty() && excludedTags.empty() &&
-        includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty() &&
-        searchText.empty()) {
+    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty() && searchText.empty()) {
         displayTags();
         return;
     }
     ui->statusbar->showMessage("正在搜索...");
     searchRequestId++;
-    emit searchPics(includedTags, excludedTags,
-                    includedPixivTags, excludedPixivTags,
-                    includedTweetTags, excludedTweetTags,
-                    searchText, searchField,
-                    selectedTagChanged, selectedPixivTagChanged, selectedTweetTagChanged, searchTextChanged,
+    emit searchPics(includedTags,
+                    excludedTags,
+                    includedPixivTags,
+                    excludedPixivTags,
+                    includedTweetTags,
+                    excludedTweetTags,
+                    searchText,
+                    searchField,
+                    selectedTagChanged,
+                    selectedPixivTagChanged,
+                    selectedTweetTagChanged,
+                    searchTextChanged,
                     searchRequestId);
 }
 void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
@@ -656,7 +653,7 @@ void MainWindow::loadMorePics() {
 }
 void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
     if (imageThumbCache.size() >= MAX_PIC_CACHE) {
-        for (auto it = imageThumbCache.begin(); it != imageThumbCache.end(); ) {
+        for (auto it = imageThumbCache.begin(); it != imageThumbCache.end();) {
             if (idToFrameMap.find(it->first) == idToFrameMap.end()) {
                 it = imageThumbCache.erase(it);
             } else {
@@ -683,22 +680,22 @@ void MainWindow::sortPics() {
             return false; // if ratios are equally close, sort by ID to ensure consistent order
         }
         switch (sortBy) {
-            case SortBy::None:
-                return false;
-            case SortBy::ID:
-                if (sortOrder == SortOrder::Ascending) {
-                    return a.id < b.id;
-                } else {
-                    return a.id > b.id;
-                }
-            case SortBy::Size:
-                if (sortOrder == SortOrder::Ascending) {
-                    return (a.size) < (b.size);
-                } else {
-                    return (a.size) > (b.size);
-                }
-            default:
-                return false;
+        case SortBy::None:
+            return false;
+        case SortBy::ID:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.id < b.id;
+            } else {
+                return a.id > b.id;
+            }
+        case SortBy::Size:
+            if (sortOrder == SortOrder::Ascending) {
+                return (a.size) < (b.size);
+            } else {
+                return (a.size) > (b.size);
+            }
+        default:
+            return false;
         }
     };
     std::sort(resultPics.begin(), resultPics.end(), comparator);
@@ -730,7 +727,7 @@ void MainWindow::clearAllPicFrames() {
     }
     idToFrameMap.clear();
 }
-void MainWindow::removePicFramesFromLayout() {    
+void MainWindow::removePicFramesFromLayout() {
     QLayoutItem* child;
     while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
         delete child;

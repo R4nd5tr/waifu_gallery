@@ -2,23 +2,19 @@
 #define PARSER_H
 
 #include "model.h"
+#include <QByteArray>
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
-#include <QByteArray>
 
-enum class ParserType {
-    None,
-    Pixiv,
-    Twitter
-};
+enum class ParserType { None, Pixiv, Twitter };
 
-PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType=ParserType::None);
+PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType = ParserType::None);
 
 PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath);
 std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath);
 
-QByteArray readJsonFile (const std::filesystem::path& jsonFilePath);
+QByteArray readJsonFile(const std::filesystem::path& jsonFilePath);
 std::vector<PixivInfo> parsePixivJson(const QByteArray& data);
 TweetInfo parseTweetJson(const QByteArray& data);
 

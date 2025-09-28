@@ -1,6 +1,6 @@
-#include <string>
-#include <algorithm>
 #include "model.h"
+#include <algorithm>
+#include <string>
 
 float PicInfo::getRatio() const {
     if (height > 0) {

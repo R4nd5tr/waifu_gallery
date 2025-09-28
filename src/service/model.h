@@ -2,28 +2,18 @@
 #define MODEL_H
 
 #include <cstdint>
-#include <set>
-#include <vector>
-#include <string>
 #include <filesystem>
-#include <unordered_set>
+#include <set>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
-enum class XRestrictType {
-    Unknown,
-    AllAges,
-    R18,
-    R18G
-};
-enum class AIType {
-    Unknown,
-    NotAI,
-    AI
-};
+enum class XRestrictType { Unknown, AllAges, R18, R18G };
+enum class AIType { Unknown, NotAI, AI };
 
 struct PairHash {
-    template <typename T1, typename T2>
-    std::size_t operator()(const std::pair<T1, T2>& p) const {
+    template <typename T1, typename T2> std::size_t operator()(const std::pair<T1, T2>& p) const {
         std::size_t h1 = std::hash<T1>{}(p.first);
         std::size_t h2 = std::hash<T2>{}(p.second);
         return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
@@ -32,7 +22,7 @@ struct PairHash {
 
 struct PicInfo;
 
-struct TweetInfo{
+struct TweetInfo {
     int64_t tweetID = 0;
     std::string date;
     uint32_t authorID;
@@ -52,7 +42,7 @@ struct TweetInfo{
     std::vector<PicInfo> pics;
 };
 
-struct PixivInfo{
+struct PixivInfo {
     int64_t pixivID = 0;
     std::string date;
     std::vector<std::string> tags;
@@ -68,8 +58,8 @@ struct PixivInfo{
     std::vector<PicInfo> pics;
 };
 
-struct PicInfo{
-    uint64_t id = 0;     //xxhash64
+struct PicInfo {
+    uint64_t id = 0;                                 // xxhash64
     std::unordered_map<int64_t, int> tweetIdIndices; //(tweetID, index)
     std::unordered_map<int64_t, int> pixivIdIndices; //(pixivID, index)
     std::unordered_set<std::string> tags;

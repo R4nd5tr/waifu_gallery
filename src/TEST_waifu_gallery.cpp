@@ -1,15 +1,13 @@
 #include "service/database.h"
-#include <iostream>
-#include <QString>
-#include <filesystem>
 #include <QCoreApplication>
 #include <QLoggingCategory>
+#include <QString>
+#include <filesystem>
+#include <iostream>
 
-int main(int argc, char *argv[]) {
-    QLoggingCategory::setFilterRules(
-        "qt.gui.imageio=false\n"
-        "qt.gui.icc=false"
-    );
+int main(int argc, char* argv[]) {
+    QLoggingCategory::setFilterRules("qt.gui.imageio=false\n"
+                                     "qt.gui.icc=false");
     QCoreApplication app(argc, argv);
     PicDatabase picDatabase = PicDatabase(QString("test_conn"), QString("database.db"));
     picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv"), ParserType::Pixiv);
