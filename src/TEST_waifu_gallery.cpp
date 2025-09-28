@@ -11,13 +11,14 @@ int main(int argc, char *argv[]) {
         "qt.gui.icc=false"
     );
     QCoreApplication app(argc, argv);
-    PicDatabase picDatabase = PicDatabase(QString("test_conn"), QString("test.db"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/pixiv"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/twitter"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv_csv"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv_json"));
-    // picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/pictures"));
+    PicDatabase picDatabase = PicDatabase(QString("test_conn"), QString("database.db"));
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv"), ParserType::Pixiv);
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/pixiv"), ParserType::Pixiv);
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/twitter"), ParserType::Twitter);
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv_csv"), ParserType::Pixiv);
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Downloads/pixiv_json"), ParserType::Pixiv);
+    picDatabase.scanDirectory(std::filesystem::path("C:/Users/Exusiai/Pictures/pictures"));
+    picDatabase.syncTables();
     return 0;
 }
 // #include <QSqlDatabase>

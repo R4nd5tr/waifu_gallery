@@ -206,7 +206,7 @@ std::vector<PixivInfo> parsePixivJson(const QByteArray& data) {
         info.authorID = obj.value("userId").toString().toUInt();
         info.likeCount = obj.value("likeCount").toInt();
         info.viewCount = obj.value("viewCount").toInt();
-        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict").toInt());
+        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict").toInt() + 1); // Adjusting for enum offset
         info.aiType = static_cast<AIType>(obj.value("aiType").toInt());
         info.date = obj.value("date").toString().toStdString();
 

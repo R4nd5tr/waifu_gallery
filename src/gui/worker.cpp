@@ -2,9 +2,8 @@
 #include "worker.h"
 #include <QImageReader>
 
-DatabaseWorker::DatabaseWorker(const QString &connectionName, QObject *parent) {
-    database = PicDatabase(connectionName);
-}
+DatabaseWorker::DatabaseWorker(const QString &connectionName, QObject *parent):
+    QObject(parent), database(connectionName) {}
 DatabaseWorker::~DatabaseWorker() {}
 void DatabaseWorker::scanDirectory(std::filesystem::path directory) {
     database.scanDirectory(directory);
@@ -102,7 +101,39 @@ void DatabaseWorker::searchPics(
             resultPics.push_back(database.getPicInfo(id));
         }
     }
-    emit searchComplete(std::move(resultPics), requestId);
+    std::unordered_map<std::string, int> tagCount;
+    std::unordered_map<std::string, int> pixivTagCount;
+    std::unordered_map<std::string, int> tweetTagCount;
+    for (const auto& pic : resultPics) {
+        for (const auto& tag : pic.tags) {
+            tagCount[tag]++;
+        }
+        for (const auto& pixivInfo : pic.pixivInfo) {
+            for (const auto& tag : pixivInfo.tags) {
+                pixivTagCount[tag]++;
+            }
+        }
+        for (const auto& tweetInfo : pic.tweetInfo) {
+            for (const auto& tag : tweetInfo.hashtags) {
+                tweetTagCount[tag]++;
+            }
+        }
+    }
+    std::vector<std::pair<std::string, int>> availableTags(tagCount.begin(), tagCount.end());
+    std::vector<std::pair<std::string, int>> availablePixivTags(pixivTagCount.begin(), pixivTagCount.end());
+    std::vector<std::pair<std::string, int>> availableTwitterHashtags(tweetTagCount.begin(), tweetTagCount.end());
+    std::sort(availableTags.begin(), availableTags.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+    std::sort(availablePixivTags.begin(), availablePixivTags.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+    std::sort(availableTwitterHashtags.begin(), availableTwitterHashtags.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+    emit searchComplete(std::move(resultPics), 
+                        availableTags, availablePixivTags, availableTwitterHashtags,
+                        requestId);
 }
 
 LoaderWorker::LoaderWorker(QObject* parent) : QObject(parent) {}

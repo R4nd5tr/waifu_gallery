@@ -10,6 +10,8 @@
 #include <QPixmap>
 #include <QWidget>
 #include <QTimer>
+#include <QPushButton>
+#include <QListWidgetItem>
 
 namespace Ui {
     class MainWindow;
@@ -60,8 +62,12 @@ signals:
                     size_t requestId);
 
 public slots:
-    void displayImage(uint64_t picId, QPixmap&& img);
-    void handleSearchResults(std::vector<PicInfo>&& resultPics, size_t requestId);
+    void displayImage(uint64_t picId, const QPixmap& img);
+    void handleSearchResults(const std::vector<PicInfo>& resultPics,
+                             std::vector<std::pair<std::string, int>> availableTags,
+                             std::vector<std::pair<std::string, int>> availablePixivTags,
+                             std::vector<std::pair<std::string, int>> availableTwitterHashtags,
+                             size_t requestId);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -80,6 +86,7 @@ private:
     std::vector<std::pair<std::string, int>> characterTags;
     std::vector<std::pair<std::string, int>> pixivTags;
     std::vector<std::pair<std::string, int>> twitterHashtags;
+    std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter (I don't like this, maybe split character tags and general tags in the database and data model?)
     void loadTags();
     
     // context
@@ -149,11 +156,18 @@ private:
     void updateSearchText(const QString& text);
     QTimer* textSearchTimer;
     
-    void addIncludedTags(QListWidgetItem* item);
+    void handleListWidgetItemSingleClick(QListWidgetItem* item);
+    QListWidgetItem* lastClickedTagItem = nullptr;
+    void addIncludedTags();
     void addExcludedTags(QListWidgetItem* item);
-    void removeIncludedTags(QListWidgetItem* item);
-    void removeExcludedTags(QListWidgetItem* item);
+    void removeIncludedTags(QPushButton* button); // is there a better way to pass which tag to remove?
+    void removeExcludedTags(QPushButton* button);
+    void removeIncludedPixivTags(QPushButton* button);
+    void removeExcludedPixivTags(QPushButton* button);
+    void removeIncludedTweetTags(QPushButton* button);
+    void removeExcludedTweetTags(QPushButton* button);
     QTimer* tagClickTimer;
+    QTimer* tagSearchTimer;
     bool tagDoubleClicked = false;
 
     void handleWindowSizeChange();
@@ -167,6 +181,11 @@ private:
     void picSearch();
 
     // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
+    void displayTags();
+    void displayTags(const std::vector<std::pair<std::string, int>>& tags,
+                     const std::vector<std::pair<std::string, int>>& pixivTags,
+                     const std::vector<std::pair<std::string, int>>& twitterHashtags);
+
     uint displayIndex;
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;

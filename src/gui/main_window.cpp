@@ -4,18 +4,20 @@
 #include <QString>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow) {
+    : QMainWindow(parent), ui(new Ui::MainWindow), database(QString("main_thread")) {
     ui->setupUi(this);
-    database = PicDatabase(QString("main_thread"));
     initInterface();
     initWorkerThreads();
     connectSignalSlots();
-
+    loadTags();
+    displayTags();
 }
 MainWindow::~MainWindow() {
     delete ui;
     loaderWorkerThread->quit();
     loaderWorkerThread->wait();
+    databaseWorkerThread->quit();
+    databaseWorkerThread->wait();
 }
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
@@ -48,7 +50,7 @@ void MainWindow::fillComboBox() {
 }
 void MainWindow::initWorkerThreads() {
     loaderWorkerThread = new QThread(this);
-    LoaderWorker* loaderWorker = new LoaderWorker(this);
+    LoaderWorker* loaderWorker = new LoaderWorker();
     loaderWorker->moveToThread(loaderWorkerThread);
     connect(this, &MainWindow::loadImage, loaderWorker, &LoaderWorker::loadImage);
     connect(loaderWorker, &LoaderWorker::loadComplete, this, &MainWindow::displayImage);
@@ -56,7 +58,7 @@ void MainWindow::initWorkerThreads() {
     loaderWorkerThread->start();
 
     databaseWorkerThread = new QThread(this);
-    DatabaseWorker* databaseWorker = new DatabaseWorker(QString("database_thread"), this);
+    DatabaseWorker* databaseWorker = new DatabaseWorker(QString("database_worker_thread"));
     databaseWorker->moveToThread(databaseWorkerThread);
     connect(this, &MainWindow::scanDirectory, databaseWorker, &DatabaseWorker::scanDirectory);
     connect(this, &MainWindow::searchPics, databaseWorker, &DatabaseWorker::searchPics);
@@ -69,10 +71,12 @@ void MainWindow::connectSignalSlots() {
     ratioSortTimer = new QTimer(this);
     textSearchTimer = new QTimer(this);
     tagClickTimer = new QTimer(this);
+    tagSearchTimer = new QTimer(this);
     resolutionTimer->setSingleShot(true);
     ratioSortTimer->setSingleShot(true);
     textSearchTimer->setSingleShot(true);
     tagClickTimer->setSingleShot(true);
+    tagSearchTimer->setSingleShot(true);
 
     connect(ui->jpgCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowJPG);
     connect(ui->pngCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowPNG);
@@ -112,28 +116,40 @@ void MainWindow::connectSignalSlots() {
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() {textSearchTimer->start(300);});
     connect(textSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
-    connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::addIncludedTags);
+    connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->generalTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(ui->characterTagList, &QListWidget::itemClicked, this, &MainWindow::addIncludedTags);
+    connect(ui->characterTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->characterTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(ui->pixivTagList, &QListWidget::itemClicked, this, &MainWindow::addIncludedTags);
+    connect(ui->pixivTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->pixivTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(ui->twitterHashtagList, &QListWidget::itemClicked, this, &MainWindow::addIncludedTags);
+    connect(ui->twitterHashtagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->twitterHashtagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
+    connect(tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
+    connect(tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 }
-    
+QString getTagString(std::string tag, int count) {
+    return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
+}
 void MainWindow::loadTags() {
     generalTags = database.getGeneralTags();
     characterTags = database.getCharacterTags();
     pixivTags = database.getPixivTags();
     twitterHashtags = database.getTwitterHashtags();
+    for (const auto& tag : characterTags) {
+        isCharacterTag[tag.first] = true;
+    }
+    for (const auto& tag : generalTags) {
+        isCharacterTag[tag.first] = false;
+    }
+}
+void MainWindow::displayTags() { // display all tags
     ui->generalTagList->clear();
     ui->characterTagList->clear();
     ui->pixivTagList->clear();
     ui->twitterHashtagList->clear();
     QStringList generalTagNames;
     for (const auto& tag : generalTags) {
-        generalTagNames.append(QString("%1 (%2)").arg(QString::fromStdString(tag.first)).arg(tag.second));
+        generalTagNames.append(getTagString(tag.first, tag.second));
     }
     ui->generalTagList->addItems(generalTagNames);
     for (size_t i = 0; i < generalTags.size(); i++) {
@@ -143,7 +159,7 @@ void MainWindow::loadTags() {
 
     QStringList characterTagNames;
     for (const auto& tag : characterTags) {
-        characterTagNames.append(QString("%1 (%2)").arg(QString::fromStdString(tag.first)).arg(tag.second));
+        characterTagNames.append(getTagString(tag.first, tag.second));
     }
     ui->characterTagList->addItems(characterTagNames);
     for (size_t i = 0; i < characterTags.size(); i++) {
@@ -152,7 +168,7 @@ void MainWindow::loadTags() {
 
     QStringList pixivTagNames;
     for (const auto& tag : pixivTags) {
-        pixivTagNames.append(QString("%1 (%2)").arg(QString::fromStdString(tag.first)).arg(tag.second));
+        pixivTagNames.append(getTagString(tag.first, tag.second));
     }
     ui->pixivTagList->addItems(pixivTagNames);
     for (size_t i = 0; i < pixivTags.size(); i++) {
@@ -161,11 +177,59 @@ void MainWindow::loadTags() {
 
     QStringList twitterHashtagNames;
     for (const auto& tag : twitterHashtags) {
-        twitterHashtagNames.append(QString("%1 (%2)").arg(QString::fromStdString(tag.first)).arg(tag.second));
+        twitterHashtagNames.append(getTagString(tag.first, tag.second));
     }
     ui->twitterHashtagList->addItems(twitterHashtagNames);
     for (size_t i = 0; i < twitterHashtags.size(); i++) {
         ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(twitterHashtags[i].first));
+    }
+}
+void MainWindow::displayTags(const std::vector<std::pair<std::string, int>>& availableTags, // display available tags after search
+                             const std::vector<std::pair<std::string, int>>& availablePixivTags,
+                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) {
+    ui->generalTagList->clear();
+    ui->characterTagList->clear();
+    ui->pixivTagList->clear();
+    ui->twitterHashtagList->clear();
+    QStringList generalTagNames;
+    QStringList characterTagNames;
+    std::vector<std::string> generalTagVec;
+    std::vector<std::string> characterTagVec;
+    for (const auto& tag : availableTags) {
+        if (isCharacterTag.find(tag.first) != isCharacterTag.end() && isCharacterTag[tag.first]) {
+            characterTagNames.append(getTagString(tag.first, tag.second));
+            characterTagVec.push_back(tag.first);
+        } else {
+            generalTagNames.append(getTagString(tag.first, tag.second));
+            generalTagVec.push_back(tag.first);
+        }
+    }
+    ui->generalTagList->addItems(generalTagNames);
+    for (size_t i = 0; i < generalTagVec.size(); i++) {
+        ui->generalTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(generalTagVec[i]));
+    }
+    
+    ui->characterTagList->addItems(characterTagNames);
+    for (size_t i = 0; i < characterTagVec.size(); i++) {
+        ui->characterTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(characterTagVec[i]));
+    }
+
+    QStringList pixivTagNames;
+    for (const auto& tag : availablePixivTags) {
+        pixivTagNames.append(getTagString(tag.first, tag.second));
+    }
+    ui->pixivTagList->addItems(pixivTagNames);
+    for (size_t i = 0; i < availablePixivTags.size(); i++) {
+        ui->pixivTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(availablePixivTags[i].first));
+    }
+
+    QStringList twitterHashtagNames;
+    for (const auto& tag : availableTwitterHashtags) {
+        twitterHashtagNames.append(getTagString(tag.first, tag.second));
+    }
+    ui->twitterHashtagList->addItems(twitterHashtagNames);
+    for (size_t i = 0; i < availableTwitterHashtags.size(); i++) {
+        ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(availableTwitterHashtags[i].first));
     }
 }
 void MainWindow::updateShowJPG(bool checked) {
@@ -324,50 +388,167 @@ void MainWindow::updateSearchText(const QString& text) {
     searchText = text.toStdString();
     searchTextChanged = true;
 }
-void MainWindow::addIncludedTags(QListWidgetItem* item) {
+
+void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
     tagClickTimer->start(400);
+    lastClickedTagItem = item;
+}
+void MainWindow::addIncludedTags() {
     if (tagDoubleClicked) return;
+
+    QListWidgetItem* item = lastClickedTagItem;
+    ui->selectedTagScrollArea->show();
+
     QListWidget* listWidget = item->listWidget();
     std::string tag = item->data(Qt::UserRole).toString().toStdString();
+
+    QPushButton* tagButton = new QPushButton(this);
+    QPalette palette = tagButton->palette();
+    palette.setColor(QPalette::Button, Qt::green);
+    tagButton->setPalette(palette);
+    tagButton->setProperty("tag", QString::fromStdString(tag));
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
         if (includedTags.find(tag) == includedTags.end()) {
             includedTags.insert(tag);
             selectedTagChanged = true;
+            tagButton->setText(QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedTags(tagButton); });
         }
     } else if (listWidget == ui->pixivTagList) {
         if (includedPixivTags.find(tag) == includedPixivTags.end()) {
             includedPixivTags.insert(tag);
             selectedPixivTagChanged = true;
+            tagButton->setText(QString("pixiv: ") + QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedPixivTags(tagButton); });
         }
     } else if (listWidget == ui->twitterHashtagList) {
         if (includedTweetTags.find(tag) == includedTweetTags.end()) {
             includedTweetTags.insert(tag);
             selectedTweetTagChanged = true;
+            tagButton->setText(QString("twitter: ") + QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedTweetTags(tagButton); });
         }
     }
+    ui->selectedTagLayout->insertWidget(0, tagButton);
+    tagSearchTimer->start(500);
 }
 void MainWindow::addExcludedTags(QListWidgetItem* item) {
     tagDoubleClicked = true;
     tagClickTimer->stop();
+
+    ui->selectedTagScrollArea->show();
+
     QListWidget* listWidget = item->listWidget();
     std::string tag = item->data(Qt::UserRole).toString().toStdString();
+
+    QPushButton* tagButton = new QPushButton(this);
+    QPalette palette = tagButton->palette();
+    palette.setColor(QPalette::Button, Qt::red);
+    tagButton->setPalette(palette);
+    tagButton->setProperty("tag", QString::fromStdString(tag));
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
         if (excludedTags.find(tag) == excludedTags.end()) {
             excludedTags.insert(tag);
             selectedTagChanged = true;
+            tagButton->setText(QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedTags(tagButton); });
         }
     } else if (listWidget == ui->pixivTagList) {
         if (excludedPixivTags.find(tag) == excludedPixivTags.end()) {
             excludedPixivTags.insert(tag);
             selectedPixivTagChanged = true;
+            tagButton->setText(QString("pixiv: ") + QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedPixivTags(tagButton); });
         }
     } else if (listWidget == ui->twitterHashtagList) {
         if (excludedTweetTags.find(tag) == excludedTweetTags.end()) {
             excludedTweetTags.insert(tag);
             selectedTweetTagChanged = true;
+            tagButton->setText(QString("twitter: ") + QString::fromStdString(tag));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedTweetTags(tagButton); });
         }
     }
+    ui->selectedTagLayout->addWidget(tagButton);
     tagDoubleClicked = false;
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeIncludedTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    includedTags.erase(tag);
+    selectedTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeExcludedTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    excludedTags.erase(tag);
+    selectedTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeIncludedPixivTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    includedPixivTags.erase(tag);
+    selectedPixivTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeExcludedPixivTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    excludedPixivTags.erase(tag);
+    selectedPixivTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeIncludedTweetTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    includedTweetTags.erase(tag);
+    selectedTweetTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
+}
+void MainWindow::removeExcludedTweetTags(QPushButton* button) {
+    std::string tag = button->property("tag").toString().toStdString();
+    excludedTweetTags.erase(tag);
+    selectedTweetTagChanged = true;
+    ui->selectedTagLayout->removeWidget(button);
+    button->deleteLater();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty()) {
+        ui->selectedTagScrollArea->hide();
+    }
+    tagSearchTimer->start(500);
 }
 void MainWindow::handleWindowSizeChange() {
     int width = ui->picBrowseWidget->width();
@@ -381,6 +562,13 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
 }
 void MainWindow::picSearch() {
     clearAllPicFrames();
+    if (includedTags.empty() && excludedTags.empty() &&
+        includedPixivTags.empty() && excludedPixivTags.empty() &&
+        includedTweetTags.empty() && excludedTweetTags.empty() &&
+        searchText.empty()) {
+        displayTags();
+        return;
+    }
     ui->statusbar->showMessage("正在搜索...");
     searchRequestId++;
     emit searchPics(includedTags, excludedTags,
@@ -390,9 +578,18 @@ void MainWindow::picSearch() {
                     selectedTagChanged, selectedPixivTagChanged, selectedTweetTagChanged, searchTextChanged,
                     searchRequestId);
 }
-void MainWindow::handleSearchResults(std::vector<PicInfo>&& pics, size_t requestId) {
+void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
+                                     std::vector<std::pair<std::string, int>> availableTags,
+                                     std::vector<std::pair<std::string, int>> availablePixivTags,
+                                     std::vector<std::pair<std::string, int>> availableTweetTags,
+                                     size_t requestId) {
     if (requestId != searchRequestId) return;
     resultPics = std::move(pics);
+    selectedTagChanged = false;
+    selectedPixivTagChanged = false;
+    selectedTweetTagChanged = false;
+    searchTextChanged = false;
+    displayTags(availableTags, availablePixivTags, availableTweetTags);
     ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
     sortPics();
     refreshPicDisplay();
@@ -457,7 +654,7 @@ void MainWindow::loadMorePics() {
         }
     }
 }
-void MainWindow::displayImage(uint64_t picId, QPixmap&& img) {
+void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
     if (imageThumbCache.size() >= MAX_PIC_CACHE) {
         for (auto it = imageThumbCache.begin(); it != imageThumbCache.end(); ) {
             if (idToFrameMap.find(it->first) == idToFrameMap.end()) {
