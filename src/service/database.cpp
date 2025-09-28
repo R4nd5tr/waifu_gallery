@@ -42,6 +42,7 @@ PicDatabase::PicDatabase(const QString& connectionName, const QString& databaseF
         this->connectionName = connectionName;
     }
     initDatabase(databaseFile);
+    getTagMapping();
 }
 PicDatabase::~PicDatabase() {
     database.close();
@@ -74,7 +75,8 @@ bool PicDatabase::createTables() {
             width INTEGER,
             height INTEGER,
             size INTEGER,
-            x_restrict INTEGER DEFAULT NULL
+            x_restrict INTEGER DEFAULT NULL,
+            ai_type INTEGER DEFAULT NULL
         )
     )";//TODO: add feature vector from deep learning models
     const QString pictureTagsTable = R"(
@@ -640,15 +642,15 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
         }
         query.prepare(R"(
             INSERT OR IGNORE INTO pixiv_artworks_tags(
-                pixiv_id, tag
+                pixiv_id, tag_id
             ) VALUES (
-                :pixiv_id, :tag
+                :pixiv_id, :tag_id
             )
         )");
         query.bindValue(":pixiv_id", QVariant::fromValue(pixivInfo.pixivID));
-        query.bindValue(":tag", QString::fromStdString(tag));
+        query.bindValue(":tag_id", pixivTagToId.at(tag));
         if (!query.exec()) {
-            qCritical() << "Failed to insert pixiv_artworks_tag: " << query.lastError().text();
+            qCritical() << "Failed to insert pixiv_artworks_tags: " << query.lastError().text();
             return false;
         }
     }
@@ -967,20 +969,24 @@ void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserTyp
         qWarning() << "Error processing file:" << path.c_str() << "Error:" << e.what();
     }
 }
-void PicDatabase::scanDirectory(const std::filesystem::path& directory){
+void PicDatabase::scanDirectory(const std::filesystem::path& directory, ParserType parserType){
     auto files = collectAllFiles(directory);
+    QSqlQuery query(database);
+
+    query.exec("PRAGMA foreign_keys = OFF;");
+
     const size_t BATCH_SIZE = 1000;
     size_t processed = 0;
     for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
-        QSqlDatabase::database().transaction();
+        database.transaction();
         auto batch_end = std::min(i + BATCH_SIZE, files.size());
         for (size_t j = i; j < batch_end; j++) {
-            processSingleFile(files[j]);
+            processSingleFile(files[j], parserType);
             processed++;
         }
-        if (!QSqlDatabase::database().commit()) {
-            qWarning() << "Batch commit failed, rolling back";
-            QSqlDatabase::database().rollback();
+        if (!database.commit()) {
+            qWarning() << "Batch commit failed, rolling back" << database.lastError().text();
+            database.rollback();
         }
         qInfo() << "Processed files: " << processed;
     }
@@ -1015,11 +1021,11 @@ void PicDatabase::syncTables() {
         QSqlQuery updateQuery(database);
         updateQuery.prepare(R"(
             UPDATE pictures SET x_restrict = (
-                SELECT x_restrict FROM pixiv_artworks WHERE id = :pixiv_id
+                SELECT x_restrict FROM pixiv_artworks WHERE pixiv_id = :pixiv_id
             ), ai_type = (
-                SELECT ai_type FROM pixiv_artworks WHERE id = :pixiv_id
+                SELECT ai_type FROM pixiv_artworks WHERE pixiv_id = :pixiv_id
             ) WHERE id IN (
-                SELECT picture_id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
+                SELECT id FROM picture_pixiv_ids WHERE pixiv_id = :pixiv_id
             )
         )");
         updateQuery.bindValue(":pixiv_id", QVariant::fromValue(pixivID));
@@ -1027,6 +1033,7 @@ void PicDatabase::syncTables() {
             qWarning() << "Failed to sync pixiv info for pixiv_id:" << pixivID << "Error:" << updateQuery.lastError().text();
         }
     }
+    query.exec("PRAGMA foreign_keys = ON");
 }
 std::vector<uint64_t> PicDatabase::tagSearch(
     const std::unordered_set<std::string>& includedTags, const std::unordered_set<std::string>& excludedTags

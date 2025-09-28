@@ -29,7 +29,11 @@ public slots:
                     size_t requestId);
 signals:
     void scanComplete();
-    void searchComplete(std::vector<PicInfo>&& resultPics, size_t requestId);
+    void searchComplete(const std::vector<PicInfo>& resultPics,
+        std::vector<std::pair<std::string, int>> availableTags,
+        std::vector<std::pair<std::string, int>> availablePixivTags,
+        std::vector<std::pair<std::string, int>> availableTwitterHashtags,
+        size_t requestId);
 private:
     PicDatabase database;
 
@@ -47,7 +51,7 @@ public:
 public slots:
     void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths);
 signals:
-    void loadComplete(uint64_t id, QPixmap&& img);
+    void loadComplete(uint64_t id, const QPixmap& img);
 private:
 };
 

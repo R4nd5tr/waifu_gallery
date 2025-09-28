@@ -31,7 +31,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tagSelector">
        <property name="geometry">
@@ -191,14 +191,14 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>278</width>
-         <height>561</height>
+         <width>280</width>
+         <height>654</height>
         </rect>
        </property>
        <attribute name="label">
         <string>筛选排序</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_5" stretch="3,2">
+       <layout class="QVBoxLayout" name="verticalLayout_5" stretch="3,0">
         <property name="leftMargin">
          <number>5</number>
         </property>
@@ -243,7 +243,7 @@
                 <string>未知</string>
                </property>
                <property name="checked">
-                <bool>true</bool>
+                <bool>false</bool>
                </property>
               </widget>
              </item>
@@ -536,13 +536,6 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_7">
            <item>
-            <widget class="Line" name="line_2">
-             <property name="orientation">
-              <enum>Qt::Orientation::Horizontal</enum>
-             </property>
-            </widget>
-           </item>
-           <item>
             <layout class="QHBoxLayout" name="horizontalLayout_12">
              <item>
               <widget class="QLabel" name="label_6">
@@ -582,6 +575,13 @@
              </property>
              <property name="currentIndex">
               <number>-1</number>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="Line" name="line_2">
+             <property name="orientation">
+              <enum>Qt::Orientation::Horizontal</enum>
              </property>
             </widget>
            </item>
@@ -670,7 +670,7 @@
              <item>
               <widget class="QSlider" name="ratioSlider">
                <property name="enabled">
-                <bool>false</bool>
+                <bool>true</bool>
                </property>
                <property name="minimumSize">
                 <size>
@@ -725,7 +725,7 @@ background: rgb(0,200,200);
              <item>
               <widget class="QDoubleSpinBox" name="widthRatioSpinBox">
                <property name="enabled">
-                <bool>false</bool>
+                <bool>true</bool>
                </property>
                <property name="minimumSize">
                 <size>
@@ -775,7 +775,7 @@ background: rgb(0,200,200);
              <item>
               <widget class="QDoubleSpinBox" name="heightRatioSpinBox">
                <property name="enabled">
-                <bool>false</bool>
+                <bool>true</bool>
                </property>
                <property name="minimumSize">
                 <size>
@@ -936,6 +936,19 @@ background: rgb(0,200,200);
           <property name="bottomMargin">
            <number>5</number>
           </property>
+          <item>
+           <spacer name="horizontalSpacer_7">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
          </layout>
         </widget>
        </widget>
