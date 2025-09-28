@@ -1,0 +1,28 @@
+BasedOnStyle: LLVM
+
+# 缩进
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# 大括号
+BreakBeforeBraces: Attach
+
+# 对齐
+PointerAlignment: Left
+AccessModifierOffset: -4
+
+# 单行/多行
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Always
+AllowShortLambdasOnASingleLine: Inline
+
+# 参数/操作符
+BinPackArguments: false
+BinPackParameters: false
+BreakBeforeBinaryOperators: None
+
+# 其它
+ColumnLimit: 130
+SpaceBeforeParens: ControlStatements

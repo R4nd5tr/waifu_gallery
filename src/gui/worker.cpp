@@ -1,36 +1,33 @@
-#include "../service/database.h"
 #include "worker.h"
+#include "../service/database.h"
 #include <QImageReader>
 
-DatabaseWorker::DatabaseWorker(const QString &connectionName, QObject *parent):
-    QObject(parent), database(connectionName) {}
+DatabaseWorker::DatabaseWorker(const QString& connectionName, QObject* parent) : QObject(parent), database(connectionName) {}
 DatabaseWorker::~DatabaseWorker() {}
 void DatabaseWorker::scanDirectory(std::filesystem::path directory) {
     database.scanDirectory(directory);
     emit scanComplete();
 }
-void DatabaseWorker::searchPics(
-    const std::unordered_set<std::string>& includedTags,
-    const std::unordered_set<std::string>& excludedTags,
-    const std::unordered_set<std::string>& includedPixivTags,
-    const std::unordered_set<std::string>& excludedPixivTags,
-    const std::unordered_set<std::string>& includedTweetTags,
-    const std::unordered_set<std::string>& excludedTweetTags,
-    const std::string& searchText,
-    SearchField searchField,
-    bool selectedTagChanged,
-    bool selectedPixivTagChanged,
-    bool selectedTweetTagChanged,
-    bool searchTextChanged,
-    size_t requestId
-) {
+void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedTags,
+                                const std::unordered_set<std::string>& excludedTags,
+                                const std::unordered_set<std::string>& includedPixivTags,
+                                const std::unordered_set<std::string>& excludedPixivTags,
+                                const std::unordered_set<std::string>& includedTweetTags,
+                                const std::unordered_set<std::string>& excludedTweetTags,
+                                const std::string& searchText,
+                                SearchField searchField,
+                                bool selectedTagChanged,
+                                bool selectedPixivTagChanged,
+                                bool selectedTweetTagChanged,
+                                bool searchTextChanged,
+                                size_t requestId) {
     std::unordered_map<uint64_t, int64_t> textSearchResult;
     bool disableTextSearch = (searchText.empty() || searchField == SearchField::None);
     if (disableTextSearch) {
         lastTextSearchResult.clear();
         searchTextChanged = false;
     }
-    
+
     if (selectedTagChanged) {
         lastTagSearchResult = database.tagSearch(includedTags, excludedTags);
     }
@@ -41,7 +38,9 @@ void DatabaseWorker::searchPics(
         lastTweetTagSearchResult = database.tweetHashtagSearch(includedTweetTags, excludedTweetTags);
     }
     if (searchTextChanged) {
-        textSearchResult = database.textSearch(searchText, searchField); // I do this because I want to get the pic id and the matched pixiv or tweet id at the same time
+        textSearchResult = database.textSearch(
+            searchText,
+            searchField); // I do this because I want to get the pic id and the matched pixiv or tweet id at the same time
         lastTextSearchResult.clear();
         for (const auto& [id, _] : textSearchResult) {
             lastTextSearchResult.push_back(id);
@@ -79,23 +78,25 @@ void DatabaseWorker::searchPics(
         }
         if (!disableTextSearch) {
             switch (searchField) {
-                case SearchField::PixivID:
-                case SearchField::PixivAuthorID:
-                case SearchField::PixivAuthorName:
-                case SearchField::PixivTitle:
-                case SearchField::PixivDescription:
-                    resultPics.push_back(database.getPicInfo(id, 0, textSearchResult[id])); // make sure to get the matched pixivID then display correct search result
-                    break;
-                case SearchField::TweetID:
-                case SearchField::TweetAuthorID:
-                case SearchField::TweetAuthorName:
-                case SearchField::TweetAuthorNick:
-                case SearchField::TweetDescription:
-                    resultPics.push_back(database.getPicInfo(id, textSearchResult[id], 0)); // make sure to get the matched tweetID then display correct search result
-                    break;
-                default:
-                    resultPics.push_back(database.getPicInfo(id));
-                    break;
+            case SearchField::PixivID:
+            case SearchField::PixivAuthorID:
+            case SearchField::PixivAuthorName:
+            case SearchField::PixivTitle:
+            case SearchField::PixivDescription:
+                resultPics.push_back(database.getPicInfo(
+                    id, 0, textSearchResult[id])); // make sure to get the matched pixivID then display correct search result
+                break;
+            case SearchField::TweetID:
+            case SearchField::TweetAuthorID:
+            case SearchField::TweetAuthorName:
+            case SearchField::TweetAuthorNick:
+            case SearchField::TweetDescription:
+                resultPics.push_back(database.getPicInfo(
+                    id, textSearchResult[id], 0)); // make sure to get the matched tweetID then display correct search result
+                break;
+            default:
+                resultPics.push_back(database.getPicInfo(id));
+                break;
             }
         } else {
             resultPics.push_back(database.getPicInfo(id));
@@ -119,21 +120,17 @@ void DatabaseWorker::searchPics(
             }
         }
     }
-    std::vector<std::pair<std::string, int>> availableTags(tagCount.begin(), tagCount.end());
+    std::vector<std::pair<std::string, int>> availableTags(tagCount.begin(),
+                                                           tagCount.end()); // TODO: remove tags that are already selected
     std::vector<std::pair<std::string, int>> availablePixivTags(pixivTagCount.begin(), pixivTagCount.end());
     std::vector<std::pair<std::string, int>> availableTwitterHashtags(tweetTagCount.begin(), tweetTagCount.end());
-    std::sort(availableTags.begin(), availableTags.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;
-    });
-    std::sort(availablePixivTags.begin(), availablePixivTags.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;
-    });
+    std::sort(availableTags.begin(), availableTags.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(
+        availablePixivTags.begin(), availablePixivTags.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
     std::sort(availableTwitterHashtags.begin(), availableTwitterHashtags.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
-    emit searchComplete(std::move(resultPics), 
-                        availableTags, availablePixivTags, availableTwitterHashtags,
-                        requestId);
+    emit searchComplete(std::move(resultPics), availableTags, availablePixivTags, availableTwitterHashtags, requestId);
 }
 
 LoaderWorker::LoaderWorker(QObject* parent) : QObject(parent) {}

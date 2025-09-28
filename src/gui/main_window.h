@@ -1,47 +1,35 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
-#include "worker.h"
-#include "picture_frame.h"
-#include "../service/model.h"
 #include "../service/database.h"
-#include <QMainWindow>
-#include <QThread>
-#include <QPixmap>
-#include <QWidget>
-#include <QTimer>
-#include <QPushButton>
+#include "../service/model.h"
+#include "picture_frame.h"
+#include "worker.h"
 #include <QListWidgetItem>
+#include <QMainWindow>
+#include <QPixmap>
+#include <QPushButton>
+#include <QThread>
+#include <QTimer>
+#include <QWidget>
 
 namespace Ui {
-    class MainWindow;
+class MainWindow;
 }
 
-enum class SortBy {
-    None,
-    ID,
-    Date,
-    Size
-};
+enum class SortBy { None, ID, Date, Size };
 
-enum class SortOrder {
-    Ascending,
-    Descending
-};
+enum class SortOrder { Ascending, Descending };
 
-enum class DisplayingItem {
-    PicInfo,
-    PixivInfo,
-    TweetInfo
-};
+enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
 const size_t MAX_PIC_CACHE = 1000; // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 50; // number of pictures to load each time
+const size_t LOAD_PIC_BATCH = 50;  // number of pictures to load each time
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
 signals:
@@ -70,11 +58,11 @@ public slots:
                              size_t requestId);
 
 protected:
-    void resizeEvent(QResizeEvent *event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     // initialize
-    Ui::MainWindow *ui;
+    Ui::MainWindow* ui;
     PicDatabase database;
     QThread* loaderWorkerThread = nullptr;
     QThread* databaseWorkerThread = nullptr;
@@ -86,9 +74,10 @@ private:
     std::vector<std::pair<std::string, int>> characterTags;
     std::vector<std::pair<std::string, int>> pixivTags;
     std::vector<std::pair<std::string, int>> twitterHashtags;
-    std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter (I don't like this, maybe split character tags and general tags in the database and data model?)
+    std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter (I don't like this, maybe split character tags and
+                                                          // general tags in the database and data model?)
     void loadTags();
-    
+
     // context
     uint widgetsPerRow;
     uint currentColumn;
@@ -155,7 +144,7 @@ private:
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
     QTimer* textSearchTimer;
-    
+
     void handleListWidgetItemSingleClick(QListWidgetItem* item);
     QListWidgetItem* lastClickedTagItem = nullptr;
     void addIncludedTags();
@@ -189,16 +178,17 @@ private:
     uint displayIndex;
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;
-    std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // remember to clear this when clearing resultPics vector, also use for clearing cache
+    std::unordered_map<uint64_t, PictureFrame*>
+        idToFrameMap; // remember to clear this when clearing resultPics vector, also use for clearing cache
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;
     void refreshPicDisplay(); // clear widget, set displayIndex to 0, and call loadMorePics()
     bool isMatchFilter(const PicInfo& pic);
-    void loadMorePics();      // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
-    void sortPics();          // sort resultPics vector
-    void rearrangePicFrames();// rearrange PictureFrame based on window size change, use displayingPicIds and idToFrameMap
+    void
+    loadMorePics(); // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
+    void sortPics();           // sort resultPics vector
+    void rearrangePicFrames(); // rearrange PictureFrame based on window size change, use displayingPicIds and idToFrameMap
     void clearAllPicFrames();
     void removePicFramesFromLayout();
-    
 };
 
 #endif
