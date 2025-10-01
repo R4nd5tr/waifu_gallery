@@ -49,14 +49,6 @@ signals:
                     bool searchTextChanged,
                     size_t requestId);
 
-public slots:
-    void displayImage(uint64_t picId, const QPixmap& img);
-    void handleSearchResults(const std::vector<PicInfo>& resultPics,
-                             std::vector<std::pair<std::string, int>> availableTags,
-                             std::vector<std::pair<std::string, int>> availablePixivTags,
-                             std::vector<std::pair<std::string, int>> availableTwitterHashtags,
-                             size_t requestId);
-
 protected:
     void resizeEvent(QResizeEvent* event) override;
 
@@ -70,13 +62,11 @@ private:
     void fillComboBox();
     void initWorkerThreads();
     void connectSignalSlots();
-    std::vector<std::pair<std::string, int>> generalTags;
-    std::vector<std::pair<std::string, int>> characterTags;
-    std::vector<std::pair<std::string, int>> pixivTags;
-    std::vector<std::pair<std::string, int>> twitterHashtags;
+    std::vector<std::tuple<std::string, int, bool>> allTags; // (tag, count, isCharacter)
+    std::vector<std::pair<std::string, int>> allPixivTags;
+    std::vector<std::pair<std::string, int>> allTwitterHashtags;
     std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter (I don't like this, maybe split character tags and
-                                                          // general tags in the database and data model?)
-    void loadTags();
+    void loadTags();                                      // general tags in the database and data model?)
 
     // context
     uint widgetsPerRow;
@@ -93,10 +83,10 @@ private:
     bool showUnknowAI = true;
     bool showAI = true;
     bool showNonAI = true;
-    uint maxHeight;
-    uint minHeight;
-    uint maxWidth;
-    uint minWidth;
+    uint maxHeight = std::numeric_limits<uint>::max();
+    uint minHeight = 0;
+    uint maxWidth = std::numeric_limits<uint>::max();
+    uint minWidth = 0;
     SortBy sortBy = SortBy::None;
     SortOrder sortOrder = SortOrder::Descending;
     int ratioSliderValue;
@@ -161,6 +151,14 @@ private:
 
     void handleWindowSizeChange();
 
+    void handlescrollBarValueChange(int value);
+
+    void tagSearch(const QString& text);
+
+    void handleAddNewPicsAction();                 // TODO: implement directory choosing dialog
+    void handleAddPowerfulPixivDownloaderAction(); // specify parser type
+    void handleAddGallery_dlTwitterAction();       // specify parser type
+
     // searching
     bool selectedTagChanged = false;
     bool selectedPixivTagChanged = false;
@@ -168,13 +166,16 @@ private:
     bool searchTextChanged = false;
     size_t searchRequestId = 0; // to identify latest search request
     void picSearch();
+    void handleSearchResults(const std::vector<PicInfo>& resultPics,
+                             std::vector<std::tuple<std::string, int, bool>> availableTags,
+                             std::vector<std::pair<std::string, int>> availablePixivTags,
+                             std::vector<std::pair<std::string, int>> availableTwitterHashtags,
+                             size_t requestId);
+    void displayTags(const std::vector<std::tuple<std::string, int, bool>>& tags = {},
+                     const std::vector<std::pair<std::string, int>>& pixivTags = {},
+                     const std::vector<std::pair<std::string, int>>& twitterHashtags = {});
 
     // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
-    void displayTags();
-    void displayTags(const std::vector<std::pair<std::string, int>>& tags,
-                     const std::vector<std::pair<std::string, int>>& pixivTags,
-                     const std::vector<std::pair<std::string, int>>& twitterHashtags);
-
     uint displayIndex;
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;
@@ -185,10 +186,10 @@ private:
     bool isMatchFilter(const PicInfo& pic);
     void
     loadMorePics(); // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
-    void sortPics();           // sort resultPics vector
-    void rearrangePicFrames(); // rearrange PictureFrame based on window size change, use displayingPicIds and idToFrameMap
+    void sortPics(); // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();
+    void displayImage(uint64_t picId, const QPixmap& img);
 };
 
 #endif

@@ -75,6 +75,7 @@ bool PicDatabase::createTables() {
             width INTEGER,
             height INTEGER,
             size INTEGER,
+            file_type TEXT,
             x_restrict INTEGER DEFAULT NULL,
             ai_type INTEGER DEFAULT NULL
         )
@@ -390,9 +391,9 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     QSqlQuery query(database);
     query.prepare(R"(
         INSERT OR IGNORE INTO pictures(
-            id, width, height, size, x_restrict
+            id, width, height, size, file_type, x_restrict
         ) VALUES (
-            :id, :width, :height, :size, :x_restrict
+            :id, :width, :height, :size, :file_type, :x_restrict
         )
     )");
     query.bindValue(
@@ -403,6 +404,7 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
         QVariant::fromValue(picInfo.width)); // convert to a signed integer with the same binary representation for storage
     query.bindValue(":height", QVariant::fromValue(picInfo.height));
     query.bindValue(":size", QVariant::fromValue(picInfo.size));
+    query.bindValue(":file_type", QString::fromStdString(picInfo.fileType));
     query.bindValue(":x_restrict", static_cast<int>(picInfo.xRestrict));
     if (!query.exec()) {
         qCritical() << "Failed to insert picture: " << query.lastError().text();
@@ -431,7 +433,7 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
 }
 bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     QSqlQuery query(database);
-    for (const auto& tag : picInfo.tags) {
+    for (const auto& [tag, isCharacter] : picInfo.tags) {
         if (tagToId.find(tag) == tagToId.end()) {
             QSqlQuery insertTagQuery(database);
             insertTagQuery.prepare(R"(
@@ -773,14 +775,15 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
     QSqlQuery query(database);
 
     // 查询主表
-    query.prepare("SELECT width, height, size, x_restrict FROM pictures WHERE id = :id");
+    query.prepare("SELECT width, height, size, file_type, x_restrict FROM pictures WHERE id = :id");
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec() && query.next()) {
         info.id = id;
         info.width = query.value(0).toUInt();
         info.height = query.value(1).toUInt();
         info.size = query.value(2).toUInt();
-        info.xRestrict = static_cast<XRestrictType>(query.value(3).toInt());
+        info.fileType = query.value(3).toString().toStdString();
+        info.xRestrict = static_cast<XRestrictType>(query.value(4).toInt());
     } else {
         return info; // id 不存在，返回空对象
     }
@@ -795,11 +798,16 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
     }
 
     // 查询标签
-    query.prepare("SELECT tag_id FROM picture_tags WHERE id = :id");
+    query.prepare(R"(
+        SELECT t.tag, t.is_character
+        FROM picture_tags pt
+        JOIN tags t ON pt.tag_id = t.id
+        WHERE pt.id = :id
+    )");
     query.bindValue(":id", QVariant::fromValue(uint64_to_int64(id)));
     if (query.exec()) {
         while (query.next()) {
-            info.tags.insert(idToTag.at(query.value(0).toInt()));
+            info.tags[query.value(0).toString().toStdString()] = query.value(1).toBool();
         }
     }
 
@@ -1370,6 +1378,24 @@ std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string&
     } break;
     }
     return results;
+}
+std::vector<std::tuple<std::string, int, bool>> PicDatabase::getTags() const {
+    std::vector<std::tuple<std::string, int, bool>> tagCounts;
+    QSqlQuery query(database);
+    if (!query.exec("SELECT tag, count, is_character FROM tags")) {
+        qWarning() << "Failed to retrieve all tags:" << query.lastError().text();
+        return tagCounts;
+    }
+    while (query.next()) {
+        std::string tag = query.value(0).toString().toStdString();
+        int count = query.value(1).toInt();
+        bool isCharacter = query.value(2).toBool();
+        tagCounts.push_back({tag, count, isCharacter});
+    }
+    std::sort(tagCounts.begin(), tagCounts.end(), [](const auto& a, const auto& b) {
+        return std::get<1>(b) < std::get<1>(a); // 按照 count 降序排序
+    });
+    return tagCounts;
 }
 std::vector<std::pair<std::string, int>> PicDatabase::getGeneralTags() const {
     std::vector<std::pair<std::string, int>> tagCounts;

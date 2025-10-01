@@ -31,7 +31,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tagSelector">
        <property name="geometry">
@@ -64,7 +64,7 @@
            <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <property name="tabsClosable">
            <bool>false</bool>
@@ -854,13 +854,13 @@ background: rgb(0,200,200);
            </property>
            <property name="minimumSize">
             <size>
-             <width>40</width>
+             <width>60</width>
              <height>30</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>100</width>
+             <width>120</width>
              <height>16777215</height>
             </size>
            </property>
@@ -999,8 +999,8 @@ background: rgb(0,200,200);
      <string>文件</string>
     </property>
     <addaction name="addNewPicsAction"/>
-    <addaction name="action_Powerful_Pixiv_Downloader"/>
-    <addaction name="action_gallery_dl_twitter"/>
+    <addaction name="addPowerfulPixivDownloaderAction"/>
+    <addaction name="addGallery_dlTwitterAction"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -1029,12 +1029,12 @@ background: rgb(0,200,200);
     <string>添加新图片...</string>
    </property>
   </action>
-  <action name="action_Powerful_Pixiv_Downloader">
+  <action name="addPowerfulPixivDownloaderAction">
    <property name="text">
     <string>添加Powerful Pixiv Downloader下载的图片</string>
    </property>
   </action>
-  <action name="action_gallery_dl_twitter">
+  <action name="addGallery_dlTwitterAction">
    <property name="text">
     <string>添加gallery-dl下载的Twitter图片</string>
    </property>
