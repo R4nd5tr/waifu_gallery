@@ -25,7 +25,7 @@ enum class SearchField {
     TweetDescription
 };
 
-class PicDatabase {
+class PicDatabase { // TODO: remove Qt dependency
 public:
     PicDatabase(const QString& connectionName = QString(), const QString& databaseFile = QString("database.db"));
     ~PicDatabase();
@@ -34,6 +34,7 @@ public:
     PicInfo getPicInfo(uint64_t id, int64_t tweetID = 0, int64_t pixivID = 0) const;
     TweetInfo getTweetInfo(int64_t tweetID) const;
     PixivInfo getPixivInfo(int64_t pixivID) const;
+    std::vector<std::tuple<std::string, int, bool>> getTags() const; // (tag, count, isCharacter)
     std::vector<std::pair<std::string, int>> getGeneralTags() const;
     std::vector<std::pair<std::string, int>> getCharacterTags() const;
     std::vector<std::pair<std::string, int>> getTwitterHashtags() const;
@@ -68,7 +69,7 @@ public:
     std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
 
     void processSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    void scanDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None); // TODO: multithreading?
+    void scanDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None); // TODO: multithreading!
     void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
 private:
     QSqlDatabase database; // SQLite

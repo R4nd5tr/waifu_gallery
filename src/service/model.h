@@ -59,10 +59,10 @@ struct PixivInfo {
 };
 
 struct PicInfo {
-    uint64_t id = 0;                                 // xxhash64
-    std::unordered_map<int64_t, int> tweetIdIndices; //(tweetID, index)
-    std::unordered_map<int64_t, int> pixivIdIndices; //(pixivID, index)
-    std::unordered_set<std::string> tags;
+    uint64_t id = 0;                                     // xxhash64
+    std::unordered_map<int64_t, int> tweetIdIndices;     //(tweetID, index)
+    std::unordered_map<int64_t, int> pixivIdIndices;     //(pixivID, index)
+    std::unordered_map<std::string, bool> tags;          // tag -> isCharacter
     std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
     std::vector<TweetInfo> tweetInfo;
     std::vector<PixivInfo> pixivInfo;

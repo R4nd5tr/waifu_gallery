@@ -30,7 +30,7 @@ public slots:
 signals:
     void scanComplete();
     void searchComplete(const std::vector<PicInfo>& resultPics,
-                        std::vector<std::pair<std::string, int>> availableTags,
+                        std::vector<std::tuple<std::string, int, bool>> availableTags,
                         std::vector<std::pair<std::string, int>> availablePixivTags,
                         std::vector<std::pair<std::string, int>> availableTwitterHashtags,
                         size_t requestId);

@@ -103,34 +103,48 @@ void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedT
         }
     }
     std::unordered_map<std::string, int> tagCount;
+    std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter
     std::unordered_map<std::string, int> pixivTagCount;
     std::unordered_map<std::string, int> tweetTagCount;
     for (const auto& pic : resultPics) {
-        for (const auto& tag : pic.tags) {
+        for (const auto& [tag, isCharacter] : pic.tags) {
+            if (includedTags.find(tag) != includedTags.end() && excludedTags.find(tag) != excludedTags.end())
+                continue; // don't count already selected tags
             tagCount[tag]++;
+            isCharacterTag[tag] = isCharacter;
         }
         for (const auto& pixivInfo : pic.pixivInfo) {
             for (const auto& tag : pixivInfo.tags) {
+                if (includedPixivTags.find(tag) != includedPixivTags.end() &&
+                    excludedPixivTags.find(tag) != excludedPixivTags.end())
+                    continue; // don't count already selected tags
                 pixivTagCount[tag]++;
             }
         }
         for (const auto& tweetInfo : pic.tweetInfo) {
             for (const auto& tag : tweetInfo.hashtags) {
+                if (includedTweetTags.find(tag) != includedTweetTags.end() &&
+                    excludedTweetTags.find(tag) != excludedTweetTags.end())
+                    continue; // don't count already selected tags
                 tweetTagCount[tag]++;
             }
         }
     }
-    std::vector<std::pair<std::string, int>> availableTags(tagCount.begin(),
-                                                           tagCount.end()); // TODO: remove tags that are already selected
-    std::vector<std::pair<std::string, int>> availablePixivTags(pixivTagCount.begin(), pixivTagCount.end());
+    std::vector<std::tuple<std::string, int, bool>> availableTags;
+    for (const auto& [tag, count] : tagCount) {
+        availableTags.emplace_back(tag, count, isCharacterTag[tag]);
+    }
+    std::vector<std::pair<std::string, int>> availablePixivTags(
+        pixivTagCount.begin(), pixivTagCount.end()); // TODO: debug this, why selected tags still appear?
     std::vector<std::pair<std::string, int>> availableTwitterHashtags(tweetTagCount.begin(), tweetTagCount.end());
-    std::sort(availableTags.begin(), availableTags.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    std::sort(
+        availableTags.begin(), availableTags.end(), [](const auto& a, const auto& b) { return std::get<1>(a) > std::get<1>(b); });
     std::sort(
         availablePixivTags.begin(), availablePixivTags.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
     std::sort(availableTwitterHashtags.begin(), availableTwitterHashtags.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });
-    emit searchComplete(std::move(resultPics), availableTags, availablePixivTags, availableTwitterHashtags, requestId);
+    emit searchComplete(resultPics, availableTags, availablePixivTags, availableTwitterHashtags, requestId);
 }
 
 LoaderWorker::LoaderWorker(QObject* parent) : QObject(parent) {}

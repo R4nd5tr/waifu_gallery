@@ -67,14 +67,14 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         if (picinfo.tweetInfo.size() > 0) {
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
             ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-            ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
+            ui->idLabel->setFont(QFont("", 10, QFont::Bold));
         }
         break;
     case SearchField::TweetAuthorNick:
         if (picinfo.tweetInfo.size() > 0) {
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
             ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-            ui->idLabel->setFont(QFont("", 10, QFont::Bold));
+            ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
         }
         break;
     default:
@@ -87,6 +87,8 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         }
         if (picinfo.tweetInfo.size() > 0) {
             ui->illustratorLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
+        } else if (picinfo.pixivInfo.size() > 0) {
+            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
         }
         break;
     }

@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "../service/database.h"
 #include "ui_main_window.h"
+#include <QScrollBar>
 #include <QString>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), database(QString("main_thread")) {
@@ -10,6 +11,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     connectSignalSlots();
     loadTags();
     displayTags();
+    handleWindowSizeChange();
 }
 MainWindow::~MainWindow() {
     delete ui;
@@ -125,43 +127,73 @@ void MainWindow::connectSignalSlots() {
     connect(ui->twitterHashtagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
     connect(tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
     connect(tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
+
+    connect(ui->searchTagTextEdit, &QLineEdit::textChanged, this, &MainWindow::tagSearch);
+
+    connect(
+        ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::handlescrollBarValueChange);
+
+    connect(ui->addNewPicsAction, &QAction::triggered, this, &MainWindow::handleAddNewPicsAction);
+    connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
+    connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
 }
 QString getTagString(std::string tag, int count) {
     return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
 }
 void MainWindow::loadTags() {
-    generalTags = database.getGeneralTags();
-    characterTags = database.getCharacterTags();
-    pixivTags = database.getPixivTags();
-    twitterHashtags = database.getTwitterHashtags();
-    for (const auto& tag : characterTags) {
-        isCharacterTag[tag.first] = true;
-    }
-    for (const auto& tag : generalTags) {
-        isCharacterTag[tag.first] = false;
-    }
+    allTags = database.getTags();
+    allPixivTags = database.getPixivTags();
+    allTwitterHashtags = database.getTwitterHashtags();
 }
-void MainWindow::displayTags() { // display all tags
+void MainWindow::displayTags(const std::vector<std::tuple<std::string, int, bool>>& availableTags,
+                             const std::vector<std::pair<std::string, int>>& availablePixivTags,
+                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) { // display all tags
     ui->generalTagList->clear();
     ui->characterTagList->clear();
     ui->pixivTagList->clear();
     ui->twitterHashtagList->clear();
-    QStringList generalTagNames;
-    for (const auto& tag : generalTags) {
-        generalTagNames.append(getTagString(tag.first, tag.second));
+
+    std::vector<std::tuple<std::string, int, bool>> tags;
+    std::vector<std::pair<std::string, int>> pixivTags;
+    std::vector<std::pair<std::string, int>> twitterHashtags;
+
+    if (availableTags.size() > 0) {
+        tags = availableTags;
+    } else {
+        tags = allTags;
     }
-    ui->generalTagList->addItems(generalTagNames);
-    for (size_t i = 0; i < generalTags.size(); i++) {
-        ui->generalTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(generalTags[i].first));
+    if (availablePixivTags.size() > 0) {
+        pixivTags = availablePixivTags;
+    } else {
+        pixivTags = allPixivTags;
+    }
+    if (availableTwitterHashtags.size() > 0) {
+        twitterHashtags = availableTwitterHashtags;
+    } else {
+        twitterHashtags = allTwitterHashtags;
     }
 
+    QStringList generalTagNames;
     QStringList characterTagNames;
-    for (const auto& tag : characterTags) {
-        characterTagNames.append(getTagString(tag.first, tag.second));
+    for (const auto& tag : tags) {
+        if (std::get<2>(tag)) { // determine if it's a character tag
+            characterTagNames.append(getTagString(std::get<0>(tag), std::get<1>(tag)));
+        } else {
+            generalTagNames.append(getTagString(std::get<0>(tag), std::get<1>(tag)));
+        }
     }
+    ui->generalTagList->addItems(generalTagNames);
     ui->characterTagList->addItems(characterTagNames);
-    for (size_t i = 0; i < characterTags.size(); i++) {
-        ui->characterTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(characterTags[i].first));
+    size_t generalTagIndex = 0;
+    size_t characterTagIndex = 0;
+    for (const auto& tag : tags) {
+        if (std::get<2>(tag)) { // determine if it's a character tag
+            ui->characterTagList->item(characterTagIndex)->setData(Qt::UserRole, QString::fromStdString(std::get<0>(tag)));
+            characterTagIndex++;
+        } else {
+            ui->generalTagList->item(generalTagIndex)->setData(Qt::UserRole, QString::fromStdString(std::get<0>(tag)));
+            generalTagIndex++;
+        }
     }
 
     QStringList pixivTagNames;
@@ -180,54 +212,6 @@ void MainWindow::displayTags() { // display all tags
     ui->twitterHashtagList->addItems(twitterHashtagNames);
     for (size_t i = 0; i < twitterHashtags.size(); i++) {
         ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(twitterHashtags[i].first));
-    }
-}
-void MainWindow::displayTags(const std::vector<std::pair<std::string, int>>& availableTags, // display available tags after search
-                             const std::vector<std::pair<std::string, int>>& availablePixivTags,
-                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) {
-    ui->generalTagList->clear();
-    ui->characterTagList->clear();
-    ui->pixivTagList->clear();
-    ui->twitterHashtagList->clear();
-    QStringList generalTagNames;
-    QStringList characterTagNames;
-    std::vector<std::string> generalTagVec;
-    std::vector<std::string> characterTagVec;
-    for (const auto& tag : availableTags) {
-        if (isCharacterTag.find(tag.first) != isCharacterTag.end() && isCharacterTag[tag.first]) {
-            characterTagNames.append(getTagString(tag.first, tag.second));
-            characterTagVec.push_back(tag.first);
-        } else {
-            generalTagNames.append(getTagString(tag.first, tag.second));
-            generalTagVec.push_back(tag.first);
-        }
-    }
-    ui->generalTagList->addItems(generalTagNames);
-    for (size_t i = 0; i < generalTagVec.size(); i++) {
-        ui->generalTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(generalTagVec[i]));
-    }
-
-    ui->characterTagList->addItems(characterTagNames);
-    for (size_t i = 0; i < characterTagVec.size(); i++) {
-        ui->characterTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(characterTagVec[i]));
-    }
-
-    QStringList pixivTagNames;
-    for (const auto& tag : availablePixivTags) {
-        pixivTagNames.append(getTagString(tag.first, tag.second));
-    }
-    ui->pixivTagList->addItems(pixivTagNames);
-    for (size_t i = 0; i < availablePixivTags.size(); i++) {
-        ui->pixivTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(availablePixivTags[i].first));
-    }
-
-    QStringList twitterHashtagNames;
-    for (const auto& tag : availableTwitterHashtags) {
-        twitterHashtagNames.append(getTagString(tag.first, tag.second));
-    }
-    ui->twitterHashtagList->addItems(twitterHashtagNames);
-    for (size_t i = 0; i < availableTwitterHashtags.size(); i++) {
-        ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(availableTwitterHashtags[i].first));
     }
 }
 void MainWindow::updateShowJPG(bool checked) {
@@ -277,22 +261,38 @@ void MainWindow::updateShowNonAI(bool checked) {
 void MainWindow::updateMaxWidth(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
-    if (ok) maxWidth = value;
+    if (ok) {
+        maxWidth = value;
+    } else {
+        maxWidth = std::numeric_limits<uint>::max();
+    }
 }
 void MainWindow::updateMinWidth(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
-    if (ok) minWidth = value;
+    if (ok) {
+        minWidth = value;
+    } else {
+        minWidth = 0;
+    }
 }
 void MainWindow::updateMaxHeight(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
-    if (ok) maxHeight = value;
+    if (ok) {
+        maxHeight = value;
+    } else {
+        maxHeight = std::numeric_limits<uint>::max();
+    }
 }
 void MainWindow::updateMinHeight(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
-    if (ok) minHeight = value;
+    if (ok) {
+        minHeight = value;
+    } else {
+        minHeight = 0;
+    }
 }
 void MainWindow::handleResolutionTimerTimeout() {
     refreshPicDisplay();
@@ -542,15 +542,51 @@ void MainWindow::removeExcludedTweetTags(QPushButton* button) {
     }
     tagSearchTimer->start(500);
 }
+void MainWindow::tagSearch(const QString& text) {
+    QListWidget* currentListWidget = ui->tagListTabWidget->currentWidget()->findChild<QListWidget*>();
+    for (int i = 0; i < currentListWidget->count(); i++) {
+        QListWidgetItem* item = currentListWidget->item(i);
+        if (item->text().contains(text, Qt::CaseInsensitive)) {
+            item->setHidden(false);
+        } else {
+            item->setHidden(true);
+        }
+    }
+}
 void MainWindow::handleWindowSizeChange() {
     int width = ui->picBrowseWidget->width();
-    widgetsPerRow = width / 250;
+    widgetsPerRow = width / 270;
     if (widgetsPerRow < 1) widgetsPerRow = 1;
-    rearrangePicFrames();
+    while (ui->picDisplayLayout->count() > 0) {
+        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
+        if (item) {
+            ui->picDisplayLayout->removeItem(item);
+        }
+        delete item;
+    }
+    currentColumn = 0;
+    currentRow = 0;
+    for (const auto& picId : displayingPicIds) {
+        auto frameIt = idToFrameMap.find(picId);
+        if (frameIt != idToFrameMap.end()) {
+            ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
+            currentColumn++;
+            if (currentColumn >= widgetsPerRow) {
+                currentColumn = 0;
+                currentRow++;
+            }
+        }
+    }
 }
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     handleWindowSizeChange();
+}
+void MainWindow::handlescrollBarValueChange(int value) {
+    QScrollBar* scrollBar = ui->picBrowseScrollArea->verticalScrollBar();
+    if (scrollBar->maximum() - value < 100) {
+        loadMorePics();
+    }
 }
 void MainWindow::picSearch() {
     clearAllPicFrames();
@@ -576,7 +612,7 @@ void MainWindow::picSearch() {
                     searchRequestId);
 }
 void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
-                                     std::vector<std::pair<std::string, int>> availableTags,
+                                     std::vector<std::tuple<std::string, int, bool>> availableTags,
                                      std::vector<std::pair<std::string, int>> availablePixivTags,
                                      std::vector<std::pair<std::string, int>> availableTweetTags,
                                      size_t requestId) {
@@ -700,22 +736,6 @@ void MainWindow::sortPics() {
     };
     std::sort(resultPics.begin(), resultPics.end(), comparator);
 }
-void MainWindow::rearrangePicFrames() {
-    removePicFramesFromLayout();
-    currentColumn = 0;
-    currentRow = 0;
-    for (const auto& picId : displayingPicIds) {
-        auto frameIt = idToFrameMap.find(picId);
-        if (frameIt != idToFrameMap.end()) {
-            ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
-            currentColumn++;
-            if (currentColumn >= widgetsPerRow) {
-                currentColumn = 0;
-                currentRow++;
-            }
-        }
-    }
-}
 void MainWindow::clearAllPicFrames() {
     QLayoutItem* child;
     while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
@@ -728,8 +748,11 @@ void MainWindow::clearAllPicFrames() {
     idToFrameMap.clear();
 }
 void MainWindow::removePicFramesFromLayout() {
-    QLayoutItem* child;
-    while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
-        delete child;
+    while (ui->picDisplayLayout->count() > 0) {
+        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
+        if (item->widget()) {
+            item->widget()->setParent(nullptr);
+        }
+        delete item;
     }
 }
