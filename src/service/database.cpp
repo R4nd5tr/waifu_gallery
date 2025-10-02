@@ -22,7 +22,7 @@ uint64_t int64_to_uint64(int64_t i) {
     std::memcpy(&u, &i, sizeof(i));
     return u;
 }
-std::vector<std::filesystem::path> collectAllFiles(const std::filesystem::path& directory) {
+std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory) {
     std::vector<std::filesystem::path> files;
     int fileCount = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
@@ -944,18 +944,18 @@ PixivInfo PicDatabase::getPixivInfo(int64_t pixivID) const {
     }
     return info;
 }
-void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserType parserType) {
-    std::string ext = path.extension().string();
+void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePath, ParserType parserType) {
+    std::string ext = filePath.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
     try {
         if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
-            PicInfo picInfo = parsePicture(path, parserType);
+            PicInfo picInfo = parsePicture(filePath, parserType);
             insertPicInfo(picInfo);
         } else if (ext == ".txt" && parserType == ParserType::Pixiv) {
-            PixivInfo pixivInfo = parsePixivMetadata(path);
+            PixivInfo pixivInfo = parsePixivMetadata(filePath);
             insertPixivInfo(pixivInfo);
         } else if (ext == ".json") {
-            QByteArray data = readJsonFile(path);
+            QByteArray data = readJsonFile(filePath);
             if (parserType == ParserType::Pixiv) {
                 std::vector<PixivInfo> pixivInfoVec = parsePixivJson(data);
                 for (const auto& pixivInfo : pixivInfoVec) {
@@ -966,17 +966,17 @@ void PicDatabase::processSingleFile(const std::filesystem::path& path, ParserTyp
                 insertTweetInfo(tweetInfo);
             }
         } else if (ext == ".csv" && parserType == ParserType::Pixiv) {
-            std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(path);
+            std::vector<PixivInfo> pixivInfoVec = parsePixivCsv(filePath);
             for (const auto& pixivInfo : pixivInfoVec) {
                 updatePixivInfo(pixivInfo);
             }
         }
     } catch (const std::exception& e) {
-        qWarning() << "Error processing file:" << path.c_str() << "Error:" << e.what();
+        qWarning() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
     }
 }
-void PicDatabase::scanDirectory(const std::filesystem::path& directory, ParserType parserType) {
-    auto files = collectAllFiles(directory);
+void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType) {
+    auto files = collectFiles(directory);
     QSqlQuery query(database);
 
     query.exec("PRAGMA foreign_keys = OFF;");
@@ -987,7 +987,7 @@ void PicDatabase::scanDirectory(const std::filesystem::path& directory, ParserTy
         database.transaction();
         auto batch_end = std::min(i + BATCH_SIZE, files.size());
         for (size_t j = i; j < batch_end; j++) {
-            processSingleFile(files[j], parserType);
+            processAndImportSingleFile(files[j], parserType);
             processed++;
         }
         if (!database.commit()) {
@@ -996,9 +996,9 @@ void PicDatabase::scanDirectory(const std::filesystem::path& directory, ParserTy
         }
         qInfo() << "Processed files: " << processed;
     }
-    qInfo() << "Scan completed. Total files processed:" << processed;
+    qInfo() << "Import completed. Total files processed:" << processed;
 }
-void PicDatabase::syncTables() {
+void PicDatabase::syncTables() { // post-import operations
     QSqlQuery query(database);
     // count tags
     if (!query.exec(R"(
@@ -1464,4 +1464,25 @@ std::vector<std::pair<std::string, int>> PicDatabase::getTwitterHashtags() const
         return b.second < a.second; // 按照 count 降序排序
     });
     return tagCounts;
+}
+void PicDatabase::enableForeignKeyRestriction() const {
+    QSqlQuery query(database);
+    if (!query.exec("PRAGMA foreign_keys = ON;")) {
+        qWarning() << "Failed to enable foreign key restriction:" << query.lastError().text();
+    }
+}
+void PicDatabase::disableForeignKeyRestriction() const {
+    QSqlQuery query(database);
+    if (!query.exec("PRAGMA foreign_keys = OFF;")) {
+        qWarning() << "Failed to disable foreign key restriction:" << query.lastError().text();
+    }
+}
+bool PicDatabase::beginTransaction() {
+    return database.transaction();
+}
+bool PicDatabase::commitTransaction() {
+    return database.commit();
+}
+bool PicDatabase::rollbackTransaction() {
+    return database.rollback();
 }

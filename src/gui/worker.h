@@ -7,13 +7,14 @@
 #include <QPixmap>
 #include <filesystem>
 
-class DatabaseWorker : public QObject { // TODO: implement
+class DatabaseWorker : public QObject { // database operations in another thread
     Q_OBJECT
 public:
     explicit DatabaseWorker(const QString& connectionName, QObject* parent = nullptr);
     ~DatabaseWorker();
-public slots:
-    void scanDirectory(std::filesystem::path directory);
+
+    void importFilesFromDirectory(std::filesystem::path directory,
+                                  ParserType parserType = ParserType::None); // TODO: multithreading!
     void searchPics(const std::unordered_set<std::string>& includedTags,
                     const std::unordered_set<std::string>& excludedTags,
                     const std::unordered_set<std::string>& includedPixivTags,
@@ -29,6 +30,7 @@ public slots:
                     size_t requestId);
 signals:
     void scanComplete();
+    void reportProgress(int current, int total, double speed);
     void searchComplete(const std::vector<PicInfo>& resultPics,
                         std::vector<std::tuple<std::string, int, bool>> availableTags,
                         std::vector<std::pair<std::string, int>> availablePixivTags,
@@ -50,7 +52,7 @@ public:
     explicit LoaderWorker(QObject* parent = nullptr);
     ~LoaderWorker();
 public slots:
-    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths);
+    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // TODO: thread pool
 signals:
     void loadComplete(uint64_t id, const QPixmap& img);
 

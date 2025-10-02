@@ -30,6 +30,12 @@ public:
     PicDatabase(const QString& connectionName = QString(), const QString& databaseFile = QString("database.db"));
     ~PicDatabase();
 
+    void enableForeignKeyRestriction() const;
+    void disableForeignKeyRestriction() const;
+    bool beginTransaction();
+    bool commitTransaction();
+    bool rollbackTransaction();
+
     // getters  TODO: batch get and merge SQL queries
     PicInfo getPicInfo(uint64_t id, int64_t tweetID = 0, int64_t pixivID = 0) const;
     TweetInfo getTweetInfo(int64_t tweetID) const;
@@ -68,8 +74,10 @@ public:
                                              const std::unordered_set<std::string>& excludedTags);
     std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
 
-    void processSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    void scanDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None); // TODO: multithreading!
+    // import functions (only used in testing)
+    void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
+    void importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None);
+
     void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
 private:
     QSqlDatabase database; // SQLite

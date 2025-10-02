@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iostream>
 #include <rapidcsv.h>
+#include <regex>
 #include <vector>
 #include <xxhash.h>
 

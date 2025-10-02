@@ -23,8 +23,10 @@ enum class SortOrder { Ascending, Descending };
 
 enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
-const size_t MAX_PIC_CACHE = 1000; // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 50;  // number of pictures to load each time
+const size_t MAX_PIC_CACHE = 1000;  // max number of pictures in cache
+const size_t LOAD_PIC_BATCH = 50;   // number of pictures to load each time
+const int DEBOUNCE_DELAY = 300;     // ms
+const int DOUBLE_CLICK_DELAY = 400; // ms
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -34,7 +36,8 @@ public:
 
 signals:
     void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // load image in another thread
-    void scanDirectory(const std::filesystem::path& directory);
+    void importFilesFromDirectory(const std::filesystem::path& directory,
+                                  ParserType parserType = ParserType::None); // scan directory in another thread
     void searchPics(const std::unordered_set<std::string>& includedTags,
                     const std::unordered_set<std::string>& excludedTags,
                     const std::unordered_set<std::string>& includedPixivTags,
@@ -57,7 +60,8 @@ private:
     Ui::MainWindow* ui;
     PicDatabase database;
     QThread* loaderWorkerThread = nullptr;
-    QThread* databaseWorkerThread = nullptr;
+    QThread* searchWorkerThread = nullptr;
+    QThread* importFilesWorkerThread = nullptr;
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -65,8 +69,7 @@ private:
     std::vector<std::tuple<std::string, int, bool>> allTags; // (tag, count, isCharacter)
     std::vector<std::pair<std::string, int>> allPixivTags;
     std::vector<std::pair<std::string, int>> allTwitterHashtags;
-    std::unordered_map<std::string, bool> isCharacterTag; // tag -> isCharacter (I don't like this, maybe split character tags and
-    void loadTags();                                      // general tags in the database and data model?)
+    void loadTags();
 
     // context
     uint widgetsPerRow;
@@ -158,6 +161,8 @@ private:
     void handleAddNewPicsAction();                 // TODO: implement directory choosing dialog
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type
     void handleAddGallery_dlTwitterAction();       // specify parser type
+    void handleImportFilesComplete();
+    void displayImportProgress(int current, int total, double speed);
 
     // searching
     bool selectedTagChanged = false;
@@ -178,14 +183,12 @@ private:
     // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
     uint displayIndex;
     std::vector<PicInfo> resultPics;
-    std::vector<uint64_t> displayingPicIds;
-    std::unordered_map<uint64_t, PictureFrame*>
-        idToFrameMap; // remember to clear this when clearing resultPics vector, also use for clearing cache
+    std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
+    std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;
     void refreshPicDisplay(); // clear widget, set displayIndex to 0, and call loadMorePics()
     bool isMatchFilter(const PicInfo& pic);
-    void
-    loadMorePics(); // check pictures match filter or not, add PictureFrame into widget and add id to displayingPicIds, load image
+    void loadMorePics();
     void sortPics(); // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();
