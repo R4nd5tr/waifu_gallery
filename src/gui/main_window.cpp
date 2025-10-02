@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "../service/database.h"
 #include "ui_main_window.h"
+#include <QFileDialog>
 #include <QScrollBar>
 #include <QString>
 
@@ -17,8 +18,10 @@ MainWindow::~MainWindow() {
     delete ui;
     loaderWorkerThread->quit();
     loaderWorkerThread->wait();
-    databaseWorkerThread->quit();
-    databaseWorkerThread->wait();
+    searchWorkerThread->quit();
+    searchWorkerThread->wait();
+    importFilesWorkerThread->quit();
+    importFilesWorkerThread->wait();
 }
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
@@ -58,14 +61,22 @@ void MainWindow::initWorkerThreads() {
     connect(loaderWorkerThread, &QThread::finished, loaderWorker, &QObject::deleteLater);
     loaderWorkerThread->start();
 
-    databaseWorkerThread = new QThread(this);
-    DatabaseWorker* databaseWorker = new DatabaseWorker(QString("database_worker_thread"));
-    databaseWorker->moveToThread(databaseWorkerThread);
-    connect(this, &MainWindow::scanDirectory, databaseWorker, &DatabaseWorker::scanDirectory);
-    connect(this, &MainWindow::searchPics, databaseWorker, &DatabaseWorker::searchPics);
-    connect(databaseWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
-    connect(databaseWorkerThread, &QThread::finished, databaseWorker, &QObject::deleteLater);
-    databaseWorkerThread->start();
+    searchWorkerThread = new QThread(this);
+    DatabaseWorker* searchWorker = new DatabaseWorker(QString("database_worker_thread"));
+    searchWorker->moveToThread(searchWorkerThread);
+    connect(this, &MainWindow::searchPics, searchWorker, &DatabaseWorker::searchPics);
+    connect(searchWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
+    connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
+    searchWorkerThread->start();
+
+    importFilesWorkerThread = new QThread(this);
+    DatabaseWorker* importFilesWorker = new DatabaseWorker(QString("import_files_worker_thread"));
+    importFilesWorker->moveToThread(importFilesWorkerThread);
+    connect(this, &MainWindow::importFilesFromDirectory, importFilesWorker, &DatabaseWorker::importFilesFromDirectory);
+    connect(importFilesWorker, &DatabaseWorker::reportProgress, this, &MainWindow::displayImportProgress);
+    connect(importFilesWorker, &DatabaseWorker::scanComplete, this, &MainWindow::handleImportFilesComplete);
+    connect(importFilesWorkerThread, &QThread::finished, importFilesWorker, &QObject::deleteLater);
+    importFilesWorkerThread->start();
 }
 void MainWindow::connectSignalSlots() {
     resolutionTimer = new QTimer(this);
@@ -92,29 +103,29 @@ void MainWindow::connectSignalSlots() {
     connect(ui->noAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowNonAI);
 
     connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxHeight);
-    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
+    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinHeight);
-    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
+    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxWidth);
-    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
+    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinWidth);
-    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(300); });
+    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
 
     connect(ui->sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortBy);
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
     connect(ui->ratioSlider, &QSlider::valueChanged, this, &MainWindow::updateRatioSlider);
-    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(300); });
+    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
     connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(300); });
+    connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(300); });
+    connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
     connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
-    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() { textSearchTimer->start(300); });
+    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() { textSearchTimer->start(DEBOUNCE_DELAY); });
     connect(textSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
     connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
@@ -388,7 +399,7 @@ void MainWindow::updateSearchText(const QString& text) {
 }
 
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
-    tagClickTimer->start(400);
+    tagClickTimer->start(DOUBLE_CLICK_DELAY);
     lastClickedTagItem = item;
 }
 void MainWindow::addIncludedTags() {
@@ -402,7 +413,7 @@ void MainWindow::addIncludedTags() {
 
     QPushButton* tagButton = new QPushButton(this);
     QPalette palette = tagButton->palette();
-    palette.setColor(QPalette::Button, Qt::green);
+    palette.setColor(QPalette::Button, QColor(100, 200, 100));
     tagButton->setPalette(palette);
     tagButton->setProperty("tag", QString::fromStdString(tag));
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
@@ -428,7 +439,7 @@ void MainWindow::addIncludedTags() {
         }
     }
     ui->selectedTagLayout->insertWidget(0, tagButton);
-    tagSearchTimer->start(500);
+    picSearch();
 }
 void MainWindow::addExcludedTags(QListWidgetItem* item) {
     tagDoubleClicked = true;
@@ -441,7 +452,7 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
 
     QPushButton* tagButton = new QPushButton(this);
     QPalette palette = tagButton->palette();
-    palette.setColor(QPalette::Button, Qt::red);
+    palette.setColor(QPalette::Button, QColor(200, 100, 100));
     tagButton->setPalette(palette);
     tagButton->setProperty("tag", QString::fromStdString(tag));
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
@@ -467,8 +478,8 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
         }
     }
     ui->selectedTagLayout->addWidget(tagButton);
+    picSearch();
     tagDoubleClicked = false;
-    tagSearchTimer->start(500);
 }
 void MainWindow::removeIncludedTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -480,7 +491,7 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -492,7 +503,7 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeIncludedPixivTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -504,7 +515,7 @@ void MainWindow::removeIncludedPixivTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedPixivTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -516,7 +527,7 @@ void MainWindow::removeExcludedPixivTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeIncludedTweetTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -528,7 +539,7 @@ void MainWindow::removeIncludedTweetTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedTweetTags(QPushButton* button) {
     std::string tag = button->property("tag").toString().toStdString();
@@ -540,7 +551,7 @@ void MainWindow::removeExcludedTweetTags(QPushButton* button) {
         includedTweetTags.empty() && excludedTweetTags.empty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(500);
+    tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::tagSearch(const QString& text) {
     QListWidget* currentListWidget = ui->tagListTabWidget->currentWidget()->findChild<QListWidget*>();
@@ -755,4 +766,24 @@ void MainWindow::removePicFramesFromLayout() {
         }
         delete item;
     }
+}
+void MainWindow::handleAddNewPicsAction() {
+    QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
+    if (dir.isEmpty()) return;
+    ui->statusbar->showMessage("正在扫描文件夹...");
+    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
+}
+void MainWindow::handleAddPowerfulPixivDownloaderAction() {
+    QString dir = QFileDialog::getExistingDirectory(
+        this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
+    if (dir.isEmpty()) return;
+    ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
+    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
+}
+void MainWindow::handleAddGallery_dlTwitterAction() {
+    QString dir =
+        QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
+    if (dir.isEmpty()) return;
+    ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
+    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
 }
