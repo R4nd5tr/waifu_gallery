@@ -11,20 +11,12 @@
 enum class XRestrictType { Unknown, AllAges, R18, R18G };
 enum class AIType { Unknown, NotAI, AI };
 
-struct PairHash {
-    template <typename T1, typename T2> std::size_t operator()(const std::pair<T1, T2>& p) const {
-        std::size_t h1 = std::hash<T1>{}(p.first);
-        std::size_t h2 = std::hash<T2>{}(p.second);
-        return h1 ^ (h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2));
-    }
-};
-
 struct PicInfo;
 
 struct TweetInfo {
     int64_t tweetID = 0;
     std::string date;
-    uint32_t authorID;
+    int64_t authorID;
     std::string authorName;
     std::string authorNick;
     std::string authorDescription;
@@ -47,7 +39,7 @@ struct PixivInfo {
     std::vector<std::string> tags;
     std::vector<std::string> tagsTransl;
     std::string authorName;
-    uint32_t authorID;
+    int64_t authorID;
     std::string title;
     std::string description;
     uint32_t likeCount = 0;

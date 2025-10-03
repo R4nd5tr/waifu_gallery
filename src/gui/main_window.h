@@ -160,7 +160,7 @@ private:
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type
     void handleAddGallery_dlTwitterAction();       // specify parser type
     // void handleImportFilesComplete();
-    // void displayImportProgress(int current, int total, double speed);
+    // void displayImportProgress(int current, int total, double speed); //TODO implement progress window and bar
 
     // searching
     bool selectedTagChanged = false;

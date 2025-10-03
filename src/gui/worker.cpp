@@ -102,7 +102,6 @@ void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedT
             case SearchField::PixivAuthorID:
             case SearchField::PixivAuthorName:
             case SearchField::PixivTitle:
-            case SearchField::PixivDescription:
                 resultPics.push_back(database.getPicInfo(
                     id, 0, textSearchResult[id])); // make sure to get the matched pixivID then display correct search result
                 break;
@@ -110,7 +109,6 @@ void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedT
             case SearchField::TweetAuthorID:
             case SearchField::TweetAuthorName:
             case SearchField::TweetAuthorNick:
-            case SearchField::TweetDescription:
                 resultPics.push_back(database.getPicInfo(
                     id, textSearchResult[id], 0)); // make sure to get the matched tweetID then display correct search result
                 break;

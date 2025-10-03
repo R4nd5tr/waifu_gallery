@@ -16,12 +16,10 @@ enum class SearchField {
     PixivAuthorID,
     PixivAuthorName,
     PixivTitle,
-    PixivDescription,
     TweetID,
     TweetAuthorID,
     TweetAuthorName,
-    TweetAuthorNick,
-    TweetDescription
+    TweetAuthorNick
 };
 
 class PicDatabase { // TODO: remove Qt dependency
@@ -53,11 +51,11 @@ public:
     bool insertTweetInfo(const TweetInfo& tweetInfo);
     bool insertTweet(const TweetInfo& tweetInfo);
     bool insertTweetHashtags(const TweetInfo& tweetInfo);
-    // insert pixiv
+    // insert pixiv (for text metadata files)
     bool insertPixivInfo(const PixivInfo& pixivInfo);
     bool insertPixivArtwork(const PixivInfo& pixivInfo);
     bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
-    // update pixiv
+    // update pixiv (for csv/json files)
     bool updatePixivInfo(const PixivInfo& pixivInfo);
     bool updatePixivArtwork(const PixivInfo& pixivInfo);
     bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
@@ -71,8 +69,8 @@ public:
                                              const std::unordered_set<std::string>& excludedTags);
     std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
 
-    // import functions (only used in testing)
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
+    // import functions (only used in testing)
     void importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None);
 
     void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
@@ -88,7 +86,6 @@ private:
 
     void initDatabase(const std::string& databaseFile);
     bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
-    bool setupFTS5();
     void getTagMapping();
 
     bool execute(const std::string& sql) const {

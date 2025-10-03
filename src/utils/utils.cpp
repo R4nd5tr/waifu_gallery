@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "logger.h"
 
 std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory) {
     std::vector<std::filesystem::path> files;
@@ -10,6 +11,6 @@ std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& dir
         files.push_back(entry.path());
         fileCount++;
     }
-    qInfo() << "Total files collected:" << fileCount;
+    Info() << "Total files collected:" << fileCount;
     return files;
 }
