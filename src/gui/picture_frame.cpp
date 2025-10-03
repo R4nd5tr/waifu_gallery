@@ -12,9 +12,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     switch (searchField) { // highlight search result
     case SearchField::PixivID:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1-%2")
-                                     .arg(QString::number(picinfo.pixivInfo[0].pixivID))
-                                     .arg(QString::number(picinfo.pixivIdIndices.at(picinfo.pixivInfo[0].pixivID))));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
@@ -23,9 +21,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     case SearchField::PixivAuthorID:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1-%2")
-                                     .arg(QString::number(picinfo.pixivInfo[0].pixivID))
-                                     .arg(QString::number(picinfo.pixivIdIndices.at(picinfo.pixivInfo[0].pixivID))));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::number(picinfo.pixivInfo[0].authorID));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
@@ -34,9 +30,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     case SearchField::PixivAuthorName:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1-%2")
-                                     .arg(QString::number(picinfo.pixivInfo[0].pixivID))
-                                     .arg(QString::number(picinfo.pixivIdIndices.at(picinfo.pixivInfo[0].pixivID))));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
@@ -45,9 +39,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     case SearchField::PixivTitle:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1-%2")
-                                     .arg(QString::number(picinfo.pixivIdIndices.begin()->first))
-                                     .arg(QString::number(picinfo.pixivIdIndices.begin()->second)));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->titleLabel->setFont(QFont("", 10, QFont::Bold));
@@ -79,14 +71,13 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     default:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1-%2")
-                                     .arg(QString::number(picinfo.pixivIdIndices.begin()->first))
-                                     .arg(QString::number(picinfo.pixivIdIndices.begin()->second)));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
         }
         if (picinfo.tweetInfo.size() > 0) {
-            ui->illustratorLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
+            ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
+            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
         } else if (picinfo.pixivInfo.size() > 0) {
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
         }

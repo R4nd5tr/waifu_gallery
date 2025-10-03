@@ -1,8 +1,8 @@
 #include "database.h"
+#include "../utils/logger.h"
 #include "../utils/utils.h"
 #include "model.h"
 #include "parser.h"
-#include <QDebug>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -37,7 +37,7 @@ void PicDatabase::initDatabase(const std::string& databaseFile) {
     }
     if (!databaseExists) {
         if (!createTables()) {
-            qCritical() << "Failed to create tables";
+            Error() << "Failed to create tables";
             return;
         }
     }
@@ -216,92 +216,22 @@ bool PicDatabase::createTables() {
     beginTransaction();
     for (const auto& tableSql : tables) {
         if (!execute(tableSql)) {
-            qCritical() << "Failed to create table:" << sqlite3_errmsg(db);
+            Error() << "Failed to create table:" << sqlite3_errmsg(db);
             rollbackTransaction();
             return false;
         }
     }
     for (const auto& indexSql : indexes) {
         if (!execute(indexSql)) {
-            qCritical() << "Failed to create index:" << sqlite3_errmsg(db);
+            Error() << "Failed to create index:" << sqlite3_errmsg(db);
             rollbackTransaction();
             return false;
         }
     }
-    if (!setupFTS5()) {
-        qCritical() << "Failed to setup FTS5";
-        rollbackTransaction();
-        return false;
-    }
     commitTransaction();
     return true;
 }
-bool PicDatabase::setupFTS5() {
-    const std::string pixivFtsTable = R"(
-        CREATE VIRTUAL TABLE IF NOT EXISTS pixiv_fts USING fts5(
-            title,
-            description,
-            content=pixiv_artworks,
-            content_rowid=pixiv_id
-        )
-    )";
-    const std::string tweetFtsTable = R"(
-        CREATE VIRTUAL TABLE IF NOT EXISTS tweets_fts USING fts5(
-            description,
-            content=tweets,
-            content_rowid=tweet_id
-        )
-    )";
-    if (!execute(pixivFtsTable)) {
-        qCritical() << "Failed to create FTS5 table for pixiv_artworks:" << sqlite3_errmsg(db);
-        return false;
-    }
-    if (!execute(tweetFtsTable)) {
-        qCritical() << "Failed to create FTS5 table for tweets:" << sqlite3_errmsg(db);
-        return false;
-    }
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_ai AFTER INSERT ON pixiv_artworks BEGIN
-            INSERT INTO pixiv_fts(rowid, title, description)
-            VALUES (new.pixiv_id, new.title, new.description);
-        END;
-    )");
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_ad AFTER DELETE ON pixiv_artworks BEGIN
-            INSERT INTO pixiv_fts(pixiv_fts, rowid, title, description)
-            VALUES('delete', old.pixiv_id, old.title, old.description);
-        END;
-    )");
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS pixiv_artworks_au AFTER UPDATE ON pixiv_artworks BEGIN
-            INSERT INTO pixiv_fts(pixiv_fts, rowid, title, description)
-            VALUES('delete', old.pixiv_id, old.title, old.description);
-            INSERT INTO pixiv_fts(rowid, title, description)
-            VALUES (new.pixiv_id, new.title, new.description);
-        END;
-    )");
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS tweets_ai AFTER INSERT ON tweets BEGIN
-            INSERT INTO tweets_fts(rowid, description)
-            VALUES (new.tweet_id, new.description);
-        END;
-    )");
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS tweets_ad AFTER DELETE ON tweets BEGIN
-            INSERT INTO tweets_fts(tweets_fts, rowid, description)
-            VALUES('delete', old.tweet_id, old.description);
-        END;
-    )");
-    execute(R"(
-        CREATE TRIGGER IF NOT EXISTS tweets_au AFTER UPDATE ON tweets BEGIN
-            INSERT INTO tweets_fts(tweets_fts, rowid, description)
-            VALUES('delete', old.tweet_id, old.description);
-            INSERT INTO tweets_fts(rowid, description)
-            VALUES (new.tweet_id, new.description);
-        END;
-    )");
-    return true;
-}
+
 void PicDatabase::getTagMapping() {
     tagToId.clear();
     idToTag.clear();
@@ -314,7 +244,7 @@ void PicDatabase::getTagMapping() {
 
     stmt = prepare("SELECT id, tag FROM tags");
     if (!stmt) {
-        qWarning() << "Failed to prepare statement for fetching tags.";
+        Warn() << "Failed to prepare statement for fetching tags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -327,7 +257,7 @@ void PicDatabase::getTagMapping() {
 
     stmt = prepare("SELECT id, hashtag FROM twitter_hashtags");
     if (!stmt) {
-        qWarning() << "Failed to prepare statement for fetching twitter hashtags.";
+        Warn() << "Failed to prepare statement for fetching twitter hashtags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -339,7 +269,7 @@ void PicDatabase::getTagMapping() {
     sqlite3_finalize(stmt);
     stmt = prepare("SELECT id, tag FROM pixiv_tags");
     if (!stmt) {
-        qWarning() << "Failed to prepare statement for fetching pixiv tags.";
+        Warn() << "Failed to prepare statement for fetching pixiv tags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -348,28 +278,28 @@ void PicDatabase::getTagMapping() {
         pixivTagToId[tag] = id;
         idToPixivTag[id] = tag;
     }
-    qInfo() << "Tag mappings loaded. Tags:" << tagToId.size() << "Twitter Hashtags:" << twitterHashtagToId.size()
-            << "Pixiv Tags:" << pixivTagToId.size();
+    Info() << "Tag mappings loaded. Tags:" << tagToId.size() << "Twitter Hashtags:" << twitterHashtagToId.size()
+           << "Pixiv Tags:" << pixivTagToId.size();
 }
 bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
     if (!insertPicture(picInfo)) {
-        qCritical() << "insertPicture failed.";
+        Error() << "insertPicture failed.";
         return false;
     }
     if (!insertPictureFilePath(picInfo)) {
-        qCritical() << "insertPictureFilePath failed.";
+        Error() << "insertPictureFilePath failed.";
         return false;
     }
     if (!insertPictureTags(picInfo)) {
-        qCritical() << "insertPictureTags failed.";
+        Error() << "insertPictureTags failed.";
         return false;
     }
     if (!insertPicturePixivId(picInfo)) {
-        qCritical() << "insertPicturePixivId failed.";
+        Error() << "insertPicturePixivId failed.";
         return false;
     }
     if (!insertPictureTweetId(picInfo)) {
-        qCritical() << "insertPictureTweetId failed.";
+        Error() << "insertPictureTweetId failed.";
         return false;
     }
     return true;
@@ -390,7 +320,7 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     sqlite3_bind_text(stmt, 5, picInfo.fileType.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 6, static_cast<int>(picInfo.xRestrict));
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        qCritical() << "Failed to insert picture: " << sqlite3_errmsg(db);
+        Error() << "Failed to insert picture: " << sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
         return false;
     }
@@ -403,14 +333,12 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
         stmt = prepare(R"(
             INSERT OR IGNORE INTO picture_file_paths(
                 id, file_path
-            ) VALUES (
-                ?, ?
-            )
+            ) VALUES (?, ?)
         )");
         sqlite3_bind_int64(stmt, 1, uint64_to_int64(picInfo.id));
-        sqlite3_bind_text(stmt, 2, filePath.string().c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, filePath.generic_u8string().c_str(), -1, SQLITE_TRANSIENT);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert picture_file_path: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert picture_file_path: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -427,7 +355,7 @@ bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
             )");
             sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to insert tag: " << sqlite3_errmsg(db);
+                Error() << "Failed to insert tag: " << sqlite3_errmsg(db);
                 sqlite3_finalize(stmt);
                 return false;
             }
@@ -444,7 +372,7 @@ bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
         sqlite3_bind_int64(stmt, 1, uint64_to_int64(picInfo.id));
         sqlite3_bind_int(stmt, 2, tagToId[tag]);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -468,7 +396,7 @@ bool PicDatabase::insertPicturePixivId(const PicInfo& picInfo) {
         sqlite3_bind_int64(stmt, 2, pixivId);
         sqlite3_bind_int(stmt, 3, pixivIndex);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert picture_pixiv_id: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert picture_pixiv_id: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -492,7 +420,7 @@ bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
         sqlite3_bind_int64(stmt, 2, tweetId);
         sqlite3_bind_int(stmt, 3, tweetIndex);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert picture_tweet_id: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert picture_tweet_id: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -502,11 +430,11 @@ bool PicDatabase::insertPictureTweetId(const PicInfo& picInfo) {
 }
 bool PicDatabase::insertTweetInfo(const TweetInfo& tweetInfo) {
     if (!insertTweet(tweetInfo)) {
-        qCritical() << "insertTweet failed.";
+        Error() << "insertTweet failed.";
         return false;
     }
     if (!insertTweetHashtags(tweetInfo)) {
-        qCritical() << "insertTweetHashtags failed.";
+        Error() << "insertTweetHashtags failed.";
         return false;
     }
     return true;
@@ -522,7 +450,7 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
     )");
     sqlite3_bind_int64(stmt, 1, tweetInfo.tweetID);
     sqlite3_bind_text(stmt, 2, tweetInfo.date.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 3, tweetInfo.authorID);
+    sqlite3_bind_int64(stmt, 3, tweetInfo.authorID);
     sqlite3_bind_text(stmt, 4, tweetInfo.authorName.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 5, tweetInfo.authorNick.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 6, tweetInfo.authorDescription.c_str(), -1, SQLITE_STATIC);
@@ -536,7 +464,7 @@ bool PicDatabase::insertTweet(const TweetInfo& tweetInfo) {
     sqlite3_bind_int(stmt, 14, tweetInfo.viewCount);
     sqlite3_bind_text(stmt, 15, tweetInfo.description.c_str(), -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        qCritical() << "Failed to insert tweet: " << sqlite3_errmsg(db);
+        Error() << "Failed to insert tweet: " << sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
         return false;
     }
@@ -552,7 +480,7 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
             )");
             sqlite3_bind_text(stmt, 1, hashtag.c_str(), -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to insert twitter hashtag: " << sqlite3_errmsg(db);
+                Error() << "Failed to insert twitter hashtag: " << sqlite3_errmsg(db);
                 sqlite3_finalize(stmt);
                 return false;
             }
@@ -569,7 +497,7 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
         sqlite3_bind_int64(stmt, 1, tweetInfo.tweetID);
         sqlite3_bind_int(stmt, 2, twitterHashtagToId[hashtag]);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert tweet_hashtag: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert tweet_hashtag: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -579,11 +507,11 @@ bool PicDatabase::insertTweetHashtags(const TweetInfo& tweetInfo) {
 }
 bool PicDatabase::insertPixivInfo(const PixivInfo& pixivInfo) {
     if (!insertPixivArtwork(pixivInfo)) {
-        qCritical() << "insertPixivArtwork failed.";
+        Error() << "insertPixivArtwork failed.";
         return false;
     }
     if (!insertPixivArtworkTags(pixivInfo)) {
-        qCritical() << "insertPixivArtworkTags failed.";
+        Error() << "insertPixivArtworkTags failed.";
         return false;
     }
     return true;
@@ -599,7 +527,7 @@ bool PicDatabase::insertPixivArtwork(const PixivInfo& pixivInfo) {
     sqlite3_bind_int64(stmt, 1, pixivInfo.pixivID);
     sqlite3_bind_text(stmt, 2, pixivInfo.date.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, pixivInfo.authorName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 4, pixivInfo.authorID);
+    sqlite3_bind_int64(stmt, 4, pixivInfo.authorID);
     sqlite3_bind_text(stmt, 5, pixivInfo.title.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 6, pixivInfo.description.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 7, pixivInfo.likeCount);
@@ -607,7 +535,7 @@ bool PicDatabase::insertPixivArtwork(const PixivInfo& pixivInfo) {
     sqlite3_bind_int(stmt, 9, static_cast<int>(pixivInfo.xRestrict));
     sqlite3_bind_int(stmt, 10, static_cast<int>(pixivInfo.aiType));
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        qCritical() << "Failed to insert pixiv_artwork: " << sqlite3_errmsg(db);
+        Error() << "Failed to insert pixiv_artwork: " << sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
         return false;
     }
@@ -624,7 +552,7 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
             )");
             sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to insert pixiv tag: " << sqlite3_errmsg(db);
+                Error() << "Failed to insert pixiv tag: " << sqlite3_errmsg(db);
                 sqlite3_finalize(stmt);
                 return false;
             }
@@ -641,7 +569,7 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
         sqlite3_bind_int64(stmt, 1, pixivInfo.pixivID);
         sqlite3_bind_int64(stmt, 2, pixivTagToId.at(tag));
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to insert pixiv_artworks_tags: " << sqlite3_errmsg(db);
+            Error() << "Failed to insert pixiv_artworks_tags: " << sqlite3_errmsg(db);
             return false;
         }
         sqlite3_finalize(stmt);
@@ -654,7 +582,7 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
             sqlite3_bind_text(stmt, 1, pixivInfo.tagsTransl[i].c_str(), -1, SQLITE_STATIC);
             sqlite3_bind_int(stmt, 2, pixivTagToId[pixivInfo.tags[i]]);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to update translated_tag: " << sqlite3_errmsg(db);
+                Error() << "Failed to update translated_tag: " << sqlite3_errmsg(db);
                 return false;
             }
             sqlite3_finalize(stmt);
@@ -664,11 +592,11 @@ bool PicDatabase::insertPixivArtworkTags(const PixivInfo& pixivInfo) {
 }
 bool PicDatabase::updatePixivInfo(const PixivInfo& pixivInfo) {
     if (!updatePixivArtwork(pixivInfo)) {
-        qCritical() << "updatePixivArtwork failed.";
+        Error() << "updatePixivArtwork failed.";
         return false;
     }
     if (!updatePixivArtworkTags(pixivInfo)) {
-        qCritical() << "updatePixivArtworkTags failed.";
+        Error() << "updatePixivArtworkTags failed.";
         return false;
     }
     return true;
@@ -694,7 +622,7 @@ bool PicDatabase::updatePixivArtwork(const PixivInfo& pixivInfo) {
     sqlite3_bind_int64(stmt, 1, pixivInfo.pixivID);
     sqlite3_bind_text(stmt, 2, pixivInfo.date.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, pixivInfo.authorName.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 4, pixivInfo.authorID);
+    sqlite3_bind_int64(stmt, 4, pixivInfo.authorID);
     sqlite3_bind_text(stmt, 5, pixivInfo.title.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 6, pixivInfo.description.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 7, pixivInfo.likeCount);
@@ -702,7 +630,7 @@ bool PicDatabase::updatePixivArtwork(const PixivInfo& pixivInfo) {
     sqlite3_bind_int(stmt, 9, static_cast<int>(pixivInfo.xRestrict));
     sqlite3_bind_int(stmt, 10, static_cast<int>(pixivInfo.aiType));
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        qCritical() << "Failed to update pixiv_artwork: " << sqlite3_errmsg(db);
+        Error() << "Failed to update pixiv_artwork: " << sqlite3_errmsg(db);
         return false;
     }
     newPixivIDs.insert(pixivInfo.pixivID);
@@ -719,7 +647,7 @@ bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
             )");
             sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_STATIC);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to insert pixiv tag: " << sqlite3_errmsg(db);
+                Error() << "Failed to insert pixiv tag: " << sqlite3_errmsg(db);
                 return false;
             }
             int newId = sqlite3_last_insert_rowid(db);
@@ -736,7 +664,7 @@ bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
         sqlite3_bind_int64(stmt, 1, pixivInfo.pixivID);
         sqlite3_bind_int64(stmt, 2, pixivTagToId.at(tag));
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qCritical() << "Failed to update pixiv_artworks_tag: " << sqlite3_errmsg(db);
+            Error() << "Failed to update pixiv_artworks_tag: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
             return false;
         }
@@ -750,7 +678,7 @@ bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
             sqlite3_bind_text(stmt, 1, pixivInfo.tagsTransl[i].c_str(), -1, SQLITE_STATIC);
             sqlite3_bind_int64(stmt, 2, pixivTagToId[pixivInfo.tags[i]]);
             if (sqlite3_step(stmt) != SQLITE_DONE) {
-                qCritical() << "Failed to update translated_tag: " << sqlite3_errmsg(db);
+                Error() << "Failed to update translated_tag: " << sqlite3_errmsg(db);
                 sqlite3_finalize(stmt);
                 return false;
             }
@@ -854,8 +782,10 @@ TweetInfo PicDatabase::getTweetInfo(int64_t tweetID) const {
     sqlite3_stmt* stmt = nullptr;
 
     // 查询主表
-    stmt = prepare("SELECT date, author_id, author_name, author_nick, author_description, favorite_count, quote_count, "
-                   "reply_count, retweet_count, bookmark_count, view_count, description FROM tweets WHERE tweet_id = ?");
+    stmt = prepare(R"(
+        SELECT date, author_id, author_name, author_nick, author_description, author_profile_image, author_profile_banner, 
+        favorite_count, quote_count, reply_count, retweet_count, bookmark_count, view_count, description 
+        FROM tweets WHERE tweet_id = ?)");
     sqlite3_bind_int64(stmt, 1, tweetID);
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         info.tweetID = tweetID;
@@ -964,7 +894,7 @@ void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePa
             }
         }
     } catch (const std::exception& e) {
-        qWarning() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
+        Warn() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
     }
 }
 void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType) {
@@ -976,17 +906,25 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
     for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
         beginTransaction();
         auto batch_end = std::min(i + BATCH_SIZE, files.size());
+        auto start_time = std::chrono::high_resolution_clock::now();
         for (size_t j = i; j < batch_end; j++) {
             processAndImportSingleFile(files[j], parserType);
             processed++;
         }
         if (!commitTransaction()) {
-            qWarning() << "Batch commit failed, rolling back";
+            Warn() << "Batch commit failed, rolling back";
             rollbackTransaction();
         }
-        qInfo() << "Processed files: " << processed;
+        auto end_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end_time - start_time;
+        double speed = (batch_end - i) / elapsed.count();
+        double eta = (files.size() - processed) / speed;
+        int eta_minutes = static_cast<int>(eta) / 60;
+        int eta_seconds = static_cast<int>(eta) % 60;
+        Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
+               << eta_seconds << "s";
     }
-    qInfo() << "Import completed. Total files processed:" << processed;
+    Info() << "Import completed. Total files processed:" << processed;
 }
 void PicDatabase::syncTables() { // post-import operations
     sqlite3_stmt* stmt = nullptr;
@@ -996,21 +934,21 @@ void PicDatabase::syncTables() { // post-import operations
             SELECT COUNT(*) FROM picture_tags WHERE tag_id = tags.id
         )
     )")) {
-        qWarning() << "Failed to count tags:" << sqlite3_errmsg(db);
+        Warn() << "Failed to count tags:" << sqlite3_errmsg(db);
     }
     if (!execute(R"(
         UPDATE twitter_hashtags SET count = (
             SELECT COUNT(*) FROM tweet_hashtags WHERE hashtag_id = twitter_hashtags.id
         )
     )")) {
-        qWarning() << "Failed to count twitter hashtags:" << sqlite3_errmsg(db);
+        Warn() << "Failed to count twitter hashtags:" << sqlite3_errmsg(db);
     }
     if (!execute(R"(
         UPDATE pixiv_tags SET count = (
             SELECT COUNT(*) FROM pixiv_artworks_tags WHERE tag_id = pixiv_tags.id
         )
     )")) {
-        qWarning() << "Failed to count pixiv tags:" << sqlite3_errmsg(db);
+        Warn() << "Failed to count pixiv tags:" << sqlite3_errmsg(db);
     }
     sqlite3_finalize(stmt);
     // sync x_restrict and ai_type from pixiv_artworks to pictures
@@ -1026,7 +964,7 @@ void PicDatabase::syncTables() { // post-import operations
         )");
         sqlite3_bind_int64(stmt, 1, pixivID);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
-            qWarning() << "Failed to sync pixiv info for pixiv_id:" << pixivID << "Error:" << sqlite3_errmsg(db);
+            Warn() << "Failed to sync pixiv info for pixiv_id:" << pixivID << "Error:" << sqlite3_errmsg(db);
         }
     }
     execute("PRAGMA foreign_keys = ON");
@@ -1061,7 +999,7 @@ std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::strin
     sqlite3_stmt* stmt = nullptr;
     stmt = prepare(sql.c_str());
     if (!stmt) {
-        qWarning() << "Failed to prepare statement:" << sqlite3_errmsg(db);
+        Warn() << "Failed to prepare statement:" << sqlite3_errmsg(db);
         return results;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1098,7 +1036,7 @@ std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::
 
     sqlite3_stmt* stmt = prepare(sql.c_str());
     if (!stmt) {
-        qWarning() << "Pixiv tag search failed:" << sqlite3_errmsg(db);
+        Warn() << "Pixiv tag search failed:" << sqlite3_errmsg(db);
         return results;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1143,7 +1081,7 @@ std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<s
 
     sqlite3_stmt* stmt = prepare(sql.c_str());
     if (!stmt) {
-        qWarning() << "Tweet hashtag search failed:" << sqlite3_errmsg(db);
+        Warn() << "Tweet hashtag search failed:" << sqlite3_errmsg(db);
         return results;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1221,27 +1159,9 @@ std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string&
     } break;
     case SearchField::PixivTitle: {
         stmt = prepare(R"(
-                SELECT pixiv_id FROM pixiv_fts WHERE title MATCH ?
+                SELECT pixiv_id FROM pixiv_artworks WHERE title LIKE ?
             )");
-        sqlite3_bind_text(stmt, 1, searchText.c_str(), -1, SQLITE_STATIC);
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            int64_t pixivID = sqlite3_column_int64(stmt, 0);
-            sqlite3_stmt* picQuery = prepare(R"(
-                        SELECT id FROM picture_pixiv_ids WHERE pixiv_id = ?
-                    )");
-            sqlite3_bind_int64(picQuery, 1, pixivID);
-            if (sqlite3_step(picQuery) == SQLITE_ROW) {
-                uint64_t id = int64_to_uint64(sqlite3_column_int64(picQuery, 0));
-                results[id] = pixivID;
-            }
-        }
-
-    } break;
-    case SearchField::PixivDescription: {
-        stmt = prepare(R"(
-                SELECT pixiv_id FROM pixiv_fts WHERE description MATCH ?
-            )");
-        sqlite3_bind_text(stmt, 1, searchText.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, (searchText + "%").c_str(), -1, SQLITE_STATIC);
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             int64_t pixivID = sqlite3_column_int64(stmt, 0);
             sqlite3_stmt* picQuery = prepare(R"(
@@ -1318,24 +1238,6 @@ std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string&
             }
         }
     } break;
-    case SearchField::TweetDescription: {
-        stmt = prepare(R"(
-                SELECT tweet_id FROM tweet_fts WHERE description MATCH ?
-            )");
-        sqlite3_bind_text(stmt, 1, (searchText + "%").c_str(), -1, SQLITE_STATIC);
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            int64_t tweetID = sqlite3_column_int64(stmt, 0);
-            sqlite3_stmt* picQuery = prepare(R"(
-                    SELECT id FROM picture_tweet_ids WHERE tweet_id = ?
-                )");
-            sqlite3_bind_int64(picQuery, 1, tweetID);
-            if (sqlite3_step(picQuery) == SQLITE_ROW) {
-                uint64_t id = int64_to_uint64(sqlite3_column_int64(picQuery, 0));
-                results[id] = tweetID;
-            }
-        }
-        break;
-    }
     }
     return results;
 }
@@ -1383,12 +1285,12 @@ std::vector<std::pair<std::string, int>> PicDatabase::getTwitterHashtags() const
 }
 void PicDatabase::enableForeignKeyRestriction() const {
     if (!execute("PRAGMA foreign_keys = ON;")) {
-        qWarning() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
+        Warn() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
     }
 }
 void PicDatabase::disableForeignKeyRestriction() const {
     if (!execute("PRAGMA foreign_keys = OFF;")) {
-        qWarning() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
+        Warn() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
     }
 }
 bool PicDatabase::beginTransaction() {

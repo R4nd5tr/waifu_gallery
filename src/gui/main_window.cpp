@@ -34,12 +34,10 @@ void MainWindow::fillComboBox() {
     ui->searchComboBox->addItem("pixiv作者ID");
     ui->searchComboBox->addItem("pixiv作者名");
     ui->searchComboBox->addItem("pixiv标题");
-    ui->searchComboBox->addItem("pixiv描述");
     ui->searchComboBox->addItem("推特ID");
     ui->searchComboBox->addItem("推特作者ID");
     ui->searchComboBox->addItem("推特作者名");
     ui->searchComboBox->addItem("推特作者别名");
-    ui->searchComboBox->addItem("推特描述");
     ui->searchComboBox->setCurrentIndex(0);
 
     ui->sortComboBox->addItem("无");

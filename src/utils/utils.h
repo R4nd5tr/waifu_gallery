@@ -1,5 +1,4 @@
 #pragma once
-#include <QDebug>
 #include <filesystem>
 #include <vector>
 
