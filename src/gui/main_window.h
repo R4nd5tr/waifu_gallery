@@ -1,6 +1,4 @@
-#ifndef MAIN_WINDOW_H
-#define MAIN_WINDOW_H
-
+#pragma once
 #include "../service/database.h"
 #include "../service/model.h"
 #include "picture_frame.h"
@@ -161,8 +159,8 @@ private:
     void handleAddNewPicsAction();                 // TODO: implement directory choosing dialog
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type
     void handleAddGallery_dlTwitterAction();       // specify parser type
-    void handleImportFilesComplete();
-    void displayImportProgress(int current, int total, double speed);
+    // void handleImportFilesComplete();
+    // void displayImportProgress(int current, int total, double speed);
 
     // searching
     bool selectedTagChanged = false;
@@ -194,5 +192,3 @@ private:
     void removePicFramesFromLayout();
     void displayImage(uint64_t picId, const QPixmap& img);
 };
-
-#endif

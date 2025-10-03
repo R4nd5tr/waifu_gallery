@@ -1,22 +1,9 @@
 #include "worker.h"
 #include "../service/database.h"
+#include "../utils/utils.h"
 #include <QImageReader>
 
-std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory) {
-    std::vector<std::filesystem::path> files;
-    int fileCount = 0;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
-        if (!entry.is_regular_file()) {
-            continue;
-        }
-        files.push_back(entry.path());
-        fileCount++;
-    }
-    qInfo() << "Total files collected:" << fileCount;
-    return files;
-}
-
-DatabaseWorker::DatabaseWorker(const QString& connectionName, QObject* parent) : QObject(parent), database(connectionName) {}
+DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) {}
 DatabaseWorker::~DatabaseWorker() {}
 void DatabaseWorker::importFilesFromDirectory(std::filesystem::path directory,
                                               ParserType parserType) { // TODO: display progress on GUI

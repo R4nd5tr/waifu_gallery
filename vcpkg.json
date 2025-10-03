@@ -2,7 +2,11 @@
     "name": "waifu-gallery",
     "version": "0.0.0",
     "dependencies": [
+        "sqlite3",
         "xxhash",
-        "rapidcsv"
+        "rapidcsv",
+        "nlohmann-json",
+        "stb",
+        "libwebp"
     ]
 }

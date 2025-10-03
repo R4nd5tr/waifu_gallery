@@ -1,8 +1,6 @@
-#ifndef PARSER_H
-#define PARSER_H
+#pragma once
 
 #include "model.h"
-#include <QByteArray>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -13,11 +11,6 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
 
 PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath);
 std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath);
+std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFilePath);
 
-QByteArray readJsonFile(const std::filesystem::path& jsonFilePath);
-std::vector<PixivInfo> parsePixivJson(const QByteArray& data);
-TweetInfo parseTweetJson(const QByteArray& data);
-
-uint64_t calcFileHash(const std::filesystem::path& filePath);
-
-#endif
+TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath);

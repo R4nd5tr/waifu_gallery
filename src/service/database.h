@@ -1,11 +1,10 @@
-#ifndef DATABASE_H
-#define DATABASE_H
+#pragma once
 #include "model.h"
 #include "parser.h"
-#include <QString>
-#include <QtSql/QSqlDatabase>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
+#include <sqlite3.h>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -27,7 +26,7 @@ enum class SearchField {
 
 class PicDatabase { // TODO: remove Qt dependency
 public:
-    PicDatabase(const QString& connectionName = QString(), const QString& databaseFile = QString("database.db"));
+    PicDatabase(const std::string& databaseFile = "database.db");
     ~PicDatabase();
 
     void enableForeignKeyRestriction() const;
@@ -41,8 +40,6 @@ public:
     TweetInfo getTweetInfo(int64_t tweetID) const;
     PixivInfo getPixivInfo(int64_t pixivID) const;
     std::vector<std::tuple<std::string, int, bool>> getTags() const; // (tag, count, isCharacter)
-    std::vector<std::pair<std::string, int>> getGeneralTags() const;
-    std::vector<std::pair<std::string, int>> getCharacterTags() const;
     std::vector<std::pair<std::string, int>> getTwitterHashtags() const;
     std::vector<std::pair<std::string, int>> getPixivTags() const;
     // insert picture
@@ -80,8 +77,7 @@ public:
 
     void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
 private:
-    QSqlDatabase database; // SQLite
-    QString connectionName;
+    sqlite3* db = nullptr;
     std::unordered_map<std::string, int> tagToId;
     std::unordered_map<std::string, int> twitterHashtagToId;
     std::unordered_map<std::string, int> pixivTagToId;
@@ -90,10 +86,28 @@ private:
     std::unordered_map<int, std::string> idToPixivTag;
     std::unordered_set<int64_t> newPixivIDs;
 
-    void initDatabase(QString databaseFile);
-    bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash)), FTS5
+    void initDatabase(const std::string& databaseFile);
+    bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
     bool setupFTS5();
     void getTagMapping();
-};
 
-#endif
+    bool execute(const std::string& sql) const {
+        char* errorMsg = nullptr;
+        int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errorMsg);
+        if (rc != SQLITE_OK) {
+            std::cerr << "Error executing SQL: " << errorMsg << std::endl;
+            sqlite3_free(errorMsg);
+            return false;
+        }
+        return true;
+    }
+    sqlite3_stmt* prepare(const std::string& sql) const {
+        sqlite3_stmt* stmt = nullptr;
+        int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            std::cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << std::endl;
+            return nullptr;
+        }
+        return stmt;
+    }
+};
