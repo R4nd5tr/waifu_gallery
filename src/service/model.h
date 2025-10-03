@@ -1,5 +1,4 @@
-#ifndef MODEL_H
-#define MODEL_H
+#pragma once
 
 #include <cstdint>
 #include <filesystem>
@@ -75,4 +74,3 @@ struct PicInfo {
 
     float getRatio() const;
 };
-#endif

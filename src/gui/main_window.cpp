@@ -5,7 +5,7 @@
 #include <QScrollBar>
 #include <QString>
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), database(QString("main_thread")) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
     initInterface();
     initWorkerThreads();
@@ -62,7 +62,7 @@ void MainWindow::initWorkerThreads() {
     loaderWorkerThread->start();
 
     searchWorkerThread = new QThread(this);
-    DatabaseWorker* searchWorker = new DatabaseWorker(QString("database_worker_thread"));
+    DatabaseWorker* searchWorker = new DatabaseWorker();
     searchWorker->moveToThread(searchWorkerThread);
     connect(this, &MainWindow::searchPics, searchWorker, &DatabaseWorker::searchPics);
     connect(searchWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
@@ -70,11 +70,11 @@ void MainWindow::initWorkerThreads() {
     searchWorkerThread->start();
 
     importFilesWorkerThread = new QThread(this);
-    DatabaseWorker* importFilesWorker = new DatabaseWorker(QString("import_files_worker_thread"));
+    DatabaseWorker* importFilesWorker = new DatabaseWorker();
     importFilesWorker->moveToThread(importFilesWorkerThread);
     connect(this, &MainWindow::importFilesFromDirectory, importFilesWorker, &DatabaseWorker::importFilesFromDirectory);
-    connect(importFilesWorker, &DatabaseWorker::reportProgress, this, &MainWindow::displayImportProgress);
-    connect(importFilesWorker, &DatabaseWorker::scanComplete, this, &MainWindow::handleImportFilesComplete);
+    // connect(importFilesWorker, &DatabaseWorker::reportProgress, this, &MainWindow::displayImportProgress);
+    // connect(importFilesWorker, &DatabaseWorker::scanComplete, this, &MainWindow::handleImportFilesComplete);
     connect(importFilesWorkerThread, &QThread::finished, importFilesWorker, &QObject::deleteLater);
     importFilesWorkerThread->start();
 }

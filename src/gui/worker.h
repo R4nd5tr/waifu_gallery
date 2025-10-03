@@ -1,5 +1,4 @@
-#ifndef WORKER_H
-#define WORKER_H
+#pragma once
 
 #include "../service/database.h"
 #include "picture_frame.h"
@@ -10,7 +9,7 @@
 class DatabaseWorker : public QObject { // database operations in another thread
     Q_OBJECT
 public:
-    explicit DatabaseWorker(const QString& connectionName, QObject* parent = nullptr);
+    explicit DatabaseWorker(QObject* parent = nullptr);
     ~DatabaseWorker();
 
     void importFilesFromDirectory(std::filesystem::path directory,
@@ -58,5 +57,3 @@ signals:
 
 private:
 };
-
-#endif

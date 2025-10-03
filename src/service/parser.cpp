@@ -1,19 +1,16 @@
 #include "parser.h"
-#include <QByteArray>
-#include <QFile>
-#include <QFileInfo>
-#include <QImageReader>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QString>
+#include <QDebug>
 #include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <rapidcsv.h>
 #include <regex>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 #include <vector>
+#include <webp/decode.h>
 #include <xxhash.h>
 
 std::vector<std::string> splitAndTrim(const std::string& str) {
@@ -50,36 +47,82 @@ AIType toAITypeEnum(const std::string& aiTypeStr) {
     }
     return AIType::Unknown;
 }
-
-PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
-    QString qStrPath = QString::fromStdString(pictureFilePath.string());
-    QString qStrDirectory = QString::fromStdString(pictureFilePath.parent_path().string());
-    QImageReader reader(qStrPath);
-    QSize size = reader.size();
-    if (size.isNull()) {
-        qCritical() << "failed to load image: " << pictureFilePath.string();
+std::pair<int, int> getImageResolution(const std::vector<uint8_t>& buffer, const std::string& fileType) {
+    int width = 0, height = 0, channels = 0;
+    if (fileType == "webp") {
+        if (WebPGetInfo(buffer.data(), buffer.size(), &width, &height)) {
+            return {width, height};
+        }
+    } else {
+        unsigned char* imgData =
+            stbi_load_from_memory(buffer.data(), static_cast<int>(buffer.size()), &width, &height, &channels, 0);
+        if (imgData) {
+            stbi_image_free(imgData);
+            return {width, height};
+        }
     }
-    QFileInfo fileInfo(qStrPath);
-    QString name = fileInfo.baseName();
+    return {0, 0};
+}
+std::vector<uint8_t> readFileToBuffer(const std::filesystem::path& imagePath) {
+    std::ifstream file(imagePath, std::ios::binary);
+    if (!file.is_open()) {
+        qCritical() << "Failed to open file:" << imagePath.string();
+        return {};
+    }
+    file.seekg(0, std::ios::end);
+    std::streamsize size = file.tellg();
+    if (size == 0) {
+        qCritical() << "File is empty:" << imagePath.string();
+        return {};
+    }
+    file.seekg(0, std::ios::beg);
+    std::vector<uint8_t> buffer(size);
+    if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
+        qCritical() << "Failed to read file:" << imagePath.string();
+        return {};
+    }
+    return buffer;
+}
+uint64_t calcFileHash(const std::vector<uint8_t>& buffer) {
+    return XXH64(buffer.data(), static_cast<size_t>(buffer.size()), 0);
+}
+PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
+    std::vector<uint8_t> buffer = readFileToBuffer(pictureFilePath);
+
+    std::string fileName = pictureFilePath.filename().string();
+    std::string fileType = pictureFilePath.extension().string().substr(1);
+    std::transform(fileType.begin(), fileType.end(), fileType.begin(), ::tolower);
+    if (fileType == "jpeg") fileType = "jpg";
+
+    int width, height;
+    std::tie(width, height) = getImageResolution(buffer, fileType);
 
     PicInfo picInfo;
-    picInfo.id = calcFileHash(pictureFilePath);
+    picInfo.id = calcFileHash(buffer);
     picInfo.filePaths.insert(pictureFilePath);
-    picInfo.height = size.height();
-    picInfo.width = size.width();
-    picInfo.size = fileInfo.size();
-    picInfo.fileType = reader.format().toStdString();
+    picInfo.width = width;
+    picInfo.height = height;
+    picInfo.size = static_cast<uint32_t>(buffer.size());
+    picInfo.fileType = fileType;
     if (parserType == ParserType::Pixiv) {
-        QStringList parts = name.split("_p");
-        uint64_t pid = static_cast<uint64_t>(parts[0].toLongLong());
-        int index = (parts.size() > 1) ? parts[1].toInt() : 0;
-        picInfo.pixivIdIndices.insert({pid, index});
+        std::regex pattern(R"(.*?(\d+)_p(\d+).*)");
+        std::smatch match;
+        if (std::regex_match(fileName, match, pattern) && match.size() == 3) {
+            uint32_t pixivId = static_cast<uint32_t>(std::stoul(match[1].str()));
+            int index = std::stoi(match[2].str());
+            picInfo.pixivIdIndices[pixivId] = index;
+        }
     }
     if (parserType == ParserType::Twitter) {
-        QStringList parts = name.split("_");
-        uint64_t tweetId = static_cast<uint64_t>(parts[0].toLongLong());
-        int index = parts[1].toInt() - 1;
-        picInfo.tweetIdIndices.insert({tweetId, index});
+        size_t firstUnderscore = fileName.find('_');
+        size_t dot = fileName.find('.', firstUnderscore + 1);
+        if (firstUnderscore != std::string::npos && dot != std::string::npos) {
+            std::string tweetIdStr = fileName.substr(0, firstUnderscore);
+            std::string indexStr = fileName.substr(firstUnderscore + 1, dot - firstUnderscore - 1);
+            int64_t tweetId = std::stoll(tweetIdStr);
+            int index = std::stoi(indexStr) - 1;
+            picInfo.tweetIdIndices[tweetId] = index;
+        }
     }
     return picInfo;
 }
@@ -172,120 +215,78 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
     }
     return result;
 }
-QByteArray readJsonFile(const std::filesystem::path& jsonFilePath) {
-    QFile file(QString::fromStdString(jsonFilePath.string()));
-    if (!file.open(QIODevice::ReadOnly)) {
-        qCritical() << "Failed to open file:" << jsonFilePath.string();
-        return QByteArray();
-    }
-    QByteArray data = file.readAll();
-    file.close();
-    return data;
-}
-std::vector<PixivInfo> parsePixivJson(const QByteArray& data) {
+std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFilePath) {
     std::vector<PixivInfo> result;
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isArray()) {
-        qCritical() << "Failed to parse JSON:" << err.errorString();
+    std::vector<uint8_t> data = readFileToBuffer(pixivJsonFilePath);
+    auto json = nlohmann::json::parse(data, nullptr, false);
+    if (json.is_discarded() || !json.is_array()) {
+        qCritical() << "Failed to parse JSON or JSON is not an array.";
         return result;
     }
-    QJsonArray arr = doc.array();
-    if (arr.isEmpty()) {
-        qCritical() << "JSON array is empty";
-        return result;
-    }
-    for (const QJsonValue& value : arr) {
-        if (!value.isObject()) continue;
-        QJsonObject obj = value.toObject();
+    for (const auto& obj : json) {
         PixivInfo info;
-        info.pixivID = obj.value("idNum").toVariant().toLongLong();
-        info.title = obj.value("title").toString().toStdString();
-        info.description = obj.value("description").toString().toStdString();
-        info.authorName = obj.value("user").toString().toStdString();
-        info.authorID = obj.value("userId").toString().toUInt();
-        info.likeCount = obj.value("likeCount").toInt();
-        info.viewCount = obj.value("viewCount").toInt();
-        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict").toInt() + 1); // Adjusting for enum offset
-        info.aiType = static_cast<AIType>(obj.value("aiType").toInt());
-        info.date = obj.value("date").toString().toStdString();
+        info.pixivID = obj.value("idNum", 0LL);
+        info.title = obj.value("title", "");
+        info.description = obj.value("description", "");
+        info.authorName = obj.value("user", "");
+        info.authorID = obj.value("userId", 0U);
+        info.likeCount = obj.value("likeCount", 0);
+        info.viewCount = obj.value("viewCount", 0);
+        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict", 0) + 1);
+        info.aiType = static_cast<AIType>(obj.value("aiType", 0));
+        info.date = obj.value("date", "");
 
         // tags
-        if (obj.contains("tags") && obj.value("tags").isArray()) {
-            QJsonArray tagsArr = obj.value("tags").toArray();
-            for (const QJsonValue& tag : tagsArr) {
-                info.tags.push_back(tag.toString().toStdString());
+        if (obj.contains("tags") && obj["tags"].is_array()) {
+            for (const auto& tag : obj["tags"]) {
+                info.tags.push_back(tag.get<std::string>());
             }
         }
-        // tagsTransl
-        if (obj.contains("tagsWithTransl") && obj.value("tagsWithTransl").isArray()) {
-            QJsonArray tagsTranslArr = obj.value("tagsWithTransl").toArray();
-            for (const QJsonValue& tag : tagsTranslArr) {
-                info.tagsTransl.push_back(tag.toString().toStdString());
+        // tagsWithTransl
+        if (obj.contains("tagsWithTransl") && obj["tagsWithTransl"].is_array()) {
+            for (const auto& tag : obj["tagsWithTransl"]) {
+                info.tagsTransl.push_back(tag.get<std::string>());
             }
         }
         result.push_back(info);
     }
     return result;
 }
-TweetInfo parseTweetJson(const QByteArray& data) {
+TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath) {
     TweetInfo info;
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-        qCritical() << "Failed to parse JSON:" << err.errorString();
+    std::vector<uint8_t> data = readFileToBuffer(tweetJsonFilePath);
+    auto json = nlohmann::json::parse(data.begin(), data.end());
+    if (!json.is_object()) {
+        qCritical() << "Failed to parse JSON: not an object";
         return info;
     }
-    QJsonObject obj = doc.object();
 
-    info.tweetID = obj.value("tweet_id").toVariant().toLongLong();
-    info.date = obj.value("date").toString().toStdString();
-    info.description = obj.value("content").toString().toStdString();
-    info.favoriteCount = obj.value("favorite_count").toInt();
-    info.quoteCount = obj.value("quote_count").toInt();
-    info.replyCount = obj.value("reply_count").toInt();
-    info.retweetCount = obj.value("retweet_count").toInt();
-    info.bookmarkCount = obj.value("bookmark_count").toInt();
-    info.viewCount = obj.value("view_count").toInt();
+    info.tweetID = json.value("tweet_id", 0LL);
+    info.date = json.value("date", "");
+    info.description = json.value("content", "");
+    info.favoriteCount = json.value("favorite_count", 0);
+    info.quoteCount = json.value("quote_count", 0);
+    info.replyCount = json.value("reply_count", 0);
+    info.retweetCount = json.value("retweet_count", 0);
+    info.bookmarkCount = json.value("bookmark_count", 0);
+    info.viewCount = json.value("view_count", 0);
+
     // 解析 author 对象
-    if (obj.contains("author") && obj.value("author").isObject()) {
-        QJsonObject authorObj = obj.value("author").toObject();
-        info.authorID = authorObj.value("id").toVariant().toInt();
-        info.authorName = authorObj.value("name").toString().toStdString();
-        info.authorNick = authorObj.value("nick").toString().toStdString();
-        info.authorDescription = authorObj.value("description").toString().toStdString();
-        info.authorProfileImage = authorObj.value("profile_image").toString().toStdString();
-        info.authorProfileBanner = authorObj.value("profile_banner").toString().toStdString();
+    if (json.contains("author") && json["author"].is_object()) {
+        const auto& authorObj = json["author"];
+        info.authorID = authorObj.value("id", 0);
+        info.authorName = authorObj.value("name", "");
+        info.authorNick = authorObj.value("nick", "");
+        info.authorDescription = authorObj.value("description", "");
+        info.authorProfileImage = authorObj.value("profile_image", "");
+        info.authorProfileBanner = authorObj.value("profile_banner", "");
     }
+
     // 解析 hashtags 数组
-    if (obj.contains("hashtags") && obj.value("hashtags").isArray()) {
-        QJsonArray hashtagsArr = obj.value("hashtags").toArray();
-        for (const QJsonValue& tag : hashtagsArr) {
-            info.hashtags.insert(tag.toString().toStdString());
+    if (json.contains("hashtags") && json["hashtags"].is_array()) {
+        for (const auto& tag : json["hashtags"]) {
+            info.hashtags.insert(tag.get<std::string>());
         }
     }
     return info;
-}
-uint64_t calcFileHash(const std::filesystem::path& filePath) {
-    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
-    if (!file) {
-        qWarning() << "Failed to open file:" << filePath.c_str();
-        return 0;
-    }
-    std::streamsize fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-    if (fileSize > 100 * 1024 * 1024) { // 100MB Max
-        qWarning() << "File too large:" << filePath.c_str() << "size:" << fileSize;
-        return 0;
-    }
-    if (fileSize == 0) {
-        qWarning() << "Empty file:" << filePath.c_str();
-        return 0;
-    }
-    std::vector<char> buffer(static_cast<size_t>(fileSize));
-    if (!file.read(buffer.data(), fileSize)) {
-        qWarning() << "Failed to read file:" << filePath.c_str();
-        return 0;
-    }
-    return XXH64(buffer.data(), static_cast<size_t>(fileSize), 0);
 }

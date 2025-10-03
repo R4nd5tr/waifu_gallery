@@ -1,5 +1,4 @@
-#ifndef PICTURE_FRAME_H
-#define PICTURE_FRAME_H
+#pragma once
 
 #include "../service/database.h"
 #include "../service/model.h"
@@ -20,5 +19,3 @@ public:
 private:
     Ui::PictureFrame* ui;
 };
-
-#endif
