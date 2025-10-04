@@ -1,0 +1,32 @@
+{
+    "version": 4,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 20
+    },
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "MinGW with Qt",
+            "generator": "MinGW Makefiles",
+            "binaryDir": "${sourceDir}/build/mingw",
+            "environment": {
+                "PATH": "<your-mingw-path>;%PATH%"
+            },
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "<your-qt-path>",
+                "CMAKE_TOOLCHAIN_FILE": "<your-vcpkg-path>/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+                "CMAKE_MAKE_PROGRAM": "<your-mingw-path>/mingw32-make.exe",
+                "CMAKE_CXX_COMPILER": "<your-mingw-path>/g++.exe"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "mingw-build",
+            "configurePreset": "default",
+            "jobs": 4
+        }
+    ]
+}
