@@ -23,8 +23,8 @@ enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
 const size_t MAX_PIC_CACHE = 1000;  // max number of pictures in cache
 const size_t LOAD_PIC_BATCH = 50;   // number of pictures to load each time
-const int DEBOUNCE_DELAY = 300;     // ms
-const int DOUBLE_CLICK_DELAY = 400; // ms
+const int DEBOUNCE_DELAY = 300;     // ms for debouncing text input
+const int DOUBLE_CLICK_DELAY = 200; // ms for double click detection
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -129,8 +129,6 @@ private:
     void updateEnableRatioSort(bool checked);
     void updateRatioSlider(int value);
     void updateRatioSpinBox(double value);
-    QTimer* ratioSortTimer;
-    void handleRatioTimerTimeout();
 
     void updateSearchField(int index);
     void updateSearchText(const QString& text);

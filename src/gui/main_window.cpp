@@ -46,8 +46,8 @@ void MainWindow::fillComboBox() {
     ui->sortComboBox->addItem("大小");
     ui->sortComboBox->setCurrentIndex(0);
 
-    ui->orderComboBox->addItem("递增");
-    ui->orderComboBox->addItem("递减");
+    ui->orderComboBox->addItem("升序");
+    ui->orderComboBox->addItem("降序");
     ui->orderComboBox->setCurrentIndex(0);
 }
 void MainWindow::initWorkerThreads() {
@@ -78,12 +78,10 @@ void MainWindow::initWorkerThreads() {
 }
 void MainWindow::connectSignalSlots() {
     resolutionTimer = new QTimer(this);
-    ratioSortTimer = new QTimer(this);
     textSearchTimer = new QTimer(this);
     tagClickTimer = new QTimer(this);
     tagSearchTimer = new QTimer(this);
     resolutionTimer->setSingleShot(true);
-    ratioSortTimer->setSingleShot(true);
     textSearchTimer->setSingleShot(true);
     tagClickTimer->setSingleShot(true);
     tagSearchTimer->setSingleShot(true);
@@ -114,12 +112,8 @@ void MainWindow::connectSignalSlots() {
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
     connect(ui->ratioSlider, &QSlider::valueChanged, this, &MainWindow::updateRatioSlider);
-    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
     connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
-    connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(DEBOUNCE_DELAY); });
-    connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
@@ -377,12 +371,6 @@ void MainWindow::updateRatioSpinBox(double value) {
     }
     ui->ratioSlider->setValue(ratioToSliderValue(ratio));
     ratioSpinBoxEditing = false;
-    if (ratioSortEnabled) {
-        sortPics();
-        refreshPicDisplay();
-    }
-}
-void MainWindow::handleRatioTimerTimeout() {
     if (ratioSortEnabled) {
         sortPics();
         refreshPicDisplay();
@@ -697,7 +685,11 @@ void MainWindow::loadMorePics() {
     }
 }
 void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
-    if (imageThumbCache.size() >= MAX_PIC_CACHE) {
+    size_t cacheLimit = MAX_PIC_CACHE;
+    if (resultPics.size() > MAX_PIC_CACHE) {
+        cacheLimit = resultPics.size();
+    }
+    if (imageThumbCache.size() >= cacheLimit) {
         for (auto it = imageThumbCache.begin(); it != imageThumbCache.end();) {
             if (idToFrameMap.find(it->first) == idToFrameMap.end()) {
                 it = imageThumbCache.erase(it);
@@ -755,6 +747,7 @@ void MainWindow::clearAllPicFrames() {
         delete frame;
     }
     idToFrameMap.clear();
+    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
 }
 void MainWindow::removePicFramesFromLayout() {
     while (ui->picDisplayLayout->count() > 0) {
@@ -776,12 +769,12 @@ void MainWindow::handleAddPowerfulPixivDownloaderAction() {
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
-    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
+    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::Pixiv);
 }
 void MainWindow::handleAddGallery_dlTwitterAction() {
     QString dir =
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
-    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
+    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::Twitter);
 }
