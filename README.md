@@ -22,6 +22,11 @@ Waifu Gallery 是基于 Qt6 开发的桌面应用程序，专门为管理二次�
 - 兼容 [powerful pixiv downloader](https://github.com/xuejianxianzun/PixivBatchDownloader) 下载的图片、抓取结果和元数据
 - 兼容 [gallery-dl](https://github.com/mikf/gallery-dl) 下载的 Twitter 图片与元数据
 
+> 💡 **实用提示** 💡
+> 如何启用下载器的元数据保存功能？
+> - 在 [powerful pixiv downloader](https://github.com/xuejianxianzun/PixivBatchDownloader) 中，进入`更多-抓取`，启用`自动导出抓取结果`，设置`抓取结果>0`，`文件格式`选择`JSON`或`CSV`（更推荐使用`JSON`）。或者在`更多-下载`中，勾选`保存作品的元数据`的`插画`选项。
+> - 在 [gallery-dl](https://github.com/mikf/gallery-dl) 中，使用`--write-metadata`选项启用元数据保存。
+
 ### 搜索功能
 - 支持图片标签（开发中）、Pixiv 标签和 Twitter 标签搜索
 - 支持多标签组合搜索，包含和排除特定标签
@@ -39,11 +44,12 @@ Waifu Gallery 是基于 Qt6 开发的桌面应用程序，专门为管理二次�
  - 点击`文件-导入gallery-dl下载的Twitter图片`，选择包含gallery-dl下载的Twitter图片或元数据的文件夹，程序同样会用专用解析器导入相关内容。  
 
 本工具支持所有二次元插画，若图片带有下载器元数据，则可按平台标签、作者、作品标题等更多维度进行搜索和筛选。
-> ⚠️ **重要提示**  
+> ⚠️ **重要提示** ⚠️
 > 使用专用解析器导入图片时，请务必确保所选文件夹内**只包含该下载器下载的文件**，不要混入其他文件。否则可能导致程序异常、数据丢失等严重后果。
 
 1. **标签搜索**：单击左侧标签栏中的标签可包含该标签，双击则可排除，点击已选中的标签可取消选择
-2. **筛选图片**：使用侧边栏的筛选条件和排序选项，快速找到目标图片
+2. **文本搜索**：选择搜索字段（如作者、标题等）然后在顶部搜索栏输入关键词
+3. **筛选图片**：使用侧边栏的筛选条件和排序选项，快速找到目标图片
 
 ## 开发与构建
 
