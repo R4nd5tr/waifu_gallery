@@ -29,18 +29,24 @@ set(PROJECT_LIBS Qt6::Core Qt6::Widgets Qt6::Sql xxHash::xxhash WebP::webp WebP:
 set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src)
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configure CMake before build
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
-set(TEST_SRC_FILES ${SRC_FILES})
-list(REMOVE_ITEM SRC_FILES ${PROJECT_SOURCE_DIR}/src/TEST_waifu_gallery.cpp) # remove test entrance
-list(REMOVE_ITEM TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp) # remove main entrance
 
 # output directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 
-# targets
+# target
 add_executable(waifu_gallery ${SRC_FILES} ${UI_FILES})
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
 target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 
-add_executable(TEST_waifu_gallery ${TEST_SRC_FILES})
-target_include_directories(TEST_waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
-target_link_libraries(TEST_waifu_gallery PRIVATE ${PROJECT_LIBS})
+# test
+if(BUILD_TEST_TARGET STREQUAL "ON")
+    file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+    list(REMOVE_ITEM TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp) # exclude main.cpp
+    file(GLOB TEST_FILES ${PROJECT_SOURCE_DIR}/tests/*.cpp) # include test files
+    add_executable(TEST_waifu_gallery
+        ${TEST_SRC_FILES}
+        ${TEST_FILES}
+    )
+    target_include_directories(TEST_waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
+    target_link_libraries(TEST_waifu_gallery PRIVATE ${PROJECT_LIBS})
+endif()

@@ -5,4 +5,4 @@ bin/
 CMakeFiles/
 CMakePresets.json
 CMakeCache.txt
-src/TEST_waifu_gallery.cpp
+tests/

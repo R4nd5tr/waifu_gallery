@@ -19,6 +19,7 @@
                 "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
                 "CMAKE_MAKE_PROGRAM": "<your-mingw-path>/mingw32-make.exe",
                 "CMAKE_CXX_COMPILER": "<your-mingw-path>/g++.exe"
+                "BUILD_TEST_TARGET": "OFF"
             }
         }
     ],
