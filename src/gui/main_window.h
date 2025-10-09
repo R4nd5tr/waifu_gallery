@@ -22,10 +22,11 @@ enum class SortOrder { Ascending, Descending };
 
 enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
-const size_t MAX_PIC_CACHE = 1000;  // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 50;   // number of pictures to load each time
-const int DEBOUNCE_DELAY = 300;     // ms for debouncing text input
-const int DOUBLE_CLICK_DELAY = 200; // ms for double click detection
+const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
+const size_t LOAD_PIC_BATCH = 50;     // number of pictures to load each time
+const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
+const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
+const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -130,6 +131,8 @@ private:
     void updateEnableRatioSort(bool checked);
     void updateRatioSlider(int value);
     void updateRatioSpinBox(double value);
+    QTimer* ratioSortTimer;
+    void handleRatioTimerTimeout();
 
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
@@ -182,8 +185,8 @@ private:
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
-    std::unordered_map<uint64_t, QPixmap> imageThumbCache;
-    void refreshPicDisplay(); // clear widget, set displayIndex to 0, and call loadMorePics()
+    std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage?
+    void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call loadMorePics()
     bool isMatchFilter(const PicInfo& pic);
     void loadMorePics();
     void sortPics(); // sort resultPics vector

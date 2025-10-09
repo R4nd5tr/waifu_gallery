@@ -10,10 +10,11 @@
 
 enum class XRestrictType { Unknown, AllAges, R18, R18G };
 enum class AIType { Unknown, NotAI, AI };
+enum class FileType { JPG, PNG, GIF, WEBP, Unknown }; // TODO: use this enum in PicInfo
 
 struct PicInfo;
 
-struct TweetInfo {
+struct TweetInfo { // represents one tweet
     int64_t tweetID = 0;
     std::string date;
     int64_t authorID;
@@ -33,7 +34,7 @@ struct TweetInfo {
     std::vector<PicInfo> pics;
 };
 
-struct PixivInfo {
+struct PixivInfo { // represents one pixiv illustration
     int64_t pixivID = 0;
     std::string date;
     std::vector<std::string> tags;
@@ -49,7 +50,7 @@ struct PixivInfo {
     std::vector<PicInfo> pics;
 };
 
-struct PicInfo {
+struct PicInfo {                                         // represents one image file
     uint64_t id = 0;                                     // xxhash64
     std::unordered_map<int64_t, int> tweetIdIndices;     //(tweetID, index)
     std::unordered_map<int64_t, int> pixivIdIndices;     //(pixivID, index)

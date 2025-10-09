@@ -68,10 +68,12 @@ void MainWindow::initWorkerThreads() {
 }
 void MainWindow::connectSignalSlots() {
     resolutionTimer = new QTimer(this);
+    ratioSortTimer = new QTimer(this);
     textSearchTimer = new QTimer(this);
     tagClickTimer = new QTimer(this);
     tagSearchTimer = new QTimer(this);
     resolutionTimer->setSingleShot(true);
+    ratioSortTimer->setSingleShot(true);
     textSearchTimer->setSingleShot(true);
     tagClickTimer->setSingleShot(true);
     tagSearchTimer->setSingleShot(true);
@@ -102,8 +104,14 @@ void MainWindow::connectSignalSlots() {
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
     connect(ui->ratioSlider, &QSlider::valueChanged, this, &MainWindow::updateRatioSlider);
+    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
     connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
+    connect(
+        ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
+    connect(
+        ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
+    connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
@@ -342,10 +350,6 @@ void MainWindow::updateRatioSlider(int value) {
     ui->widthRatioSpinBox->setValue(widthRatioSpinBoxValue);
     ui->heightRatioSpinBox->setValue(heightRatioSpinBoxValue);
     ratioSliderEditing = false;
-    if (ratioSortEnabled) {
-        sortPics();
-        refreshPicDisplay();
-    }
 }
 void MainWindow::updateRatioSpinBox(double value) {
     if (ratioSliderEditing) return;
@@ -361,6 +365,8 @@ void MainWindow::updateRatioSpinBox(double value) {
     }
     ui->ratioSlider->setValue(ratioToSliderValue(ratio));
     ratioSpinBoxEditing = false;
+}
+void MainWindow::handleRatioTimerTimeout() {
     if (ratioSortEnabled) {
         sortPics();
         refreshPicDisplay();
@@ -577,6 +583,7 @@ void MainWindow::handlescrollBarValueChange(int value) {
 }
 void MainWindow::picSearch() {
     clearAllPicFrames();
+    imageLoadThreadPool.clearTasks();
     if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty() && searchText.empty()) {
         displayTags();
@@ -624,10 +631,10 @@ void MainWindow::refreshPicDisplay() {
     loadMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
-    if (!showJPG && pic.fileType == "jpg") return false;
-    if (!showPNG && pic.fileType == "png") return false;
-    if (!showGIF && pic.fileType == "gif") return false;
-    if (!showWEBP && pic.fileType == "webp") return false;
+    if (!showJPG && pic.fileType == "JPG") return false;
+    if (!showPNG && pic.fileType == "PNG") return false;
+    if (!showGIF && pic.fileType == "GIF") return false;
+    if (!showWEBP && pic.fileType == "WebP") return false;
     if (!showUnknowRestrict && pic.xRestrict == XRestrictType::Unknown) return false;
     if (!showAllAge && pic.xRestrict == XRestrictType::AllAges) return false;
     if (!showR18 && pic.xRestrict == XRestrictType::R18) return false;
@@ -646,13 +653,17 @@ void MainWindow::loadMorePics() {
     while (displayIndex < resultPics.size() && picsLoaded < LOAD_PIC_BATCH) {
         const PicInfo& pic = resultPics[displayIndex];
         displayIndex++;
+
         if (!isMatchFilter(pic)) continue;
+
         displayingPicIds.push_back(pic.id);
-        auto frame = idToFrameMap.find(pic.id);
-        if (frame != idToFrameMap.end()) {
-            ui->picDisplayLayout->addWidget(frame->second, currentRow, currentColumn);
+
+        PictureFrame* picFrame = nullptr;
+        auto frameIt = idToFrameMap.find(pic.id);
+        if (frameIt != idToFrameMap.end()) {
+            picFrame = frameIt->second;
+            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
         } else {
-            PictureFrame* picFrame;
             if (searchText.empty() || searchField == SearchField::None) {
                 picFrame = new PictureFrame(this, pic);
             } else {
@@ -660,13 +671,13 @@ void MainWindow::loadMorePics() {
             }
             idToFrameMap[pic.id] = picFrame;
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
-            auto imgIt = imageThumbCache.find(pic.id);
-            if (imgIt != imageThumbCache.end()) {
-                picFrame->setPixmap(imgIt->second);
-            } else {
-                imageLoadThreadPool.loadImage(pic);
-            }
         }
+
+        auto imgIt = imageThumbCache.find(pic.id);
+        if (imgIt == imageThumbCache.end()) {
+            imageLoadThreadPool.loadImage(pic);
+        }
+
         picsLoaded++;
         currentColumn++;
         if (currentColumn >= widgetsPerRow) {
