@@ -16,8 +16,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 }
 MainWindow::~MainWindow() {
     delete ui;
-    loaderWorkerThread->quit();
-    loaderWorkerThread->wait();
     searchWorkerThread->quit();
     searchWorkerThread->wait();
     importFilesWorkerThread->quit();
@@ -51,14 +49,6 @@ void MainWindow::fillComboBox() {
     ui->orderComboBox->setCurrentIndex(0);
 }
 void MainWindow::initWorkerThreads() {
-    loaderWorkerThread = new QThread(this);
-    LoaderWorker* loaderWorker = new LoaderWorker();
-    loaderWorker->moveToThread(loaderWorkerThread);
-    connect(this, &MainWindow::loadImage, loaderWorker, &LoaderWorker::loadImage);
-    connect(loaderWorker, &LoaderWorker::loadComplete, this, &MainWindow::displayImage);
-    connect(loaderWorkerThread, &QThread::finished, loaderWorker, &QObject::deleteLater);
-    loaderWorkerThread->start();
-
     searchWorkerThread = new QThread(this);
     DatabaseWorker* searchWorker = new DatabaseWorker();
     searchWorker->moveToThread(searchWorkerThread);
@@ -630,6 +620,7 @@ void MainWindow::refreshPicDisplay() {
     displayingPicIds.clear();
     currentColumn = 0;
     currentRow = 0;
+    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
     loadMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
@@ -673,7 +664,7 @@ void MainWindow::loadMorePics() {
             if (imgIt != imageThumbCache.end()) {
                 picFrame->setPixmap(imgIt->second);
             } else {
-                emit loadImage(pic.id, pic.filePaths);
+                imageLoadThreadPool.loadImage(pic);
             }
         }
         picsLoaded++;
@@ -684,7 +675,15 @@ void MainWindow::loadMorePics() {
         }
     }
 }
-void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
+bool MainWindow::event(QEvent* event) {
+    if (event->type() == ImageLoadCompleteEvent::EventType) {
+        auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
+        displayImage(imageEvent->id, std::move(imageEvent->img));
+        return true;
+    }
+    return QMainWindow::event(event);
+}
+void MainWindow::displayImage(uint64_t picId, QImage&& img) {
     size_t cacheLimit = MAX_PIC_CACHE;
     if (resultPics.size() > MAX_PIC_CACHE) {
         cacheLimit = resultPics.size();
@@ -698,10 +697,11 @@ void MainWindow::displayImage(uint64_t picId, const QPixmap& img) {
             }
         }
     }
-    imageThumbCache[picId] = img;
+    QPixmap pixmap = QPixmap::fromImage(std::move(img));
+    imageThumbCache[picId] = pixmap;
     auto frameIt = idToFrameMap.find(picId);
     if (frameIt != idToFrameMap.end()) {
-        frameIt->second->setPixmap(img);
+        frameIt->second->setPixmap(pixmap);
     }
 }
 void MainWindow::sortPics() {

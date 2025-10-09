@@ -1,8 +1,8 @@
 #pragma once
 #include "../service/model.h"
-#include "main_window.h"
 #include <QEvent>
 #include <QImage>
+#include <atomic>
 #include <condition_variable>
 #include <filesystem>
 #include <mutex>
@@ -11,30 +11,7 @@
 #include <unordered_set>
 #include <vector>
 
-template <typename T>
-
-class ThreadSafeQueue {
-public:
-    ThreadSafeQueue() = default;
-    ~ThreadSafeQueue() = default;
-    void push(const T& item) {
-        std::lock_guard<std::mutex> lock(mutex);
-        queue.push(item);
-        condVar.notify_one();
-    }
-    T pop() {
-        std::unique_lock<std::mutex> lock(mutex);
-        condVar.wait(lock, [this]() { return !queue.empty(); });
-        T item = queue.front();
-        queue.pop();
-        return item;
-    }
-
-private:
-    std::queue<T> queue;
-    std::mutex mutex;
-    std::condition_variable condVar;
-};
+class MainWindow;
 
 struct ImageLoadTask {
     uint64_t id;
@@ -56,12 +33,14 @@ public:
 
     void loadImage(PicInfo picInfo);
     void clearTasks();
-    void stop();
 
 private:
-    void enqueueTask(const ImageLoadTask& task);
+    void stop();
     void workerFunction();
     MainWindow* mainWindow;
     std::vector<std::thread> workers;
-    ThreadSafeQueue<ImageLoadTask> taskQueue;
+    std::queue<ImageLoadTask> taskQueue;
+    std::mutex mutex;
+    std::condition_variable condVar;
+    std::atomic<bool> stopFlag{false};
 };

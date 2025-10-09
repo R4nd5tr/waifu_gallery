@@ -2,6 +2,7 @@
 #include "../service/database.h"
 #include "../service/model.h"
 #include "picture_frame.h"
+#include "thread_pool.h"
 #include "worker.h"
 #include <QListWidgetItem>
 #include <QMainWindow>
@@ -33,7 +34,6 @@ public:
     ~MainWindow();
 
 signals:
-    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // load image in another thread
     void importFilesFromDirectory(const std::filesystem::path& directory,
                                   ParserType parserType = ParserType::None); // scan directory in another thread
     void searchPics(const std::unordered_set<std::string>& includedTags,
@@ -52,12 +52,13 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
+    bool event(QEvent* event) override;
 
 private:
     // initialize
     Ui::MainWindow* ui;
     PicDatabase database;
-    QThread* loaderWorkerThread = nullptr;
+    ImageLoadThreadPool imageLoadThreadPool{this};
     QThread* searchWorkerThread = nullptr;
     QThread* importFilesWorkerThread = nullptr;
     void initInterface();
@@ -188,5 +189,5 @@ private:
     void sortPics(); // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();
-    void displayImage(uint64_t picId, const QPixmap& img);
+    void displayImage(uint64_t picId, QImage&& img);
 };

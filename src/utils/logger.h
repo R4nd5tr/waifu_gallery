@@ -20,6 +20,17 @@ public:
         return *this;
     }
 
+#ifdef QT_CORE_LIB
+    Logger& operator<<(const QString& value) {
+        ss_ << value.toStdString();
+        return *this;
+    }
+    Logger& operator<<(const QByteArray& value) {
+        ss_ << value.toStdString();
+        return *this;
+    }
+#endif
+
     // 支持链式调用 std::endl
     Logger& operator<<(std::ostream& (*manip)(std::ostream&)) {
         ss_ << manip;
