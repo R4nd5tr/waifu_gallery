@@ -10,7 +10,7 @@
 
 enum class XRestrictType { Unknown, AllAges, R18, R18G };
 enum class AIType { Unknown, NotAI, AI };
-enum class FileType { JPG, PNG, GIF, WEBP, Unknown }; // TODO: use this enum in PicInfo
+enum class ImageFormat { Unknown, JPG, PNG, GIF, WebP };
 
 struct PicInfo;
 
@@ -61,7 +61,7 @@ struct PicInfo {                                         // represents one image
     uint32_t width;
     uint32_t height;
     uint32_t size;
-    std::string fileType;
+    ImageFormat fileType = ImageFormat::Unknown;
     XRestrictType xRestrict = XRestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 

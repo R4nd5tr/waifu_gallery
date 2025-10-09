@@ -53,7 +53,7 @@ bool PicDatabase::createTables() {
             width INTEGER,
             height INTEGER,
             size INTEGER,
-            file_type TEXT,
+            file_type INTEGER,
             x_restrict INTEGER DEFAULT NULL,
             ai_type INTEGER DEFAULT NULL
         )
@@ -317,7 +317,7 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     sqlite3_bind_int(stmt, 2, picInfo.width);
     sqlite3_bind_int(stmt, 3, picInfo.height);
     sqlite3_bind_int64(stmt, 4, picInfo.size);
-    sqlite3_bind_text(stmt, 5, picInfo.fileType.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 5, static_cast<int>(picInfo.fileType));
     sqlite3_bind_int(stmt, 6, static_cast<int>(picInfo.xRestrict));
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         Error() << "Failed to insert picture: " << sqlite3_errmsg(db);
@@ -699,7 +699,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
         info.width = sqlite3_column_int(stmt, 0);
         info.height = sqlite3_column_int(stmt, 1);
         info.size = sqlite3_column_int(stmt, 2);
-        info.fileType = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        info.fileType = static_cast<ImageFormat>(sqlite3_column_int(stmt, 3));
         info.xRestrict = static_cast<XRestrictType>(sqlite3_column_int(stmt, 4));
     } else {
         return info; // id 不存在，返回空对象

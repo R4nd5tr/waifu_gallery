@@ -44,16 +44,3 @@ private:
     std::vector<uint64_t> lastTweetTagSearchResult;
     std::vector<uint64_t> lastTextSearchResult;
 };
-
-class LoaderWorker : public QObject {
-    Q_OBJECT
-public:
-    explicit LoaderWorker(QObject* parent = nullptr);
-    ~LoaderWorker();
-public slots:
-    void loadImage(uint64_t id, const std::unordered_set<std::filesystem::path>& filePaths); // TODO: thread pool
-signals:
-    void loadComplete(uint64_t id, const QPixmap& img);
-
-private:
-};

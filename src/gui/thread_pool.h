@@ -26,7 +26,7 @@ public:
     QImage img;
 };
 
-class ImageLoadThreadPool {
+class ImageLoadThreadPool { // TODO: load full image functionality?
 public:
     ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
     ~ImageLoadThreadPool();

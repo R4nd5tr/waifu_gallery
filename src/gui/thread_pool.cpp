@@ -4,7 +4,7 @@
 #include <QCoreApplication>
 #include <QImageReader>
 
-size_t IMAGE_RESOLUTION_LIMIT = 1024;
+const size_t IMAGE_RESOLUTION_LIMIT = 256;
 
 const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 ImageLoadThreadPool::ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads) : mainWindow(mainWindow) {

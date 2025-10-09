@@ -1,13 +1,28 @@
 #include "picture_frame.h"
 #include "ui_picture_frame.h"
 
+QString getFileTypeStr(ImageFormat fileType) {
+    switch (fileType) {
+    case ImageFormat::JPG:
+        return QString("JPG");
+    case ImageFormat::PNG:
+        return QString("PNG");
+    case ImageFormat::GIF:
+        return QString("GIF");
+    case ImageFormat::WebP:
+        return QString("WebP");
+    default:
+        return QString("Unknown");
+    }
+}
+
 PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
     : QFrame(parent), ui(new Ui::PictureFrame) {
     ui->setupUi(this);
     ui->titleLabel->hide();
     ui->resolutionLabel->setText(QString("%1x%2").arg(picinfo.width).arg(picinfo.height));
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
-                                          .arg(QString::fromStdString(picinfo.fileType))
+                                          .arg(getFileTypeStr(picinfo.fileType))
                                           .arg(static_cast<double>(picinfo.size) / (1024 * 1024), 0, 'f', 2));
     switch (searchField) { // highlight search result
     case SearchField::PixivID:

@@ -631,10 +631,10 @@ void MainWindow::refreshPicDisplay() {
     loadMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
-    if (!showJPG && pic.fileType == "JPG") return false;
-    if (!showPNG && pic.fileType == "PNG") return false;
-    if (!showGIF && pic.fileType == "GIF") return false;
-    if (!showWEBP && pic.fileType == "WebP") return false;
+    if (!showJPG && pic.fileType == ImageFormat::JPG) return false;
+    if (!showPNG && pic.fileType == ImageFormat::PNG) return false;
+    if (!showGIF && pic.fileType == ImageFormat::GIF) return false;
+    if (!showWEBP && pic.fileType == ImageFormat::WebP) return false;
     if (!showUnknowRestrict && pic.xRestrict == XRestrictType::Unknown) return false;
     if (!showAllAge && pic.xRestrict == XRestrictType::AllAges) return false;
     if (!showR18 && pic.xRestrict == XRestrictType::R18) return false;

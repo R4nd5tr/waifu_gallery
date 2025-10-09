@@ -14,11 +14,19 @@
 #include <webp/decode.h>
 #include <xxhash.h>
 
+static const std::unordered_map<std::string, ImageFormat> fileTypeMap = {
+    {"JPG", ImageFormat::JPG},
+    {"JPEG", ImageFormat::JPG},
+    {"PNG", ImageFormat::PNG},
+    {"GIF", ImageFormat::GIF},
+    {"WEBP", ImageFormat::WebP},
+};
+
 // Utility functions
 std::vector<uint8_t> readFileToBuffer(const std::filesystem::path& imagePath);
 uint64_t calcFileHash(const std::vector<uint8_t>& buffer);
 std::vector<std::string> splitAndTrim(const std::string& str);
-std::tuple<int, int, std::string> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, std::string& fileType);
+std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, ImageFormat fileType);
 XRestrictType toXRestrictTypeEnum(const std::string& xRestrictStr);
 AIType toAITypeEnum(const std::string& aiTypeStr);
 
@@ -26,10 +34,9 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
     std::vector<uint8_t> buffer = readFileToBuffer(pictureFilePath);
 
     std::string fileName = pictureFilePath.filename().string();
-    std::string fileType = pictureFilePath.extension().string().substr(1);
-    std::transform(fileType.begin(), fileType.end(), fileType.begin(), ::toupper);
-    if (fileType == "JPEG") fileType = "JPG";
-    if (fileType == "WEBP") fileType = "WebP";
+    std::string fileTypeStr = pictureFilePath.extension().string().substr(1);
+    std::transform(fileTypeStr.begin(), fileTypeStr.end(), fileTypeStr.begin(), ::toupper);
+    ImageFormat fileType = fileTypeMap.at(fileTypeStr);
 
     int width, height;
     std::tie(width, height, fileType) = getImageResolutionOptimized(buffer, fileType);
@@ -295,9 +302,9 @@ std::vector<uint8_t> readFileToBuffer(const std::filesystem::path& imagePath) {
 uint64_t calcFileHash(const std::vector<uint8_t>& buffer) {
     return XXH64(buffer.data(), static_cast<size_t>(buffer.size()), 0);
 }
-std::tuple<int, int, std::string> getImageResolution(const std::vector<uint8_t>& buffer, const std::string& fileType) {
+std::tuple<int, int, ImageFormat> getImageResolution(const std::vector<uint8_t>& buffer, ImageFormat fileType) {
     int width = 0, height = 0, channels = 0;
-    if (fileType == "WEBP") {
+    if (fileType == ImageFormat::WebP) {
         if (WebPGetInfo(buffer.data(), buffer.size(), &width, &height)) {
             return {width, height, fileType};
         }
@@ -312,10 +319,8 @@ std::tuple<int, int, std::string> getImageResolution(const std::vector<uint8_t>&
     return {0, 0, fileType};
 }
 
-enum class ImageFormat { UNKNOWN, JPG, PNG, GIF, WEBP };
-
 struct ImageHeaderInfo {
-    ImageFormat format = ImageFormat::UNKNOWN;
+    ImageFormat format = ImageFormat::Unknown;
     int width = 0;
     int height = 0;
     bool isValid = false;
@@ -451,7 +456,7 @@ ImageHeaderInfo parseImageHeader(const std::vector<uint8_t>& buffer) {
         {"\x89PNG\r\n\x1A\n", 8, ImageFormat::PNG, "PNG", parsePNGResolution},
         {"GIF87a", 6, ImageFormat::GIF, "GIF", parseGIFResolution},
         {"GIF89a", 6, ImageFormat::GIF, "GIF", parseGIFResolution},
-        {"RIFF", 4, ImageFormat::WEBP, "WebP", parseWebPResolution},
+        {"RIFF", 4, ImageFormat::WebP, "WebP", parseWebPResolution},
     };
 
     // 检查所有已知格式
@@ -469,12 +474,11 @@ ImageHeaderInfo parseImageHeader(const std::vector<uint8_t>& buffer) {
     return info;
 }
 
-// 在现有代码中的使用示例
-std::tuple<int, int, std::string> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, std::string& fileType) {
+std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, ImageFormat fileType) {
     ImageHeaderInfo headerInfo = parseImageHeader(buffer);
 
     if (headerInfo.isValid) {
-        fileType = headerInfo.formatName;
+        fileType = headerInfo.format;
         return {headerInfo.width, headerInfo.height, fileType};
     }
 
