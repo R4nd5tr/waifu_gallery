@@ -22,7 +22,7 @@ enum class SearchField {
     TweetAuthorNick
 };
 
-class PicDatabase { // TODO: remove Qt dependency
+class PicDatabase {
 public:
     PicDatabase(const std::string& databaseFile = "database.db");
     ~PicDatabase();

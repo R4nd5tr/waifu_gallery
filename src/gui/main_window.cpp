@@ -372,6 +372,39 @@ void MainWindow::handleRatioTimerTimeout() {
         refreshPicDisplay();
     }
 }
+void MainWindow::sortPics() {
+    auto comparator = [this](const PicInfo& a, const PicInfo& b) {
+        if (ratioSortEnabled) {
+            double ratioA = (a.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(a.width) / a.height;
+            double ratioB = (b.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(b.width) / b.height;
+            double diffA = std::abs(ratioA - ratio);
+            double diffB = std::abs(ratioB - ratio);
+            if (diffA != diffB) {
+                return diffA < diffB;
+            }
+            return false; // if ratios are equally close, sort by ID to ensure consistent order
+        }
+        switch (sortBy) {
+        case SortBy::None:
+            return false;
+        case SortBy::ID:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.id < b.id;
+            } else {
+                return a.id > b.id;
+            }
+        case SortBy::Size:
+            if (sortOrder == SortOrder::Ascending) {
+                return (a.size) < (b.size);
+            } else {
+                return (a.size) > (b.size);
+            }
+        default:
+            return false;
+        }
+    };
+    std::sort(resultPics.begin(), resultPics.end(), comparator);
+}
 void MainWindow::updateSearchField(int index) {
     searchField = static_cast<SearchField>(index);
 }
@@ -379,7 +412,6 @@ void MainWindow::updateSearchText(const QString& text) {
     searchText = text.toStdString();
     searchTextChanged = true;
 }
-
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
     tagClickTimer->start(DOUBLE_CLICK_DELAY);
     lastClickedTagItem = item;
@@ -576,14 +608,13 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
     handleWindowSizeChange();
 }
 void MainWindow::handlescrollBarValueChange(int value) {
-    QScrollBar* scrollBar = ui->picBrowseScrollArea->verticalScrollBar();
-    if (scrollBar->maximum() - value < 100) {
+    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 100) {
         loadMorePics();
     }
 }
 void MainWindow::picSearch() {
-    clearAllPicFrames();
     imageLoadThreadPool.clearTasks();
+    clearAllPicFrames();
     if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
         includedTweetTags.empty() && excludedTweetTags.empty() && searchText.empty()) {
         displayTags();
@@ -619,15 +650,10 @@ void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
     displayTags(availableTags, availablePixivTags, availableTweetTags);
     ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
     sortPics();
-    refreshPicDisplay();
+    loadMorePics();
 }
 void MainWindow::refreshPicDisplay() {
     removePicFramesFromLayout();
-    displayIndex = 0;
-    displayingPicIds.clear();
-    currentColumn = 0;
-    currentRow = 0;
-    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
     loadMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
@@ -670,12 +696,12 @@ void MainWindow::loadMorePics() {
                 picFrame = new PictureFrame(this, pic, searchField);
             }
             idToFrameMap[pic.id] = picFrame;
+            if (imageThumbCache.find(pic.id) == imageThumbCache.end()) {
+                imageLoadThreadPool.loadImage(pic);
+            } else {
+                picFrame->setPixmap(imageThumbCache[pic.id]);
+            }
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
-        }
-
-        auto imgIt = imageThumbCache.find(pic.id);
-        if (imgIt == imageThumbCache.end()) {
-            imageLoadThreadPool.loadImage(pic);
         }
 
         picsLoaded++;
@@ -700,11 +726,11 @@ void MainWindow::displayImage(uint64_t picId, QImage&& img) {
         cacheLimit = resultPics.size();
     }
     if (imageThumbCache.size() >= cacheLimit) {
-        for (auto it = imageThumbCache.begin(); it != imageThumbCache.end();) {
-            if (idToFrameMap.find(it->first) == idToFrameMap.end()) {
-                it = imageThumbCache.erase(it);
+        for (auto iter = imageThumbCache.begin(); iter != imageThumbCache.end();) {
+            if (idToFrameMap.find(iter->first) == idToFrameMap.end()) {
+                iter = imageThumbCache.erase(iter);
             } else {
-                ++it;
+                ++iter;
             }
         }
     }
@@ -715,52 +741,7 @@ void MainWindow::displayImage(uint64_t picId, QImage&& img) {
         frameIt->second->setPixmap(pixmap);
     }
 }
-void MainWindow::sortPics() {
-    auto comparator = [this](const PicInfo& a, const PicInfo& b) {
-        if (ratioSortEnabled) {
-            double ratioA = (a.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(a.width) / a.height;
-            double ratioB = (b.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(b.width) / b.height;
-            double diffA = std::abs(ratioA - ratio);
-            double diffB = std::abs(ratioB - ratio);
-            if (diffA != diffB) {
-                return diffA < diffB;
-            }
-            return false; // if ratios are equally close, sort by ID to ensure consistent order
-        }
-        switch (sortBy) {
-        case SortBy::None:
-            return false;
-        case SortBy::ID:
-            if (sortOrder == SortOrder::Ascending) {
-                return a.id < b.id;
-            } else {
-                return a.id > b.id;
-            }
-        case SortBy::Size:
-            if (sortOrder == SortOrder::Ascending) {
-                return (a.size) < (b.size);
-            } else {
-                return (a.size) > (b.size);
-            }
-        default:
-            return false;
-        }
-    };
-    std::sort(resultPics.begin(), resultPics.end(), comparator);
-}
-void MainWindow::clearAllPicFrames() {
-    QLayoutItem* child;
-    while ((child = ui->picDisplayLayout->takeAt(0)) != nullptr) {
-        delete child;
-    }
-
-    for (auto& [id, frame] : idToFrameMap) {
-        delete frame;
-    }
-    idToFrameMap.clear();
-    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
-}
-void MainWindow::removePicFramesFromLayout() {
+void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory
     while (ui->picDisplayLayout->count() > 0) {
         QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
         if (item->widget()) {
@@ -768,6 +749,31 @@ void MainWindow::removePicFramesFromLayout() {
         }
         delete item;
     }
+
+    for (auto& [id, frame] : idToFrameMap) {
+        delete frame;
+    }
+    idToFrameMap.clear();
+
+    displayIndex = 0;
+    displayingPicIds.clear();
+    currentColumn = 0;
+    currentRow = 0;
+    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
+}
+void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from layout but keep them in memory
+    while (ui->picDisplayLayout->count() > 0) {
+        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
+        if (item->widget()) {
+            item->widget()->setParent(nullptr);
+        }
+        delete item;
+    }
+    displayIndex = 0;
+    displayingPicIds.clear();
+    currentColumn = 0;
+    currentRow = 0;
+    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
 }
 void MainWindow::handleAddNewPicsAction() {
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
