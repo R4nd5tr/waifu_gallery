@@ -690,18 +690,20 @@ void MainWindow::loadMorePics() {
             picFrame = frameIt->second;
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
         } else {
-            if (searchText.empty() || searchField == SearchField::None) {
+            if (searchText.empty() || searchField == SearchField::None) { // create PictureFrame
                 picFrame = new PictureFrame(this, pic);
             } else {
                 picFrame = new PictureFrame(this, pic, searchField);
             }
             idToFrameMap[pic.id] = picFrame;
-            if (imageThumbCache.find(pic.id) == imageThumbCache.end()) {
+
+            if (imageThumbCache.find(pic.id) == imageThumbCache.end()) { // load image thumbnail
                 imageLoadThreadPool.loadImage(pic);
             } else {
                 picFrame->setPixmap(imageThumbCache[pic.id]);
             }
-            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
+
+            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn); // add to layout and display
         }
 
         picsLoaded++;

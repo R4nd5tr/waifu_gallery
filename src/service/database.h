@@ -1,13 +1,19 @@
 #pragma once
 #include "model.h"
 #include "parser.h"
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <iostream>
+#include <mutex>
 #include <sqlite3.h>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+using ProgressCallback = std::function<void(size_t processed, size_t total)>;
 
 enum class SearchField {
     None,
@@ -24,7 +30,7 @@ enum class SearchField {
 
 class PicDatabase {
 public:
-    PicDatabase(const std::string& databaseFile = "database.db");
+    PicDatabase(const std::string& databaseFile = "database.db", bool importOnly = false);
     ~PicDatabase();
 
     void enableForeignKeyRestriction() const;
@@ -69,11 +75,16 @@ public:
                                              const std::unordered_set<std::string>& excludedTags);
     std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
 
+    // import functions
+    void importFilesFromDirectory(const std::filesystem::path& directory,
+                                  ParserType parserType = ParserType::None,
+                                  ProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    // import functions (only used in testing)
-    void importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None);
 
-    void syncTables(); // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
+    // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
+    void syncTables(std::unordered_set<int64_t> newPixivIDs = {});
+    std::unordered_set<int64_t> newPixivIDs; // to be used between import and syncTables
+
 private:
     sqlite3* db = nullptr;
     std::unordered_map<std::string, int> tagToId;
@@ -82,7 +93,6 @@ private:
     std::unordered_map<int, std::string> idToTag;
     std::unordered_map<int, std::string> idToTwitterHashtag;
     std::unordered_map<int, std::string> idToPixivTag;
-    std::unordered_set<int64_t> newPixivIDs;
 
     void initDatabase(const std::string& databaseFile);
     bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
@@ -107,4 +117,35 @@ private:
         }
         return stmt;
     }
+};
+
+class MultiThreadedImporter {
+public:
+    MultiThreadedImporter(const std::filesystem::path& directory,
+                          size_t threadCount = std::thread::hardware_concurrency(),
+                          ProgressCallback progressCallback = nullptr,
+                          ParserType parserType = ParserType::None,
+                          std::string dbFile = "database.db");
+    ~MultiThreadedImporter();
+
+    bool finish();
+    void forceStop();
+
+private:
+    PicDatabase picDatabase;
+    bool finished = false;
+
+    ProgressCallback progressCallback; // Caution: may be called from multiple threads concurrently, no lock
+    ParserType parserType;
+    std::string dbFile;
+
+    std::vector<std::thread> workers;
+    std::vector<std::filesystem::path> files;
+    std::atomic<size_t> nextFileIndex = 0;
+
+    std::atomic<bool> stopFlag = false;
+    std::mutex mutex;
+    std::unordered_set<int64_t> newPixivIDs;
+
+    void workerThread();
 };

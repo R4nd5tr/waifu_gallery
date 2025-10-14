@@ -19,8 +19,9 @@ uint64_t int64_to_uint64(int64_t i) {
     return u;
 }
 
-PicDatabase::PicDatabase(const std::string& databaseFile) {
+PicDatabase::PicDatabase(const std::string& databaseFile, bool importOnly) {
     initDatabase(databaseFile);
+    if (importOnly) return;
     getTagMapping();
 }
 PicDatabase::~PicDatabase() {
@@ -32,7 +33,7 @@ PicDatabase::~PicDatabase() {
 void PicDatabase::initDatabase(const std::string& databaseFile) {
     bool databaseExists = std::filesystem::exists(databaseFile);
     if (sqlite3_open(databaseFile.c_str(), &db) != SQLITE_OK) {
-        std::cerr << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
+        Error() << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
         return;
     }
     if (!databaseExists) {
@@ -42,9 +43,9 @@ void PicDatabase::initDatabase(const std::string& databaseFile) {
         }
     }
     if (!execute("PRAGMA foreign_keys = ON")) {
-        std::cerr << "Failed to enable foreign keys: " << sqlite3_errmsg(db) << std::endl;
+        Warn() << "Failed to enable foreign keys: " << sqlite3_errmsg(db) << std::endl;
     }
-    std::cout << "Database initialized" << std::endl;
+    Info() << "Database initialized" << std::endl;
 }
 bool PicDatabase::createTables() {
     const std::string picturesTable = R"(
@@ -231,7 +232,6 @@ bool PicDatabase::createTables() {
     commitTransaction();
     return true;
 }
-
 void PicDatabase::getTagMapping() {
     tagToId.clear();
     idToTag.clear();
@@ -897,7 +897,9 @@ void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePa
         Warn() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
     }
 }
-void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory, ParserType parserType) {
+void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory,
+                                           ParserType parserType,
+                                           ProgressCallback progressCallback) {
     auto files = collectFiles(directory);
     disableForeignKeyRestriction();
 
@@ -921,12 +923,15 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
         double eta = (files.size() - processed) / speed;
         int eta_minutes = static_cast<int>(eta) / 60;
         int eta_seconds = static_cast<int>(eta) % 60;
+        if (progressCallback) {
+            progressCallback(processed, files.size());
+        }
         Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
                << eta_seconds << "s";
     }
     Info() << "Import completed. Total files processed:" << processed;
 }
-void PicDatabase::syncTables() { // post-import operations
+void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-import operations
     sqlite3_stmt* stmt = nullptr;
     // count tags
     if (!execute(R"(
@@ -952,6 +957,9 @@ void PicDatabase::syncTables() { // post-import operations
     }
     sqlite3_finalize(stmt);
     // sync x_restrict and ai_type from pixiv_artworks to pictures
+    if (newPixivIDs.empty()) {
+        newPixivIDs = this->newPixivIDs;
+    }
     for (const auto& pixivID : newPixivIDs) {
         stmt = prepare(R"(
             UPDATE pictures SET x_restrict = (
@@ -1301,4 +1309,74 @@ bool PicDatabase::commitTransaction() {
 }
 bool PicDatabase::rollbackTransaction() {
     return execute("ROLLBACK;");
+}
+
+MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& directory,
+                                             size_t threadCount,
+                                             ProgressCallback progressCallback,
+                                             ParserType parserType,
+                                             std::string dbFile)
+    : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
+    picDatabase = PicDatabase(dbFile, true);
+    files = collectFiles(directory);
+    for (size_t i = 0; i < threadCount; ++i) {
+        workers.emplace_back(&MultiThreadedImporter::workerThread, this);
+    }
+}
+MultiThreadedImporter::~MultiThreadedImporter() {
+    forceStop();
+    finish();
+}
+void MultiThreadedImporter::forceStop() {
+    stopFlag.store(true);
+}
+bool MultiThreadedImporter::finish() {
+    if (finished) return true;
+    if (nextFileIndex.load() < files.size() && !stopFlag.load()) {
+        return false; // 还有文件未处理完
+    }
+    for (auto& worker : workers) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+    workers.clear();
+    picDatabase.syncTables(newPixivIDs);
+    finished = true;
+    return true;
+}
+void MultiThreadedImporter::workerThread() {
+    PicDatabase threadDb = PicDatabase(dbFile, true); // 每个线程一个数据库连接
+    size_t index = 0;
+    size_t processed = 0;
+    bool commited = true;
+    threadDb.disableForeignKeyRestriction();
+    threadDb.beginTransaction();
+    commited = false;
+    while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
+        if (index > 0 && index % 1000 == 0) {
+            if (progressCallback) progressCallback(index, files.size());
+        }
+        if (processed > 0 && processed % 1000 == 0) {
+            if (!threadDb.commitTransaction()) {
+                Warn() << "Batch commit failed in thread, rolling back";
+                threadDb.rollbackTransaction();
+            }
+            commited = true;
+            threadDb.beginTransaction();
+            commited = false;
+        }
+        if (stopFlag.load()) break;
+        const auto& filePath = files[index];
+        threadDb.processAndImportSingleFile(filePath, parserType);
+        processed++;
+    }
+    if (!commited) {
+        if (!threadDb.commitTransaction()) {
+            Warn() << "Final commit failed in thread, rolling back";
+            threadDb.rollbackTransaction();
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex);
+    newPixivIDs.insert(threadDb.newPixivIDs.begin(), threadDb.newPixivIDs.end());
 }
