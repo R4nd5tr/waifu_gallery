@@ -1317,11 +1317,11 @@ MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& direct
                                              ParserType parserType,
                                              std::string dbFile)
     : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
-    picDatabase = PicDatabase(dbFile, true);
     files = collectFiles(directory);
     for (size_t i = 0; i < threadCount; ++i) {
-        workers.emplace_back(&MultiThreadedImporter::workerThread, this);
+        workers.emplace_back(&MultiThreadedImporter::workerThreadFunc, this);
     }
+    insertThread = std::thread(&MultiThreadedImporter::insertThreadFunc, this);
 }
 MultiThreadedImporter::~MultiThreadedImporter() {
     forceStop();
@@ -1341,42 +1341,228 @@ bool MultiThreadedImporter::finish() {
         }
     }
     workers.clear();
-    picDatabase.syncTables(newPixivIDs);
     finished = true;
+    stopFlag.store(true);
+    cv.notify_all();
+    if (insertThread.joinable()) {
+        insertThread.join();
+    }
     return true;
 }
-void MultiThreadedImporter::workerThread() {
-    PicDatabase threadDb = PicDatabase(dbFile, true); // 每个线程一个数据库连接
-    size_t index = 0;
-    size_t processed = 0;
-    bool commited = true;
-    threadDb.disableForeignKeyRestriction();
-    threadDb.beginTransaction();
-    commited = false;
-    while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
-        if (index > 0 && index % 1000 == 0) {
-            if (progressCallback) progressCallback(index, files.size());
-        }
-        if (processed > 0 && processed % 1000 == 0) {
-            if (!threadDb.commitTransaction()) {
-                Warn() << "Batch commit failed in thread, rolling back";
-                threadDb.rollbackTransaction();
+void processSingleFile(const std::filesystem::path& filePath,
+                       ParserType parserType,
+                       std::vector<PicInfo>& picInfos,
+                       std::vector<PixivInfo>& pixivInfos,
+                       std::vector<TweetInfo>& tweetInfos,
+                       std::vector<std::vector<PixivInfo>>& pixivInfoVecs) {
+    std::string ext = filePath.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    try {
+        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
+            picInfos.push_back(parsePicture(filePath, parserType));
+        } else if (ext == ".txt" && parserType == ParserType::Pixiv) {
+            pixivInfos.push_back(parsePixivMetadata(filePath));
+        } else if (ext == ".json") {
+            if (parserType == ParserType::Pixiv) {
+                pixivInfoVecs.push_back(parsePixivJson(filePath));
+            } else if (parserType == ParserType::Twitter) {
+                tweetInfos.push_back(parseTweetJson(filePath));
             }
-            commited = true;
-            threadDb.beginTransaction();
-            commited = false;
+        } else if (ext == ".csv" && parserType == ParserType::Pixiv) {
+            pixivInfoVecs.push_back(parsePixivCsv(filePath));
+        }
+    } catch (const std::exception& e) {
+        Warn() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
+    }
+}
+void MultiThreadedImporter::workerThreadFunc() {
+    std::vector<PicInfo> picInfos;
+    picInfos.reserve(1500);
+    std::vector<PixivInfo> pixivInfos;
+    pixivInfos.reserve(1500);
+    std::vector<TweetInfo> tweetInfos;
+    tweetInfos.reserve(1500);
+    std::vector<std::vector<PixivInfo>> pixivInfoVecs;
+    pixivInfoVecs.reserve(500);
+    size_t index = 0;
+    while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
+        if (picInfos.size() >= 1000) {
+            if (picMutex.try_lock()) {
+                while (!picInfos.empty()) {
+                    picQueue.push(std::move(picInfos.back()));
+                    picInfos.pop_back();
+                }
+                picMutex.unlock();
+                picInfos.clear();
+                cv.notify_one();
+            }
+        }
+        if (pixivInfos.size() >= 1000) {
+            if (pixivMutex.try_lock()) {
+                while (!pixivInfos.empty()) {
+                    pixivQueue.push(std::move(pixivInfos.back()));
+                    pixivInfos.pop_back();
+                }
+                pixivMutex.unlock();
+                pixivInfos.clear();
+                cv.notify_one();
+            }
+        }
+        if (tweetInfos.size() >= 1000) {
+            if (tweetMutex.try_lock()) {
+                while (!tweetInfos.empty()) {
+                    tweetQueue.push(std::move(tweetInfos.back()));
+                    tweetInfos.pop_back();
+                }
+                tweetMutex.unlock();
+                tweetInfos.clear();
+                cv.notify_one();
+            }
+        }
+        if (pixivInfoVecs.size() >= 100) {
+            if (pixivVecMutex.try_lock()) {
+                while (!pixivInfoVecs.empty()) {
+                    pixivVecQueue.push(std::move(pixivInfoVecs.back()));
+                    pixivInfoVecs.pop_back();
+                }
+                pixivVecMutex.unlock();
+                pixivInfoVecs.clear();
+                cv.notify_one();
+            }
         }
         if (stopFlag.load()) break;
         const auto& filePath = files[index];
-        threadDb.processAndImportSingleFile(filePath, parserType);
-        processed++;
+        processSingleFile(filePath, parserType, picInfos, pixivInfos, tweetInfos, pixivInfoVecs);
     }
-    if (!commited) {
-        if (!threadDb.commitTransaction()) {
-            Warn() << "Final commit failed in thread, rolling back";
-            threadDb.rollbackTransaction();
+    if (!picInfos.empty()) {
+        std::lock_guard<std::mutex> lock(picMutex);
+        while (!picInfos.empty()) {
+            picQueue.push(std::move(picInfos.back()));
+            picInfos.pop_back();
+        }
+        picInfos.clear();
+        cv.notify_one();
+    }
+    if (!pixivInfos.empty()) {
+        std::lock_guard<std::mutex> lock(pixivMutex);
+        while (!pixivInfos.empty()) {
+            pixivQueue.push(std::move(pixivInfos.back()));
+            pixivInfos.pop_back();
+        }
+        pixivInfos.clear();
+        cv.notify_one();
+    }
+    if (!tweetInfos.empty()) {
+        std::lock_guard<std::mutex> lock(tweetMutex);
+        while (!tweetInfos.empty()) {
+            tweetQueue.push(std::move(tweetInfos.back()));
+            tweetInfos.pop_back();
+        }
+        tweetInfos.clear();
+        cv.notify_one();
+    }
+    if (!pixivInfoVecs.empty()) {
+        std::lock_guard<std::mutex> lock(pixivVecMutex);
+        while (!pixivInfoVecs.empty()) {
+            pixivVecQueue.push(std::move(pixivInfoVecs.back()));
+            pixivInfoVecs.pop_back();
+        }
+        pixivInfoVecs.clear();
+        cv.notify_one();
+    }
+}
+void MultiThreadedImporter::insertThreadFunc() {
+    PicDatabase threadDb(dbFile, true);
+    std::mutex conditionMutex;
+    std::vector<PicInfo> picsToInsert;
+    picsToInsert.reserve(2000);
+    std::vector<PixivInfo> pixivsToInsert;
+    pixivsToInsert.reserve(2000);
+    std::vector<TweetInfo> tweetsToInsert;
+    tweetsToInsert.reserve(2000);
+    std::vector<std::vector<PixivInfo>> pixivVecsToInsert;
+    pixivVecsToInsert.reserve(1000);
+    while (!stopFlag.load()) {
+        if (progressCallback) progressCallback(nextFileIndex.load(), files.size());
+        std::unique_lock<std::mutex> lock(conditionMutex);
+        cv.wait(lock, [this]() {
+            return !picQueue.empty() || !pixivQueue.empty() || !tweetQueue.empty() || !pixivVecQueue.empty() || stopFlag.load();
+        });
+        if (stopFlag.load()) break;
+        if (!picQueue.empty()) {
+            if (picMutex.try_lock()) {
+                while (!picQueue.empty()) {
+                    picsToInsert.push_back(std::move(picQueue.front()));
+                    picQueue.pop();
+                }
+                picMutex.unlock();
+                threadDb.beginTransaction();
+                for (const auto& picInfo : picsToInsert) {
+                    threadDb.insertPicInfo(picInfo);
+                }
+                picsToInsert.clear();
+                if (!threadDb.commitTransaction()) {
+                    Warn() << "Batch commit failed in insert thread, rolling back";
+                    threadDb.rollbackTransaction();
+                }
+            }
+        }
+        if (!pixivQueue.empty()) {
+            if (pixivMutex.try_lock()) {
+                while (!pixivQueue.empty()) {
+                    pixivsToInsert.push_back(std::move(pixivQueue.front()));
+                    pixivQueue.pop();
+                }
+                pixivMutex.unlock();
+                threadDb.beginTransaction();
+                for (const auto& pixivInfo : pixivsToInsert) {
+                    threadDb.insertPixivInfo(pixivInfo);
+                }
+                pixivsToInsert.clear();
+                if (!threadDb.commitTransaction()) {
+                    Warn() << "Batch commit failed in insert thread, rolling back";
+                    threadDb.rollbackTransaction();
+                }
+            }
+        }
+        if (!tweetQueue.empty()) {
+            if (tweetMutex.try_lock()) {
+                while (!tweetQueue.empty()) {
+                    tweetsToInsert.push_back(std::move(tweetQueue.front()));
+                    tweetQueue.pop();
+                }
+                tweetMutex.unlock();
+                threadDb.beginTransaction();
+                for (const auto& tweetInfo : tweetsToInsert) {
+                    threadDb.insertTweetInfo(tweetInfo);
+                }
+                tweetsToInsert.clear();
+                if (!threadDb.commitTransaction()) {
+                    Warn() << "Batch commit failed in insert thread, rolling back";
+                    threadDb.rollbackTransaction();
+                }
+            }
+        }
+        if (!pixivVecQueue.empty()) {
+            if (pixivVecMutex.try_lock()) {
+                while (!pixivVecQueue.empty()) {
+                    pixivVecsToInsert.push_back(std::move(pixivVecQueue.front()));
+                    pixivVecQueue.pop();
+                }
+                pixivVecMutex.unlock();
+                threadDb.beginTransaction();
+                for (const auto& pixivInfoVec : pixivVecsToInsert) {
+                    for (const auto& pixivInfo : pixivInfoVec) {
+                        threadDb.updatePixivInfo(pixivInfo);
+                    }
+                }
+                pixivVecsToInsert.clear();
+                if (!threadDb.commitTransaction()) {
+                    Warn() << "Batch commit failed in insert thread, rolling back";
+                    threadDb.rollbackTransaction();
+                }
+            }
         }
     }
-    std::lock_guard<std::mutex> lock(mutex);
-    newPixivIDs.insert(threadDb.newPixivIDs.begin(), threadDb.newPixivIDs.end());
+    threadDb.syncTables();
 }

@@ -2,11 +2,13 @@
 #include "model.h"
 #include "parser.h"
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <iostream>
 #include <mutex>
+#include <queue>
 #include <sqlite3.h>
 #include <thread>
 #include <unordered_map>
@@ -132,10 +134,9 @@ public:
     void forceStop();
 
 private:
-    PicDatabase picDatabase;
     bool finished = false;
 
-    ProgressCallback progressCallback; // Caution: may be called from multiple threads concurrently, no lock
+    ProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
     ParserType parserType;
     std::string dbFile;
 
@@ -143,9 +144,19 @@ private:
     std::vector<std::filesystem::path> files;
     std::atomic<size_t> nextFileIndex = 0;
 
-    std::atomic<bool> stopFlag = false;
-    std::mutex mutex;
-    std::unordered_set<int64_t> newPixivIDs;
+    std::thread insertThread;
+    std::queue<PicInfo> picQueue;
+    std::mutex picMutex;
+    std::queue<TweetInfo> tweetQueue;
+    std::mutex tweetMutex;
+    std::queue<PixivInfo> pixivQueue;
+    std::mutex pixivMutex;
+    std::queue<std::vector<PixivInfo>> pixivVecQueue;
+    std::mutex pixivVecMutex;
 
-    void workerThread();
+    std::atomic<bool> stopFlag = false;
+    std::condition_variable cv;
+
+    void workerThreadFunc();
+    void insertThreadFunc();
 };
