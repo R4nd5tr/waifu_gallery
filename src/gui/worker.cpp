@@ -3,7 +3,9 @@
 #include "../utils/utils.h"
 #include <QImageReader>
 
-DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) {}
+DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) {
+    database.setMode(DbMode::Query);
+}
 DatabaseWorker::~DatabaseWorker() {}
 void DatabaseWorker::importFilesFromDirectory(std::filesystem::path directory,
                                               ParserType parserType) { // TODO: display progress on GUI

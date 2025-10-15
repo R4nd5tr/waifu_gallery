@@ -1,4 +1,5 @@
 #pragma once
+#include "../utils/logger.h"
 #include "model.h"
 #include "parser.h"
 #include <atomic>
@@ -30,9 +31,10 @@ enum class SearchField {
     TweetAuthorNick
 };
 
+enum class DbMode { Normal, Import, Query };
 class PicDatabase {
 public:
-    PicDatabase(const std::string& databaseFile = "database.db", bool importOnly = false);
+    PicDatabase(const std::string& databaseFile = "database.db", DbMode mode = DbMode::Normal);
     ~PicDatabase();
 
     void enableForeignKeyRestriction() const;
@@ -40,6 +42,31 @@ public:
     bool beginTransaction();
     bool commitTransaction();
     bool rollbackTransaction();
+    void setMode(DbMode mode) {
+        if (currentMode == mode) return;
+        switch (mode) {
+        case DbMode::Normal:
+            execute("PRAGMA cache_size = -32000");
+            execute("PRAGMA synchronous = NORMAL");
+            execute("PRAGMA foreign_keys = ON");
+            break;
+
+        case DbMode::Import:
+            execute("PRAGMA cache_size = -128000");
+            execute("PRAGMA journal_mode = WAL");
+            execute("PRAGMA temp_store = memory");
+            execute("PRAGMA foreign_keys = OFF");
+            execute("PRAGMA synchronous = NORMAL");
+            break;
+
+        case DbMode::Query:
+            execute("PRAGMA cache_size = -64000");
+            execute("PRAGMA mmap_size = 268435456");
+            execute("PRAGMA foreign_keys = ON");
+            break;
+        }
+        currentMode = mode;
+    }
 
     // getters  TODO: batch get and merge SQL queries
     PicInfo getPicInfo(uint64_t id, int64_t tweetID = 0, int64_t pixivID = 0) const;
@@ -88,6 +115,7 @@ public:
     std::unordered_set<int64_t> newPixivIDs; // to be used between import and syncTables
 
 private:
+    DbMode currentMode = DbMode::Normal;
     sqlite3* db = nullptr;
     std::unordered_map<std::string, int> tagToId;
     std::unordered_map<std::string, int> twitterHashtagToId;
@@ -104,7 +132,7 @@ private:
         char* errorMsg = nullptr;
         int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errorMsg);
         if (rc != SQLITE_OK) {
-            std::cerr << "Error executing SQL: " << errorMsg << std::endl;
+            Error() << "Error executing SQL: " << errorMsg << std::endl;
             sqlite3_free(errorMsg);
             return false;
         }
@@ -114,7 +142,7 @@ private:
         sqlite3_stmt* stmt = nullptr;
         int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
         if (rc != SQLITE_OK) {
-            std::cerr << "Error preparing SQL statement: " << sqlite3_errmsg(db) << std::endl;
+            Error() << "Error preparing SQL statement: " << sqlite3_errmsg(db) << std::endl;
             return nullptr;
         }
         return stmt;
@@ -144,7 +172,8 @@ private:
     std::vector<std::filesystem::path> files;
     std::atomic<size_t> nextFileIndex = 0;
 
-    std::thread insertThread;
+    // single insert thread
+    std::thread insertThread; // TODO: use separate database file for each thread to achieve parallel insert and merge later?
     std::queue<PicInfo> picQueue;
     std::mutex picMutex;
     std::queue<TweetInfo> tweetQueue;

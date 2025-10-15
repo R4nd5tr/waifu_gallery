@@ -1,5 +1,4 @@
 #include "database.h"
-#include "../utils/logger.h"
 #include "../utils/utils.h"
 #include "model.h"
 #include "parser.h"
@@ -19,9 +18,10 @@ uint64_t int64_to_uint64(int64_t i) {
     return u;
 }
 
-PicDatabase::PicDatabase(const std::string& databaseFile, bool importOnly) {
+PicDatabase::PicDatabase(const std::string& databaseFile, DbMode mode) {
     initDatabase(databaseFile);
-    if (importOnly) return;
+    setMode(mode);
+    if (mode == DbMode::Import) return;
     getTagMapping();
 }
 PicDatabase::~PicDatabase() {
@@ -42,10 +42,7 @@ void PicDatabase::initDatabase(const std::string& databaseFile) {
             return;
         }
     }
-    if (!execute("PRAGMA foreign_keys = ON")) {
-        Warn() << "Failed to enable foreign keys: " << sqlite3_errmsg(db) << std::endl;
-    }
-    Info() << "Database initialized" << std::endl;
+    Info() << "Database initialized";
 }
 bool PicDatabase::createTables() {
     const std::string picturesTable = R"(
@@ -926,10 +923,10 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
         if (progressCallback) {
             progressCallback(processed, files.size());
         }
-        Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
-               << eta_seconds << "s";
+        // Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
+        //        << eta_seconds << "s";
     }
-    Info() << "Import completed. Total files processed:" << processed;
+    // Info() << "Import completed. Total files processed:" << processed;
 }
 void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-import operations
     sqlite3_stmt* stmt = nullptr;
@@ -1472,7 +1469,7 @@ void MultiThreadedImporter::workerThreadFunc() {
     }
 }
 void MultiThreadedImporter::insertThreadFunc() {
-    PicDatabase threadDb(dbFile, true);
+    PicDatabase threadDb(dbFile, DbMode::Import);
     std::mutex conditionMutex;
     std::vector<PicInfo> picsToInsert;
     picsToInsert.reserve(2000);
