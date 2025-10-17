@@ -5,6 +5,8 @@
 #include <QScrollBar>
 #include <QString>
 
+const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
     initInterface();
@@ -56,15 +58,6 @@ void MainWindow::initWorkerThreads() {
     connect(searchWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
     connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
     searchWorkerThread->start();
-
-    importFilesWorkerThread = new QThread(this);
-    DatabaseWorker* importFilesWorker = new DatabaseWorker();
-    importFilesWorker->moveToThread(importFilesWorkerThread);
-    connect(this, &MainWindow::importFilesFromDirectory, importFilesWorker, &DatabaseWorker::importFilesFromDirectory);
-    // connect(importFilesWorker, &DatabaseWorker::reportProgress, this, &MainWindow::displayImportProgress);
-    // connect(importFilesWorker, &DatabaseWorker::scanComplete, this, &MainWindow::handleImportFilesComplete);
-    connect(importFilesWorkerThread, &QThread::finished, importFilesWorker, &QObject::deleteLater);
-    importFilesWorkerThread->start();
 }
 void MainWindow::connectSignalSlots() {
     resolutionTimer = new QTimer(this);
@@ -720,6 +713,11 @@ bool MainWindow::event(QEvent* event) {
         displayImage(imageEvent->id, std::move(imageEvent->img));
         return true;
     }
+    if (event->type() == ImportProgressReportEvent::EventType) {
+        auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
+        displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
+        return true;
+    }
     return QMainWindow::event(event);
 }
 void MainWindow::displayImage(uint64_t picId, QImage&& img) {
@@ -742,6 +740,14 @@ void MainWindow::displayImage(uint64_t picId, QImage&& img) {
     if (frameIt != idToFrameMap.end()) {
         frameIt->second->setPixmap(pixmap);
     }
+}
+void MainWindow::displayImportProgress(size_t progress, size_t total) {
+    if (progress >= total) {
+        delete importer;
+        importer = nullptr;
+        loadTags(); // load new tags from database
+    }
+    // TODO: update status bar with progress
 }
 void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory
     while (ui->picDisplayLayout->count() > 0) {
@@ -778,22 +784,25 @@ void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from 
     ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
 }
 void MainWindow::handleAddNewPicsAction() {
+    if (importer) return;
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描文件夹...");
-    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()));
+    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress);
 }
 void MainWindow::handleAddPowerfulPixivDownloaderAction() {
+    if (importer) return;
     QString dir = QFileDialog::getExistingDirectory(
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
-    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::Pixiv);
+    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Pixiv);
 }
 void MainWindow::handleAddGallery_dlTwitterAction() {
+    if (importer) return;
     QString dir =
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
-    emit importFilesFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::Twitter);
+    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Twitter);
 }

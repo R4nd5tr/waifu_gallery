@@ -16,7 +16,7 @@
 #include <unordered_set>
 #include <vector>
 
-using ProgressCallback = std::function<void(size_t processed, size_t total)>;
+using ImportProgressCallback = std::function<void(size_t processed, size_t total)>;
 
 enum class SearchField {
     None,
@@ -107,12 +107,11 @@ public:
     // import functions
     void importFilesFromDirectory(const std::filesystem::path& directory,
                                   ParserType parserType = ParserType::None,
-                                  ProgressCallback progressCallback = nullptr);
+                                  ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
 
     // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
-    void syncTables(std::unordered_set<int64_t> newPixivIDs = {});
-    std::unordered_set<int64_t> newPixivIDs; // to be used between import and syncTables
+    void syncTables(std::unordered_set<int64_t> newPixivIDs = {}); // TODO: Incremental update?
 
 private:
     DbMode currentMode = DbMode::Normal;
@@ -123,6 +122,7 @@ private:
     std::unordered_map<int, std::string> idToTag;
     std::unordered_map<int, std::string> idToTwitterHashtag;
     std::unordered_map<int, std::string> idToPixivTag;
+    std::unordered_set<int64_t> newPixivIDs;
 
     void initDatabase(const std::string& databaseFile);
     bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
@@ -149,13 +149,13 @@ private:
     }
 };
 
-class MultiThreadedImporter {
+class MultiThreadedImporter { // TODO: use this in gui
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
-                          size_t threadCount = std::thread::hardware_concurrency(),
-                          ProgressCallback progressCallback = nullptr,
+                          ImportProgressCallback progressCallback = nullptr,
                           ParserType parserType = ParserType::None,
-                          std::string dbFile = "database.db");
+                          std::string dbFile = "database.db",
+                          size_t threadCount = std::thread::hardware_concurrency());
     ~MultiThreadedImporter();
 
     bool finish();
@@ -164,14 +164,15 @@ public:
 private:
     bool finished = false;
 
-    ProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
+    ImportProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
     ParserType parserType;
     std::string dbFile;
 
     std::vector<std::thread> workers;
     std::vector<std::filesystem::path> files;
     std::atomic<size_t> nextFileIndex = 0;
-
+    std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping
+                                                // when some unsupported files are in the directory
     // single insert thread
     std::thread insertThread; // TODO: use separate database file for each thread to achieve parallel insert and merge later?
     std::queue<PicInfo> picQueue;

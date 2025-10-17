@@ -6,14 +6,12 @@
 #include <QPixmap>
 #include <filesystem>
 
-class DatabaseWorker : public QObject { // database operations in another thread
+class DatabaseWorker : public QObject { // database search worker in another thread
     Q_OBJECT
 public:
     explicit DatabaseWorker(QObject* parent = nullptr);
     ~DatabaseWorker();
 
-    void importFilesFromDirectory(std::filesystem::path directory,
-                                  ParserType parserType = ParserType::None); // TODO: multithreading!
     void searchPics(const std::unordered_set<std::string>& includedTags,
                     const std::unordered_set<std::string>& excludedTags,
                     const std::unordered_set<std::string>& includedPixivTags,
@@ -28,8 +26,6 @@ public:
                     bool searchTextChanged,
                     size_t requestId);
 signals:
-    void scanComplete();
-    void reportProgress(int current, int total, double speed);
     void searchComplete(const std::vector<PicInfo>& resultPics,
                         std::vector<std::tuple<std::string, int, bool>> availableTags,
                         std::vector<std::pair<std::string, int>> availablePixivTags,

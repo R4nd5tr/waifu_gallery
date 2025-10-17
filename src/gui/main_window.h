@@ -4,6 +4,7 @@
 #include "picture_frame.h"
 #include "thread_pool.h"
 #include "worker.h"
+#include <QCoreApplication>
 #include <QListWidgetItem>
 #include <QMainWindow>
 #include <QPixmap>
@@ -28,15 +29,25 @@ const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
 const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
 const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
 
+class ImportProgressReportEvent : public QEvent {
+public:
+    static const QEvent::Type EventType;
+    ImportProgressReportEvent(size_t progress, size_t total) : QEvent(EventType), progress(progress), total(total) {}
+    size_t progress;
+    size_t total;
+};
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+    ImportProgressCallback reportImportProgress = [this](size_t progress, size_t total) {
+        QCoreApplication::postEvent(this, new ImportProgressReportEvent(progress, total));
+    };
+
 signals:
-    void importFilesFromDirectory(const std::filesystem::path& directory,
-                                  ParserType parserType = ParserType::None); // scan directory in another thread
     void searchPics(const std::unordered_set<std::string>& includedTags,
                     const std::unordered_set<std::string>& excludedTags,
                     const std::unordered_set<std::string>& includedPixivTags,
@@ -62,6 +73,7 @@ private:
     ImageLoadThreadPool imageLoadThreadPool{this}; // Blazing fast!!!
     QThread* searchWorkerThread = nullptr;
     QThread* importFilesWorkerThread = nullptr;
+    MultiThreadedImporter* importer = nullptr; // only one importer at a time, Blazing fast!!!
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -158,11 +170,10 @@ private:
 
     void tagSearch(const QString& text);
 
-    void handleAddNewPicsAction();                 // TODO: implement directory choosing dialog
-    void handleAddPowerfulPixivDownloaderAction(); // specify parser type
-    void handleAddGallery_dlTwitterAction();       // specify parser type
-    // void handleImportFilesComplete();
-    // void displayImportProgress(int current, int total, double speed); //TODO implement progress window and bar
+    void handleAddNewPicsAction();                             // TODO: implement directory choosing dialog
+    void handleAddPowerfulPixivDownloaderAction();             // specify parser type
+    void handleAddGallery_dlTwitterAction();                   // specify parser type
+    void displayImportProgress(size_t progress, size_t total); // TODO: implement progress window and bar
 
     // searching
     bool selectedTagChanged = false;

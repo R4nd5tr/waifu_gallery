@@ -896,7 +896,7 @@ void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePa
 }
 void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory,
                                            ParserType parserType,
-                                           ProgressCallback progressCallback) {
+                                           ImportProgressCallback progressCallback) {
     auto files = collectFiles(directory);
     disableForeignKeyRestriction();
 
@@ -1309,12 +1309,13 @@ bool PicDatabase::rollbackTransaction() {
 }
 
 MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& directory,
-                                             size_t threadCount,
-                                             ProgressCallback progressCallback,
+                                             ImportProgressCallback progressCallback,
                                              ParserType parserType,
-                                             std::string dbFile)
+                                             std::string dbFile,
+                                             size_t threadCount)
     : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
     files = collectFiles(directory);
+    supportedFileCount = files.size();
     for (size_t i = 0; i < threadCount; ++i) {
         workers.emplace_back(&MultiThreadedImporter::workerThreadFunc, this);
     }
@@ -1346,7 +1347,7 @@ bool MultiThreadedImporter::finish() {
     }
     return true;
 }
-void processSingleFile(const std::filesystem::path& filePath,
+bool processSingleFile(const std::filesystem::path& filePath,
                        ParserType parserType,
                        std::vector<PicInfo>& picInfos,
                        std::vector<PixivInfo>& pixivInfos,
@@ -1357,20 +1358,26 @@ void processSingleFile(const std::filesystem::path& filePath,
     try {
         if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
             picInfos.push_back(parsePicture(filePath, parserType));
+            return true;
         } else if (ext == ".txt" && parserType == ParserType::Pixiv) {
             pixivInfos.push_back(parsePixivMetadata(filePath));
+            return true;
         } else if (ext == ".json") {
             if (parserType == ParserType::Pixiv) {
                 pixivInfoVecs.push_back(parsePixivJson(filePath));
             } else if (parserType == ParserType::Twitter) {
                 tweetInfos.push_back(parseTweetJson(filePath));
             }
+            return true;
         } else if (ext == ".csv" && parserType == ParserType::Pixiv) {
             pixivInfoVecs.push_back(parsePixivCsv(filePath));
+            return true;
         }
     } catch (const std::exception& e) {
         Warn() << "Error processing file:" << filePath.c_str() << "Error:" << e.what();
+        return false;
     }
+    return false;
 }
 void MultiThreadedImporter::workerThreadFunc() {
     std::vector<PicInfo> picInfos;
@@ -1429,7 +1436,8 @@ void MultiThreadedImporter::workerThreadFunc() {
         }
         if (stopFlag.load()) break;
         const auto& filePath = files[index];
-        processSingleFile(filePath, parserType, picInfos, pixivInfos, tweetInfos, pixivInfoVecs);
+        if (!processSingleFile(filePath, parserType, picInfos, pixivInfos, tweetInfos, pixivInfoVecs))
+            supportedFileCount.fetch_sub(1, std::memory_order_relaxed);
     }
     if (!picInfos.empty()) {
         std::lock_guard<std::mutex> lock(picMutex);
@@ -1479,8 +1487,9 @@ void MultiThreadedImporter::insertThreadFunc() {
     tweetsToInsert.reserve(2000);
     std::vector<std::vector<PixivInfo>> pixivVecsToInsert;
     pixivVecsToInsert.reserve(1000);
-    while (!stopFlag.load()) {
-        if (progressCallback) progressCallback(nextFileIndex.load(), files.size());
+    size_t importedCount = 0;
+    while (!stopFlag.load() || importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
+        if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
         std::unique_lock<std::mutex> lock(conditionMutex);
         cv.wait(lock, [this]() {
             return !picQueue.empty() || !pixivQueue.empty() || !tweetQueue.empty() || !pixivVecQueue.empty() || stopFlag.load();
@@ -1496,6 +1505,7 @@ void MultiThreadedImporter::insertThreadFunc() {
                 threadDb.beginTransaction();
                 for (const auto& picInfo : picsToInsert) {
                     threadDb.insertPicInfo(picInfo);
+                    importedCount++;
                 }
                 picsToInsert.clear();
                 if (!threadDb.commitTransaction()) {
@@ -1514,6 +1524,7 @@ void MultiThreadedImporter::insertThreadFunc() {
                 threadDb.beginTransaction();
                 for (const auto& pixivInfo : pixivsToInsert) {
                     threadDb.insertPixivInfo(pixivInfo);
+                    importedCount++;
                 }
                 pixivsToInsert.clear();
                 if (!threadDb.commitTransaction()) {
@@ -1532,6 +1543,7 @@ void MultiThreadedImporter::insertThreadFunc() {
                 threadDb.beginTransaction();
                 for (const auto& tweetInfo : tweetsToInsert) {
                     threadDb.insertTweetInfo(tweetInfo);
+                    importedCount++;
                 }
                 tweetsToInsert.clear();
                 if (!threadDb.commitTransaction()) {
@@ -1551,6 +1563,7 @@ void MultiThreadedImporter::insertThreadFunc() {
                 for (const auto& pixivInfoVec : pixivVecsToInsert) {
                     for (const auto& pixivInfo : pixivInfoVec) {
                         threadDb.updatePixivInfo(pixivInfo);
+                        importedCount++;
                     }
                 }
                 pixivVecsToInsert.clear();
@@ -1562,4 +1575,5 @@ void MultiThreadedImporter::insertThreadFunc() {
         }
     }
     threadDb.syncTables();
+    if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
 }

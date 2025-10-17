@@ -3,33 +3,10 @@
 #include "../utils/utils.h"
 #include <QImageReader>
 
-DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) {
+DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) { // search worker
     database.setMode(DbMode::Query);
 }
 DatabaseWorker::~DatabaseWorker() {}
-void DatabaseWorker::importFilesFromDirectory(std::filesystem::path directory,
-                                              ParserType parserType) { // TODO: display progress on GUI
-    auto files = collectFiles(directory);
-    database.disableForeignKeyRestriction();
-    const size_t BATCH_SIZE = 1000;
-
-    size_t processed = 0;
-    for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
-        database.beginTransaction();
-        auto batch_end = std::min(i + BATCH_SIZE, files.size());
-        for (size_t j = i; j < batch_end; j++) {
-            database.processAndImportSingleFile(files[j], parserType);
-            processed++;
-        }
-        if (database.commitTransaction()) {
-            qInfo() << "Processed files: " << processed;
-        } else {
-            qWarning() << "Batch commit failed, rolling back";
-            database.rollbackTransaction();
-        }
-    }
-    qInfo() << "Import completed. Total files processed:" << processed;
-}
 void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedTags,
                                 const std::unordered_set<std::string>& excludedTags,
                                 const std::unordered_set<std::string>& includedPixivTags,
