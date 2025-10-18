@@ -91,8 +91,10 @@ private:
     bool showJPG = true;
     bool showGIF = true;
     bool showWEBP = true;
-    bool showUnknowRestrict = true;
+    bool showUnknowRestrict = false;
     bool showAllAge = true;
+    bool showSensitive = false;
+    bool showQuestionable = false;
     bool showR18 = false;
     bool showR18g = false;
     bool showUnknowAI = true;
@@ -125,6 +127,8 @@ private:
     void updateShowWEBP(bool checked);
     void updateShowUnknowRestrict(bool checked);
     void updateShowAllAge(bool checked);
+    void updateShowSensitive(bool checked);
+    void updateShowQuestionable(bool checked);
     void updateShowR18(bool checked);
     void updateShowR18g(bool checked);
     void updateShowUnknowAI(bool checked);

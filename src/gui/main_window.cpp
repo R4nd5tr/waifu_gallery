@@ -60,6 +60,7 @@ void MainWindow::initWorkerThreads() {
     searchWorkerThread->start();
 }
 void MainWindow::connectSignalSlots() {
+    // debounce timers
     resolutionTimer = new QTimer(this);
     ratioSortTimer = new QTimer(this);
     textSearchTimer = new QTimer(this);
@@ -71,28 +72,33 @@ void MainWindow::connectSignalSlots() {
     tagClickTimer->setSingleShot(true);
     tagSearchTimer->setSingleShot(true);
 
+    // filter checkboxes
     connect(ui->jpgCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowJPG);
     connect(ui->pngCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowPNG);
     connect(ui->gifCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowGIF);
     connect(ui->webpCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowWEBP);
     connect(ui->unknowRestrictCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowRestrict);
     connect(ui->allAgeCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowAllAge);
+    connect(ui->sensitiveCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowSensitive);
+    connect(ui->questionableCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowQuestionable);
     connect(ui->r18CheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowR18);
     connect(ui->r18gCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowR18g);
     connect(ui->unknowAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowAI);
     connect(ui->aiCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowAI);
     connect(ui->noAICheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowNonAI);
 
+    // resolution filters
     connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxHeight);
-    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinHeight);
-    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxWidth);
-    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinWidth);
+    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
+    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
+    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
 
+    // sorting controls
     connect(ui->sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortBy);
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
@@ -106,11 +112,13 @@ void MainWindow::connectSignalSlots() {
         ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
     connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
+    // text search controls
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() { textSearchTimer->start(DEBOUNCE_DELAY); });
     connect(textSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
+    // tag list controls
     connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->generalTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
     connect(ui->characterTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
@@ -122,11 +130,14 @@ void MainWindow::connectSignalSlots() {
     connect(tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
     connect(tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
+    // tag search box
     connect(ui->searchTagTextEdit, &QLineEdit::textChanged, this, &MainWindow::tagSearch);
 
+    // scroll area scrollbar
     connect(
         ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::handlescrollBarValueChange);
 
+    // menu actions
     connect(ui->addNewPicsAction, &QAction::triggered, this, &MainWindow::handleAddNewPicsAction);
     connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
     connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
@@ -141,7 +152,7 @@ void MainWindow::loadTags() {
 }
 void MainWindow::displayTags(const std::vector<std::tuple<std::string, int, bool>>& availableTags,
                              const std::vector<std::pair<std::string, int>>& availablePixivTags,
-                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) { // display all tags
+                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) {
     ui->generalTagList->clear();
     ui->characterTagList->clear();
     ui->pixivTagList->clear();
@@ -230,6 +241,14 @@ void MainWindow::updateShowUnknowRestrict(bool checked) {
 }
 void MainWindow::updateShowAllAge(bool checked) {
     showAllAge = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowSensitive(bool checked) {
+    showSensitive = checked;
+    refreshPicDisplay();
+}
+void MainWindow::updateShowQuestionable(bool checked) {
+    showQuestionable = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowR18(bool checked) {
@@ -654,10 +673,10 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (!showPNG && pic.fileType == ImageFormat::PNG) return false;
     if (!showGIF && pic.fileType == ImageFormat::GIF) return false;
     if (!showWEBP && pic.fileType == ImageFormat::WebP) return false;
-    if (!showUnknowRestrict && pic.xRestrict == XRestrictType::Unknown) return false;
-    if (!showAllAge && pic.xRestrict == XRestrictType::AllAges) return false;
-    if (!showR18 && pic.xRestrict == XRestrictType::R18) return false;
-    if (!showR18g && pic.xRestrict == XRestrictType::R18G) return false;
+    if (!showUnknowRestrict && pic.xRestrict == RestrictType::Unknown) return false;
+    if (!showAllAge && pic.xRestrict == RestrictType::AllAges) return false;
+    if (!showR18 && pic.xRestrict == RestrictType::R18) return false;
+    if (!showR18g && pic.xRestrict == RestrictType::R18G) return false;
     if (!showUnknowAI && pic.aiType == AIType::Unknown) return false;
     if (!showAI && pic.aiType == AIType::AI) return false;
     if (!showNonAI && pic.aiType == AIType::NotAI) return false;

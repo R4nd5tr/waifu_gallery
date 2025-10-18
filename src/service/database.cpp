@@ -697,7 +697,7 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
         info.height = sqlite3_column_int(stmt, 1);
         info.size = sqlite3_column_int(stmt, 2);
         info.fileType = static_cast<ImageFormat>(sqlite3_column_int(stmt, 3));
-        info.xRestrict = static_cast<XRestrictType>(sqlite3_column_int(stmt, 4));
+        info.xRestrict = static_cast<RestrictType>(sqlite3_column_int(stmt, 4));
     } else {
         return info; // id 不存在，返回空对象
     }
@@ -839,7 +839,7 @@ PixivInfo PicDatabase::getPixivInfo(int64_t pixivID) const {
         info.description = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
         info.likeCount = sqlite3_column_int(stmt, 5);
         info.viewCount = sqlite3_column_int(stmt, 6);
-        info.xRestrict = static_cast<XRestrictType>(sqlite3_column_int(stmt, 7));
+        info.xRestrict = static_cast<RestrictType>(sqlite3_column_int(stmt, 7));
         info.aiType = static_cast<AIType>(sqlite3_column_int(stmt, 8));
     } else {
         sqlite3_finalize(stmt);

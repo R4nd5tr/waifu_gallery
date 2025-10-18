@@ -8,7 +8,14 @@
 #include <unordered_set>
 #include <vector>
 
-enum class XRestrictType { Unknown, AllAges, R18, R18G };
+enum class RestrictType { // keep in sync with autotagger module
+    Unknown,
+    AllAges, // rating: General
+    Sensitive,
+    Questionable,
+    R18, // rating: Explicit
+    R18G
+};
 enum class AIType { Unknown, NotAI, AI };
 enum class ImageFormat { Unknown, JPG, PNG, GIF, WebP };
 
@@ -45,7 +52,7 @@ struct PixivInfo { // represents one pixiv illustration
     std::string description;
     uint32_t likeCount = 0;
     uint32_t viewCount = 0;
-    XRestrictType xRestrict = XRestrictType::Unknown;
+    RestrictType xRestrict = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
     std::vector<PicInfo> pics;
 };
@@ -62,7 +69,7 @@ struct PicInfo {                                         // represents one image
     uint32_t height;
     uint32_t size;
     ImageFormat fileType = ImageFormat::Unknown;
-    XRestrictType xRestrict = XRestrictType::Unknown;
+    RestrictType xRestrict = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 
     float getRatio() const;

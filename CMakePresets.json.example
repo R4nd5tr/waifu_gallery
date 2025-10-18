@@ -6,7 +6,19 @@
     },
     "configurePresets": [
         {
-            "name": "default",
+            "name": "msvc",
+            "displayName": "MSVC with Qt",
+            "binaryDir": "${sourceDir}/build/msvc",
+            "cacheVariables": {
+                "CMAKE_PREFIX_PATH": "<your-qt-path>/msvc2022_64",
+                "CMAKE_TOOLCHAIN_FILE": "<your-vcpkg-path>/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
+                "BUILD_TEST_TARGET": "OFF"
+            }
+        },
+        {
+            "name": "mingw",
             "displayName": "MinGW with Qt",
             "generator": "MinGW Makefiles",
             "binaryDir": "${sourceDir}/build/mingw",
@@ -14,19 +26,25 @@
                 "PATH": "<your-mingw-path>;%PATH%"
             },
             "cacheVariables": {
-                "CMAKE_PREFIX_PATH": "<your-qt-path>",
+                "CMAKE_PREFIX_PATH": "<your-qt-path>/mingw_64",
                 "CMAKE_TOOLCHAIN_FILE": "<your-vcpkg-path>/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
                 "CMAKE_MAKE_PROGRAM": "<your-mingw-path>/mingw32-make.exe",
-                "CMAKE_CXX_COMPILER": "<your-mingw-path>/g++.exe"
+                "CMAKE_CXX_COMPILER": "<your-mingw-path>/g++.exe",
+                "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/mingw",
                 "BUILD_TEST_TARGET": "OFF"
             }
         }
     ],
     "buildPresets": [
         {
+            "name": "msvc-build",
+            "configurePreset": "msvc",
+            "jobs": 16
+        },
+        {
             "name": "mingw-build",
-            "configurePreset": "default",
+            "configurePreset": "mingw",
             "jobs": 4
         }
     ]

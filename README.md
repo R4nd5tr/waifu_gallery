@@ -61,7 +61,7 @@ Waifu Gallery 是基于 Qt6 开发的桌面应用程序，专门为管理二次�
 
 ### 环境要求
 
-- 编译器：mingw-w64
+- MSVC 编译器（MinGW 也支持，但推荐使用 MSVC）
 - Qt6 框架
 - vcpkg 包管理器
 - CMake 构建工具
@@ -79,12 +79,12 @@ cd waifu_gallery
 
 然后在项目根目录下运行以下命令：
 ```bash
-cmake --preset=default
-cmake --build --preset=mingw-build
+cmake --preset=msvc
+cmake --build --preset=msvc-build
 ```
 编译结果将在`/bin`目录下。
 
-如果你遇到了打开程序直接闪退的问题，可能是缺少某些DLL文件，需要使用`windeployqt`工具复制Qt依赖，如果仍然有问题，请检查是否缺少vcpkg下载的DLL文件，在`build/mingw/vcpkg_installed/x64-mingw-dynamic/bin`文件夹中可以找到这些DLL文件。
+如果你遇到了打开程序直接闪退的问题，可能是缺少某些DLL文件，需要使用`windeployqt`工具复制Qt依赖，如果仍然有问题，请检查是否缺少vcpkg下载的DLL文件，在`build/msvc/vcpkg_installed/x64-windows/bin`目录中可以找到这些DLL文件。
 
 使用Qt6的`windeployqt`工具将必要的Qt库复制到输出目录：
 ```bash

@@ -27,7 +27,7 @@ std::vector<uint8_t> readFileToBuffer(const std::filesystem::path& imagePath);
 uint64_t calcFileHash(const std::vector<uint8_t>& buffer);
 std::vector<std::string> splitAndTrim(const std::string& str);
 std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, ImageFormat fileType);
-XRestrictType toXRestrictTypeEnum(const std::string& xRestrictStr);
+RestrictType toXRestrictTypeEnum(const std::string& xRestrictStr);
 AIType toAITypeEnum(const std::string& aiTypeStr);
 
 PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
@@ -141,7 +141,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
         std::cerr << "Failed to open file: " << pixivCsvFilePath << std::endl;
         return result;
     }
-    rapidcsv::Document doc(file, rapidcsv::LabelParams(0, -1), rapidcsv::SeparatorParams(',', '"', false));
+    rapidcsv::Document doc(file, rapidcsv::LabelParams(0, -1));
     size_t rowCount = doc.GetRowCount();
 
     auto colNames = doc.GetColumnNames();
@@ -184,7 +184,7 @@ std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFile
         info.authorID = std::stoul(obj.value("userId", ""));
         info.likeCount = obj.value("likeCount", 0);
         info.viewCount = obj.value("viewCount", 0);
-        info.xRestrict = static_cast<XRestrictType>(obj.value("xRestrict", 0) + 1);
+        info.xRestrict = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
         info.aiType = static_cast<AIType>(obj.value("aiType", 0));
         info.date = obj.value("date", "");
 
@@ -259,15 +259,15 @@ std::vector<std::string> splitAndTrim(const std::string& str) {
     }
     return result;
 }
-XRestrictType toXRestrictTypeEnum(const std::string& xRestrictStr) {
+RestrictType toXRestrictTypeEnum(const std::string& xRestrictStr) {
     if (xRestrictStr == "AllAges") {
-        return XRestrictType::AllAges;
+        return RestrictType::AllAges;
     } else if (xRestrictStr == "R-18") {
-        return XRestrictType::R18;
+        return RestrictType::R18;
     } else if (xRestrictStr == "R-18G") {
-        return XRestrictType::R18G;
+        return RestrictType::R18G;
     }
-    return XRestrictType::Unknown;
+    return RestrictType::Unknown;
 }
 AIType toAITypeEnum(const std::string& aiTypeStr) {
     if (aiTypeStr == "No") {

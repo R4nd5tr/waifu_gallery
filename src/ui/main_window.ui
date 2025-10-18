@@ -31,7 +31,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="tagSelector">
        <property name="geometry">
@@ -191,8 +191,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>278</width>
-         <height>561</height>
+         <width>280</width>
+         <height>721</height>
         </rect>
        </property>
        <attribute name="label">
@@ -254,6 +254,24 @@
                </property>
                <property name="checked">
                 <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="sensitiveCheckBox">
+               <property name="text">
+                <string>敏感</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_17">
+             <item>
+              <widget class="QCheckBox" name="questionableCheckBox">
+               <property name="text">
+                <string>限制</string>
                </property>
               </widget>
              </item>

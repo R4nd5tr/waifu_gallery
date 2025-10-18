@@ -30,9 +30,6 @@ set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src)
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configure CMake before build
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
 
-# output directory
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-
 # target
 add_executable(waifu_gallery ${SRC_FILES} ${UI_FILES})
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
