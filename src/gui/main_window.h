@@ -24,7 +24,7 @@ enum class SortOrder { Ascending, Descending };
 enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
 const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 50;     // number of pictures to load each time
+const size_t LOAD_PIC_BATCH = 15;     // number of pictures to load each time
 const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
 const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
 const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
@@ -69,7 +69,7 @@ protected:
 private:
     // initialize
     Ui::MainWindow* ui;
-    PicDatabase database;
+    PicDatabase database;                          // Normal mode by default, for tag loading and user changes
     ImageLoadThreadPool imageLoadThreadPool{this}; // Blazing fast!!!
     QThread* searchWorkerThread = nullptr;
     QThread* importFilesWorkerThread = nullptr;

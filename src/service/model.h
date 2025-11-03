@@ -72,5 +72,10 @@ struct PicInfo {                                         // represents one image
     RestrictType xRestrict = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 
-    float getRatio() const;
+    float getRatio() const {
+        if (height > 0) {
+            return static_cast<float>(width) / static_cast<float>(height);
+        }
+        return 0.0f;
+    };
 };

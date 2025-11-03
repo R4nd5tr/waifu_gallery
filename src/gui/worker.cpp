@@ -3,8 +3,7 @@
 #include "../utils/utils.h"
 #include <QImageReader>
 
-DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent) { // search worker
-    database.setMode(DbMode::Query);
+DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent), database{DbMode::Query} { // search worker
 }
 DatabaseWorker::~DatabaseWorker() {}
 void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedTags,

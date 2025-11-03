@@ -675,6 +675,8 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (!showWEBP && pic.fileType == ImageFormat::WebP) return false;
     if (!showUnknowRestrict && pic.xRestrict == RestrictType::Unknown) return false;
     if (!showAllAge && pic.xRestrict == RestrictType::AllAges) return false;
+    if (!showSensitive && pic.xRestrict == RestrictType::Sensitive) return false;
+    if (!showQuestionable && pic.xRestrict == RestrictType::Questionable) return false;
     if (!showR18 && pic.xRestrict == RestrictType::R18) return false;
     if (!showR18g && pic.xRestrict == RestrictType::R18G) return false;
     if (!showUnknowAI && pic.aiType == AIType::Unknown) return false;

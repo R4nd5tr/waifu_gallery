@@ -31,10 +31,14 @@ enum class SearchField {
     TweetAuthorNick
 };
 
-enum class DbMode { Normal, Import, Query };
+const std::string DEFAULT_DATABASE_FILE = "database.db";
+
+enum class DbMode { None, Normal, Import, Query };
+
 class PicDatabase {
 public:
-    PicDatabase(const std::string& databaseFile = "database.db", DbMode mode = DbMode::Normal);
+    PicDatabase(const std::string& databaseFile = DEFAULT_DATABASE_FILE, DbMode mode = DbMode::Normal);
+    explicit PicDatabase(DbMode mode) : PicDatabase(DEFAULT_DATABASE_FILE, mode) {}
     ~PicDatabase();
 
     void enableForeignKeyRestriction() const;
@@ -44,25 +48,26 @@ public:
     bool rollbackTransaction();
     void setMode(DbMode mode) {
         if (currentMode == mode) return;
+        execute("PRAGMA journal_mode = WAL");
         switch (mode) {
-        case DbMode::Normal:
+        case DbMode::Normal: // use for ui thread
             execute("PRAGMA cache_size = -32000");
             execute("PRAGMA synchronous = NORMAL");
             execute("PRAGMA foreign_keys = ON");
             break;
 
-        case DbMode::Import:
+        case DbMode::Import: // use for batch import
             execute("PRAGMA cache_size = -128000");
-            execute("PRAGMA journal_mode = WAL");
             execute("PRAGMA temp_store = memory");
             execute("PRAGMA foreign_keys = OFF");
             execute("PRAGMA synchronous = NORMAL");
             break;
 
-        case DbMode::Query:
+        case DbMode::Query: // use for read-only query
             execute("PRAGMA cache_size = -64000");
             execute("PRAGMA mmap_size = 268435456");
             execute("PRAGMA foreign_keys = ON");
+            execute("PRAGMA query_only = ON");
             break;
         }
         currentMode = mode;
@@ -114,7 +119,7 @@ public:
     void syncTables(std::unordered_set<int64_t> newPixivIDs = {}); // TODO: Incremental update?
 
 private:
-    DbMode currentMode = DbMode::Normal;
+    DbMode currentMode = DbMode::None;
     sqlite3* db = nullptr;
     std::unordered_map<std::string, int> tagToId;
     std::unordered_map<std::string, int> twitterHashtagToId;
@@ -149,12 +154,12 @@ private:
     }
 };
 
-class MultiThreadedImporter { // TODO: use this in gui
+class MultiThreadedImporter {
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,
                           ParserType parserType = ParserType::None,
-                          std::string dbFile = "database.db",
+                          std::string dbFile = DEFAULT_DATABASE_FILE,
                           size_t threadCount = std::thread::hardware_concurrency());
     ~MultiThreadedImporter();
 

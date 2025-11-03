@@ -31,16 +31,13 @@ PicDatabase::~PicDatabase() {
     }
 }
 void PicDatabase::initDatabase(const std::string& databaseFile) {
-    bool databaseExists = std::filesystem::exists(databaseFile);
     if (sqlite3_open(databaseFile.c_str(), &db) != SQLITE_OK) {
         Error() << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
         return;
     }
-    if (!databaseExists) {
-        if (!createTables()) {
-            Error() << "Failed to create tables";
-            return;
-        }
+    if (!createTables()) {
+        Error() << "Failed to create tables";
+        return;
     }
     Info() << "Database initialized";
 }
