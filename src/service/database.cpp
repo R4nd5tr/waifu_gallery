@@ -49,14 +49,18 @@ bool PicDatabase::createTables() {
             height INTEGER,
             size INTEGER,
             file_type INTEGER,
+            edit_time TEXT DEFAULT NULL,
+            download_time TEXT DEFAULT NULL,
             x_restrict INTEGER DEFAULT NULL,
-            ai_type INTEGER DEFAULT NULL
+            ai_type INTEGER DEFAULT NULL,
+            phash TEXT DEFAULT NULL
         )
     )"; // TODO: add feature vector from deep learning models
     const std::string pictureTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
             tag_id INTEGER NOT NULL,
+            probability REAL DEFAULT 1.0,
             PRIMARY KEY (id, tag_id),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
@@ -95,7 +99,7 @@ bool PicDatabase::createTables() {
     )";
     const std::string tagsTable = R"(
         CREATE TABLE IF NOT EXISTS tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             tag TEXT NOT NULL UNIQUE,
             is_character BOOLEAN,
             count INTEGER DEFAULT 0
@@ -132,7 +136,7 @@ bool PicDatabase::createTables() {
     )";
     const std::string twitterHashtagsTable = R"(
         CREATE TABLE IF NOT EXISTS twitter_hashtags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             hashtag TEXT NOT NULL UNIQUE,
             count INTEGER DEFAULT 0
         )
@@ -163,7 +167,7 @@ bool PicDatabase::createTables() {
     )";
     const std::string pixivTagsTable = R"(
         CREATE TABLE IF NOT EXISTS pixiv_tags (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             tag TEXT NOT NULL UNIQUE,
             translated_tag TEXT,
             count INTEGER DEFAULT 0
@@ -302,9 +306,9 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     sqlite3_stmt* stmt = nullptr;
     stmt = prepare(R"(
         INSERT OR IGNORE INTO pictures(
-            id, width, height, size, file_type, x_restrict
+            id, width, height, size, file_type, x_restrict, edit_time, download_time
         ) VALUES (
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?
         )
     )");
     sqlite3_bind_int64(stmt, 1, uint64_to_int64(picInfo.id));
@@ -313,6 +317,8 @@ bool PicDatabase::insertPicture(const PicInfo& picInfo) {
     sqlite3_bind_int64(stmt, 4, picInfo.size);
     sqlite3_bind_int(stmt, 5, static_cast<int>(picInfo.fileType));
     sqlite3_bind_int(stmt, 6, static_cast<int>(picInfo.xRestrict));
+    sqlite3_bind_text(stmt, 7, picInfo.editTime.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 8, picInfo.downloadTime.c_str(), -1, SQLITE_STATIC);
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         Error() << "Failed to insert picture: " << sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
@@ -342,29 +348,15 @@ bool PicDatabase::insertPictureFilePath(const PicInfo& picInfo) {
 }
 bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
     sqlite3_stmt* stmt = nullptr;
-    for (const auto& [tag, isCharacter] : picInfo.tags) {
-        if (tagToId.find(tag) == tagToId.end()) {
-            stmt = prepare(R"(
-                INSERT OR IGNORE INTO tags(tag, count) VALUES (?, 0)
-            )");
-            sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_STATIC);
-            if (sqlite3_step(stmt) != SQLITE_DONE) {
-                Error() << "Failed to insert tag: " << sqlite3_errmsg(db);
-                sqlite3_finalize(stmt);
-                return false;
-            }
-            int newId = static_cast<int>(sqlite3_last_insert_rowid(db));
-            tagToId[tag] = newId;
-            idToTag[newId] = tag;
-            sqlite3_finalize(stmt);
-        }
+    for (const auto& picTag : picInfo.tags) {
         stmt = prepare(R"(
             INSERT OR IGNORE INTO picture_tags(
-                id, tag_id
-            ) VALUES (?, ?)
+                id, tag_id, probability
+            ) VALUES (?, ?, ?)
         )");
         sqlite3_bind_int64(stmt, 1, uint64_to_int64(picInfo.id));
-        sqlite3_bind_int(stmt, 2, tagToId[tag]);
+        sqlite3_bind_int(stmt, 2, tagToId[picTag.tag]);
+        sqlite3_bind_double(stmt, 3, picTag.probability);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             Error() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
             sqlite3_finalize(stmt);
@@ -372,6 +364,24 @@ bool PicDatabase::insertPictureTags(const PicInfo& picInfo) {
         }
         sqlite3_finalize(stmt);
     }
+    return true;
+}
+bool PicDatabase::insertPictureTags(uint64_t id, int tagId, float probability) {
+    sqlite3_stmt* stmt = nullptr;
+    stmt = prepare(R"(
+        INSERT OR IGNORE INTO picture_tags(
+            id, tag_id, probability
+        ) VALUES (?, ?, ?)
+    )");
+    sqlite3_bind_int64(stmt, 1, uint64_to_int64(id));
+    sqlite3_bind_int(stmt, 2, tagId);
+    sqlite3_bind_double(stmt, 3, probability);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        Error() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    sqlite3_finalize(stmt);
     return true;
 }
 bool PicDatabase::insertPicturePixivId(const PicInfo& picInfo) {
@@ -686,7 +696,8 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
     sqlite3_stmt* stmt = nullptr;
 
     // 查询主表
-    stmt = prepare("SELECT width, height, size, file_type, x_restrict FROM pictures WHERE id = ?");
+    stmt = prepare(
+        "SELECT width, height, size, file_type, x_restrict, ai_type, edit_time, download_time, phash FROM pictures WHERE id = ?");
     sqlite3_bind_int64(stmt, 1, uint64_to_int64(id));
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         info.id = id;
@@ -695,6 +706,11 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
         info.size = sqlite3_column_int(stmt, 2);
         info.fileType = static_cast<ImageFormat>(sqlite3_column_int(stmt, 3));
         info.xRestrict = static_cast<RestrictType>(sqlite3_column_int(stmt, 4));
+        info.aiType = static_cast<AIType>(sqlite3_column_int(stmt, 5));
+        info.editTime = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
+        info.downloadTime = std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7)));
+        const char* phashText = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
+        info.phash = std::string(phashText ? phashText : "");
     } else {
         return info; // id 不存在，返回空对象
     }
@@ -710,14 +726,18 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
 
     // 查询标签
     stmt = prepare(R"(
-        SELECT t.tag, t.is_character
+        SELECT t.tag, t.is_character, pt.probability
         FROM picture_tags pt
         JOIN tags t ON pt.tag_id = t.id
         WHERE pt.id = ?
     )");
     sqlite3_bind_int64(stmt, 1, uint64_to_int64(id));
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        info.tags[reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0))] = sqlite3_column_int(stmt, 1);
+        PicTag picTag;
+        picTag.tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        picTag.isCharacter = sqlite3_column_int(stmt, 1) != 0;
+        picTag.probability = static_cast<float>(sqlite3_column_double(stmt, 2));
+        info.tags.push_back(picTag);
     }
     sqlite3_finalize(stmt);
 
@@ -770,6 +790,31 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) c
     }
 
     return info;
+}
+// 查询没有任何Pixiv 关联和 Tweet 关联的图片和有关联但对应的 Pixiv 或 Tweet 信息缺失的图片
+std::vector<PicInfo> PicDatabase::getNoMetadataPics() const {
+    std::vector<PicInfo> pics;
+    sqlite3_stmt* stmt = nullptr;
+
+    stmt = prepare(R"(
+        SELECT p.id
+        FROM pictures p
+        LEFT JOIN picture_pixiv_ids ppi ON p.id = ppi.id
+        LEFT JOIN picture_tweet_ids pti ON p.id = pti.id
+        LEFT JOIN pixiv_artworks pa ON ppi.pixiv_id = pa.pixiv_id
+        LEFT JOIN tweets t ON pti.tweet_id = t.tweet_id
+        WHERE 
+            (ppi.id IS NULL AND pti.id IS NULL)
+            OR (ppi.id IS NOT NULL AND pa.pixiv_id IS NULL)
+            OR (pti.id IS NOT NULL AND t.tweet_id IS NULL)
+    )");
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        uint64_t picID = static_cast<uint64_t>(sqlite3_column_int64(stmt, 0));
+        PicInfo picInfo = getPicInfo(picID);
+        pics.push_back(picInfo);
+    }
+    sqlite3_finalize(stmt);
+    return pics;
 }
 TweetInfo PicDatabase::getTweetInfo(int64_t tweetID) const {
     TweetInfo info{};
@@ -970,6 +1015,23 @@ void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-
         }
     }
     execute("PRAGMA foreign_keys = ON");
+    sqlite3_finalize(stmt);
+}
+void PicDatabase::importTagSet(const std::vector<std::pair<std::string, bool>>& tagSet) {
+    sqlite3_stmt* stmt = nullptr;
+    for (int tagId = 0; tagId < tagSet.size(); tagId++) {
+        stmt = prepare(R"(
+            INSERT INTO tags(id, tag, is_character) VALUES (?, ?, ?)
+        )");
+        const auto& [tag, isCharacter] = tagSet[tagId];
+        sqlite3_bind_int(stmt, 1, tagId);
+        sqlite3_bind_text(stmt, 2, tag.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int(stmt, 3, isCharacter ? 1 : 0);
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            Error() << "Failed to insert tag: " << sqlite3_errmsg(db);
+            continue;
+        }
+    }
     sqlite3_finalize(stmt);
 }
 std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::string>& includedTags,
@@ -1327,7 +1389,7 @@ void MultiThreadedImporter::forceStop() {
 }
 bool MultiThreadedImporter::finish() {
     if (finished) return true;
-    if (nextFileIndex.load() < files.size() && !stopFlag.load()) {
+    if (importedCount < supportedFileCount.load(std::memory_order_relaxed) && !stopFlag.load()) {
         return false; // 还有文件未处理完
     }
     for (auto& worker : workers) {
@@ -1484,7 +1546,6 @@ void MultiThreadedImporter::insertThreadFunc() {
     tweetsToInsert.reserve(2000);
     std::vector<std::vector<PixivInfo>> pixivVecsToInsert;
     pixivVecsToInsert.reserve(1000);
-    size_t importedCount = 0;
     while (!stopFlag.load() || importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
         if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
         std::unique_lock<std::mutex> lock(conditionMutex);

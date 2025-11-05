@@ -17,14 +17,14 @@ namespace Ui {
 class MainWindow;
 }
 
-enum class SortBy { None, ID, Date, Size };
+enum class SortBy { None, ID, DownloadDate, EditDate, Size };
 
 enum class SortOrder { Ascending, Descending };
 
 enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
 
 const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 15;     // number of pictures to load each time
+const size_t LOAD_PIC_BATCH = 50;     // number of pictures to load each time
 const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
 const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
 const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
@@ -72,7 +72,6 @@ private:
     PicDatabase database;                          // Normal mode by default, for tag loading and user changes
     ImageLoadThreadPool imageLoadThreadPool{this}; // Blazing fast!!!
     QThread* searchWorkerThread = nullptr;
-    QThread* importFilesWorkerThread = nullptr;
     MultiThreadedImporter* importer = nullptr; // only one importer at a time, Blazing fast!!!
     void initInterface();
     void fillComboBox();
@@ -91,7 +90,7 @@ private:
     bool showJPG = true;
     bool showGIF = true;
     bool showWEBP = true;
-    bool showUnknowRestrict = false;
+    bool showUnknowRestrict = true;
     bool showAllAge = true;
     bool showSensitive = false;
     bool showQuestionable = false;
@@ -105,7 +104,7 @@ private:
     uint maxWidth = std::numeric_limits<uint>::max();
     uint minWidth = 0;
     SortBy sortBy = SortBy::None;
-    SortOrder sortOrder = SortOrder::Descending;
+    SortOrder sortOrder = SortOrder::Ascending;
     int ratioSliderValue;
     double widthRatioSpinBoxValue;
     double heightRatioSpinBoxValue;

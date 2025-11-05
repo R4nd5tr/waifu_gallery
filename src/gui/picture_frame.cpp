@@ -16,6 +16,11 @@ QString getFileTypeStr(ImageFormat fileType) {
     }
 }
 
+// TODO: click resolution label to open image in default viewer,
+//       click file type and size label to open file location
+//       click illustrator label to open illustrator's pixiv page
+//       click id label to open image's pixiv/tweet page
+
 PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
     : QFrame(parent), ui(new Ui::PictureFrame) {
     ui->setupUi(this);
@@ -80,21 +85,26 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::TweetAuthorNick:
         if (picinfo.tweetInfo.size() > 0) {
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
             ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
+            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
         }
         break;
     default:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
             ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-        }
-        if (picinfo.tweetInfo.size() > 0) {
+            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
+        } else if (picinfo.tweetInfo.size() > 0) {
+            ui->titleLabel->show();
+            QString description = QString::fromStdString(picinfo.tweetInfo[0].description).split('\n').first();
+            const int maxLength = 20;
+            if (description.length() > maxLength) {
+                description = description.left(maxLength) + "...";
+            }
+            ui->titleLabel->setText(description);
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
             ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-        } else if (picinfo.pixivInfo.size() > 0) {
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
         }
         break;
     }

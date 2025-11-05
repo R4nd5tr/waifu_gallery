@@ -75,6 +75,7 @@ public:
 
     // getters  TODO: batch get and merge SQL queries
     PicInfo getPicInfo(uint64_t id, int64_t tweetID = 0, int64_t pixivID = 0) const;
+    std::vector<PicInfo> getNoMetadataPics() const;
     TweetInfo getTweetInfo(int64_t tweetID) const;
     PixivInfo getPixivInfo(int64_t pixivID) const;
     std::vector<std::tuple<std::string, int, bool>> getTags() const; // (tag, count, isCharacter)
@@ -85,6 +86,7 @@ public:
     bool insertPicture(const PicInfo& picInfo);
     bool insertPictureFilePath(const PicInfo& picInfo);
     bool insertPictureTags(const PicInfo& picInfo);
+    bool insertPictureTags(uint64_t id, int tagId, float probability);
     bool insertPicturePixivId(const PicInfo& picInfo);
     bool insertPictureTweetId(const PicInfo& picInfo);
     // insert tweet
@@ -114,9 +116,10 @@ public:
                                   ParserType parserType = ParserType::None,
                                   ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-
     // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
     void syncTables(std::unordered_set<int64_t> newPixivIDs = {}); // TODO: Incremental update?
+
+    void importTagSet(const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter), index is tag ID
 
 private:
     DbMode currentMode = DbMode::None;
@@ -176,6 +179,7 @@ private:
     std::vector<std::thread> workers;
     std::vector<std::filesystem::path> files;
     std::atomic<size_t> nextFileIndex = 0;
+    size_t importedCount = 0;
     std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping
                                                 // when some unsupported files are in the directory
     // single insert thread
@@ -195,3 +199,21 @@ private:
     void workerThreadFunc();
     void insertThreadFunc();
 };
+
+// class DatabaseAutoTagger {
+// public:
+//     DatabaseAutoTagger(const std::string& databaseFile = DEFAULT_DATABASE_FILE);
+//     ~DatabaseAutoTagger();
+
+// private:
+//     std::vector<std::pair<uint64_t, std::filesystem::path>> picFilesForTagging; // (picID, filePath)
+//     std::atomic<size_t> nextIndex = 0;
+//     std::vector<std::thread> preprocessWorkers;
+//     std::queue<std::pair<uint64_t, std::vector<float>>> preprocessedPic; // (picID, imageData)
+//     std::mutex preprocessedMutex;
+//     std::condition_variable preprocessedCv;
+//     std::thread analyzeThread;
+//     std::atomic<bool> stopFlag = false;
+//     void preprocessWorkerFunc();
+//     void analyzeThreadFunc();
+// };

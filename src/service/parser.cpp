@@ -12,6 +12,7 @@
 #include <stb_image.h>
 #include <vector>
 #include <webp/decode.h>
+#include <windows.h>
 #include <xxhash.h>
 
 static const std::unordered_map<std::string, ImageFormat> fileTypeMap = {
@@ -29,6 +30,7 @@ std::vector<std::string> splitAndTrim(const std::string& str);
 std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, ImageFormat fileType);
 RestrictType toXRestrictTypeEnum(const std::string& xRestrictStr);
 AIType toAITypeEnum(const std::string& aiTypeStr);
+std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::path& filePath);
 
 PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
     std::vector<uint8_t> buffer = readFileToBuffer(pictureFilePath);
@@ -41,6 +43,12 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
     int width, height;
     std::tie(width, height, fileType) = getImageResolutionOptimized(buffer, fileType);
 
+    std::string creationTime, lastModifiedTime;
+    std::tie(creationTime, lastModifiedTime) = getFileTimestamps(pictureFilePath);
+    if (creationTime == lastModifiedTime) {
+        lastModifiedTime = "";
+    }
+
     PicInfo picInfo;
     picInfo.id = calcFileHash(buffer);
     picInfo.filePaths.insert(pictureFilePath);
@@ -48,6 +56,8 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
     picInfo.height = height;
     picInfo.size = static_cast<uint32_t>(buffer.size());
     picInfo.fileType = fileType;
+    picInfo.editTime = lastModifiedTime;
+    picInfo.downloadTime = creationTime;
     if (parserType == ParserType::Pixiv) {
         if (fileName.find("_p") == std::string::npos) {
             std::string stem = pictureFilePath.stem().string();
@@ -215,6 +225,8 @@ TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath) {
 
     info.tweetID = json.value("tweet_id", 0LL);
     info.date = json.value("date", "");
+    info.date[10] = 'T'; // ensure ISO 8601 format
+    info.date += "Z";
     info.description = json.value("content", "");
     info.favoriteCount = json.value("favorite_count", 0);
     info.quoteCount = json.value("quote_count", 0);
@@ -484,4 +496,37 @@ std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<
 
     // 回退到完整解码
     return getImageResolution(buffer, fileType);
+}
+// get {file creation time, last modified time} in ISO 8601 format from windows API
+std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::path& filePath) {
+    WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+    if (!GetFileAttributesExW(filePath.wstring().c_str(), GetFileExInfoStandard, &fileInfo)) {
+        return {"", ""};
+    }
+    FILETIME ftCreate = fileInfo.ftCreationTime;
+    FILETIME ftWrite = fileInfo.ftLastWriteTime;
+    SYSTEMTIME stUTC;
+    FileTimeToSystemTime(&ftCreate, &stUTC);
+    char createTimeStr[20];
+    snprintf(createTimeStr,
+             sizeof(createTimeStr),
+             "%04d-%02d-%02dT%02d:%02d:%02dZ",
+             stUTC.wYear,
+             stUTC.wMonth,
+             stUTC.wDay,
+             stUTC.wHour,
+             stUTC.wMinute,
+             stUTC.wSecond);
+    FileTimeToSystemTime(&ftWrite, &stUTC);
+    char writeTimeStr[20];
+    snprintf(writeTimeStr,
+             sizeof(writeTimeStr),
+             "%04d-%02d-%02dT%02d:%02d:%02dZ",
+             stUTC.wYear,
+             stUTC.wMonth,
+             stUTC.wDay,
+             stUTC.wHour,
+             stUTC.wMinute,
+             stUTC.wSecond);
+    return {std::string(createTimeStr), std::string(writeTimeStr)};
 }

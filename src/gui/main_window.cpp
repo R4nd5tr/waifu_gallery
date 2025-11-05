@@ -14,14 +14,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     connectSignalSlots();
     loadTags();
     displayTags();
-    handleWindowSizeChange();
 }
 MainWindow::~MainWindow() {
     delete ui;
     searchWorkerThread->quit();
     searchWorkerThread->wait();
-    importFilesWorkerThread->quit();
-    importFilesWorkerThread->wait();
 }
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
@@ -42,7 +39,8 @@ void MainWindow::fillComboBox() {
 
     ui->sortComboBox->addItem("无");
     ui->sortComboBox->addItem("图片ID");
-    ui->sortComboBox->addItem("日期");
+    ui->sortComboBox->addItem("下载日期");
+    ui->sortComboBox->addItem("编辑日期");
     ui->sortComboBox->addItem("大小");
     ui->sortComboBox->setCurrentIndex(0);
 
@@ -410,6 +408,18 @@ void MainWindow::sortPics() {
                 return (a.size) < (b.size);
             } else {
                 return (a.size) > (b.size);
+            }
+        case SortBy::DownloadDate:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.downloadTime < b.downloadTime;
+            } else {
+                return a.downloadTime > b.downloadTime;
+            }
+        case SortBy::EditDate:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.editTime < b.editTime;
+            } else {
+                return a.editTime > b.editTime;
             }
         default:
             return false;

@@ -21,6 +21,12 @@ enum class ImageFormat { Unknown, JPG, PNG, GIF, WebP };
 
 struct PicInfo;
 
+struct PicTag {
+    std::string tag;
+    bool isCharacter;
+    float probability; // confidence score for the tag
+};
+
 struct TweetInfo { // represents one tweet
     int64_t tweetID = 0;
     std::string date;
@@ -54,21 +60,24 @@ struct PixivInfo { // represents one pixiv illustration
     uint32_t viewCount = 0;
     RestrictType xRestrict = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
-    std::vector<PicInfo> pics;
+    std::vector<PicInfo> pics; // optional information about pictures in this artwork
 };
 
-struct PicInfo {                                         // represents one image file
-    uint64_t id = 0;                                     // xxhash64
-    std::unordered_map<int64_t, int> tweetIdIndices;     //(tweetID, index)
-    std::unordered_map<int64_t, int> pixivIdIndices;     //(pixivID, index)
-    std::unordered_map<std::string, bool> tags;          // tag -> isCharacter
-    std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
-    std::vector<TweetInfo> tweetInfo;
-    std::vector<PixivInfo> pixivInfo;
+struct PicInfo {     // represents one image file
+    uint64_t id = 0; // xxhash64
     uint32_t width;
     uint32_t height;
     uint32_t size;
     ImageFormat fileType = ImageFormat::Unknown;
+    std::string editTime;                            // last modified time of the file
+    std::string downloadTime;                        // ISO 8601 format time
+    std::string phash;                               // perceptual hash for image similarity search
+    std::unordered_map<int64_t, int> tweetIdIndices; //(tweetID, index)
+    std::unordered_map<int64_t, int> pixivIdIndices; //(pixivID, index)
+    std::vector<PicTag> tags;
+    std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
+    std::vector<TweetInfo> tweetInfo;                    // optional information about tweets containing this picture
+    std::vector<PixivInfo> pixivInfo;                    // optional information about pixiv artworks containing this picture
     RestrictType xRestrict = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 

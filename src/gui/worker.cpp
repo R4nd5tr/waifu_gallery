@@ -103,7 +103,9 @@ void DatabaseWorker::searchPics(const std::unordered_set<std::string>& includedT
     std::unordered_map<std::string, int> pixivTagCount;
     std::unordered_map<std::string, int> tweetTagCount;
     for (const auto& pic : resultPics) {
-        for (const auto& [tag, isCharacter] : pic.tags) {
+        for (const auto& picTag : pic.tags) {
+            const std::string& tag = picTag.tag;
+            bool isCharacter = picTag.isCharacter;
             if (includedTags.find(tag) != includedTags.end() || excludedTags.find(tag) != excludedTags.end())
                 continue; // don't count already selected tags
             tagCount[tag]++;
