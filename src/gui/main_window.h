@@ -181,7 +181,7 @@ private:
 
     void tagSearch(const QString& text);
 
-    void handleAddNewPicsAction();                 // TODO: load images after import
+    void handleAddNewPicsAction();
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type
     void handleAddGallery_dlTwitterAction();       // specify parser type
     void displayImportProgress(size_t progress, size_t total);
