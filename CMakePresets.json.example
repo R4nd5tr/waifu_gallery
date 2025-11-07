@@ -6,46 +6,42 @@
     },
     "configurePresets": [
         {
-            "name": "msvc",
-            "displayName": "MSVC with Qt",
+            "name": "msvc-debug",
+            "displayName": "MSVC Debug with Qt",
             "binaryDir": "${sourceDir}/build/msvc",
             "cacheVariables": {
-                "CMAKE_PREFIX_PATH": "<your-qt-path>/msvc2022_64",
-                "CMAKE_TOOLCHAIN_FILE": "<your-vcpkg-path>/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_PREFIX_PATH": "<path-to-Qt>/Qt/6.8.2/msvc2022_64",
+                "CMAKE_TOOLCHAIN_FILE": "<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows",
                 "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
-                "BUILD_TEST_TARGET": "OFF"
+                "BUILD_TEST_TARGET": "ON"
             }
         },
         {
-            "name": "mingw",
-            "displayName": "MinGW with Qt",
-            "generator": "MinGW Makefiles",
-            "binaryDir": "${sourceDir}/build/mingw",
-            "environment": {
-                "PATH": "<your-mingw-path>;%PATH%"
-            },
+            "name": "msvc-release",
+            "displayName": "MSVC Release with Qt",
+            "binaryDir": "${sourceDir}/build/msvc",
             "cacheVariables": {
-                "CMAKE_PREFIX_PATH": "<your-qt-path>/mingw_64",
-                "CMAKE_TOOLCHAIN_FILE": "<your-vcpkg-path>/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
-                "CMAKE_MAKE_PROGRAM": "<your-mingw-path>/mingw32-make.exe",
-                "CMAKE_CXX_COMPILER": "<your-mingw-path>/g++.exe",
-                "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/mingw",
+                "CMAKE_PREFIX_PATH": "<path-to-Qt>/Qt/6.8.2/msvc2022_64",
+                "CMAKE_TOOLCHAIN_FILE": "<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
                 "BUILD_TEST_TARGET": "OFF"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "msvc-build",
-            "configurePreset": "msvc",
+            "name": "msvc-debug-build",
+            "configurePreset": "msvc-debug",
+            "configuration": "Debug",
             "jobs": 16
         },
         {
-            "name": "mingw-build",
-            "configurePreset": "mingw",
-            "jobs": 4
+            "name": "msvc-release-build",
+            "configurePreset": "msvc-release",
+            "configuration": "Release",
+            "jobs": 16
         }
     ]
 }
