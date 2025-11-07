@@ -31,6 +31,16 @@ std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<
 RestrictType toXRestrictTypeEnum(const std::string& xRestrictStr);
 AIType toAITypeEnum(const std::string& aiTypeStr);
 std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::path& filePath);
+static std::string replacePlusZeroWithZ(const std::string& s) {
+    std::string out = s;
+    const std::string target = "+00:00";
+    size_t pos = out.find(target);
+    while (pos != std::string::npos) {
+        out.replace(pos, target.size(), "Z");
+        pos = out.find(target, pos + 1);
+    }
+    return out;
+}
 
 PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
     std::vector<uint8_t> buffer = readFileToBuffer(pictureFilePath);
@@ -45,9 +55,6 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
 
     std::string creationTime, lastModifiedTime;
     std::tie(creationTime, lastModifiedTime) = getFileTimestamps(pictureFilePath);
-    if (creationTime == lastModifiedTime) {
-        lastModifiedTime = "";
-    }
 
     PicInfo picInfo;
     picInfo.id = calcFileHash(buffer);
@@ -59,6 +66,7 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
     picInfo.editTime = lastModifiedTime;
     picInfo.downloadTime = creationTime;
     if (parserType == ParserType::Pixiv) {
+        // extract pixiv ID and index from filename
         if (fileName.find("_p") == std::string::npos) {
             std::string stem = pictureFilePath.stem().string();
             if (std::all_of(stem.begin(), stem.end(), ::isdigit)) {
@@ -73,6 +81,11 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
                 int index = std::stoi(match[2].str());
                 picInfo.pixivIdIndices[pixivId] = index;
             }
+        }
+        // determine xRestrict from file path
+        if (pictureFilePath.string().find("R-18") != std::string::npos ||
+            pictureFilePath.string().find("R18") != std::string::npos) {
+            picInfo.xRestrict = RestrictType::R18;
         }
     }
     if (parserType == ParserType::Twitter) {
@@ -134,7 +147,7 @@ PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath)
             }
         } else if (line == "Date") {
             std::getline(file, line);
-            info.date = line;
+            info.date = replacePlusZeroWithZ(line);
         }
     }
     for (auto& tag : info.tags) {
@@ -172,7 +185,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
             info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
         info.xRestrict = toXRestrictTypeEnum(doc.GetCell<std::string>("xRestrict", i));
         if (hasAI) info.aiType = toAITypeEnum(doc.GetCell<std::string>("AI", i));
-        info.date = doc.GetCell<std::string>("date", i);
+        info.date = replacePlusZeroWithZ(doc.GetCell<std::string>("date", i));
         result.push_back(info);
     }
     return result;
@@ -196,7 +209,7 @@ std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFile
         info.viewCount = obj.value("viewCount", 0);
         info.xRestrict = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
         info.aiType = static_cast<AIType>(obj.value("aiType", 0));
-        info.date = obj.value("date", "");
+        info.date = replacePlusZeroWithZ(obj.value("date", ""));
 
         // tags
         if (obj.contains("tags") && obj["tags"].is_array()) {
@@ -507,7 +520,7 @@ std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::pat
     FILETIME ftWrite = fileInfo.ftLastWriteTime;
     SYSTEMTIME stUTC;
     FileTimeToSystemTime(&ftCreate, &stUTC);
-    char createTimeStr[20];
+    char createTimeStr[21];
     snprintf(createTimeStr,
              sizeof(createTimeStr),
              "%04d-%02d-%02dT%02d:%02d:%02dZ",
@@ -518,7 +531,7 @@ std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::pat
              stUTC.wMinute,
              stUTC.wSecond);
     FileTimeToSystemTime(&ftWrite, &stUTC);
-    char writeTimeStr[20];
+    char writeTimeStr[21];
     snprintf(writeTimeStr,
              sizeof(writeTimeStr),
              "%04d-%02d-%02dT%02d:%02d:%02dZ",

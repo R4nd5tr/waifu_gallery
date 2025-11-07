@@ -14,6 +14,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     connectSignalSlots();
     loadTags();
     displayTags();
+    noMetadataPics = database.getNoMetadataPics();
 }
 MainWindow::~MainWindow() {
     delete ui;
@@ -22,6 +23,7 @@ MainWindow::~MainWindow() {
 }
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
+    ui->progressWidget->hide();
     fillComboBox();
 }
 void MainWindow::fillComboBox() {
@@ -42,6 +44,9 @@ void MainWindow::fillComboBox() {
     ui->sortComboBox->addItem("下载日期");
     ui->sortComboBox->addItem("编辑日期");
     ui->sortComboBox->addItem("大小");
+    ui->sortComboBox->addItem("文件名");
+    ui->sortComboBox->addItem("宽度");
+    ui->sortComboBox->addItem("高度");
     ui->sortComboBox->setCurrentIndex(0);
 
     ui->orderComboBox->addItem("升序");
@@ -55,6 +60,7 @@ void MainWindow::initWorkerThreads() {
     connect(this, &MainWindow::searchPics, searchWorker, &DatabaseWorker::searchPics);
     connect(searchWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
     connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
+    connect(this, &MainWindow::reloadWorkerDatabase, searchWorker, &DatabaseWorker::reloadDatabase);
     searchWorkerThread->start();
 }
 void MainWindow::connectSignalSlots() {
@@ -405,9 +411,9 @@ void MainWindow::sortPics() {
             }
         case SortBy::Size:
             if (sortOrder == SortOrder::Ascending) {
-                return (a.size) < (b.size);
+                return a.size < b.size;
             } else {
-                return (a.size) > (b.size);
+                return a.size > b.size;
             }
         case SortBy::DownloadDate:
             if (sortOrder == SortOrder::Ascending) {
@@ -420,6 +426,24 @@ void MainWindow::sortPics() {
                 return a.editTime < b.editTime;
             } else {
                 return a.editTime > b.editTime;
+            }
+        case SortBy::Filename:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.filePaths.begin()->filename().string() < b.filePaths.begin()->filename().string();
+            } else {
+                return a.filePaths.begin()->filename().string() > b.filePaths.begin()->filename().string();
+            }
+        case SortBy::Width:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.width < b.width;
+            } else {
+                return a.width > b.width;
+            }
+        case SortBy::Height:
+            if (sortOrder == SortOrder::Ascending) {
+                return a.height < b.height;
+            } else {
+                return a.height > b.height;
             }
         default:
             return false;
@@ -523,8 +547,7 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
     selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -535,8 +558,7 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
     selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -547,8 +569,7 @@ void MainWindow::removeIncludedPixivTags(QPushButton* button) {
     selectedPixivTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -559,8 +580,7 @@ void MainWindow::removeExcludedPixivTags(QPushButton* button) {
     selectedPixivTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -571,8 +591,7 @@ void MainWindow::removeIncludedTweetTags(QPushButton* button) {
     selectedTweetTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -583,8 +602,7 @@ void MainWindow::removeExcludedTweetTags(QPushButton* button) {
     selectedTweetTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty()) {
+    if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
@@ -625,6 +643,14 @@ void MainWindow::handleWindowSizeChange() {
         }
     }
 }
+void MainWindow::showEvent(QShowEvent* event) {
+    QMainWindow::showEvent(event);
+    if (firstShow_) {
+        firstShow_ = false;
+        handleWindowSizeChange();
+        picSearch(); // display no metadata pics initially
+    }
+}
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     handleWindowSizeChange();
@@ -637,9 +663,12 @@ void MainWindow::handlescrollBarValueChange(int value) {
 void MainWindow::picSearch() {
     imageLoadThreadPool.clearTasks();
     clearAllPicFrames();
-    if (includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-        includedTweetTags.empty() && excludedTweetTags.empty() && searchText.empty()) {
+    if (isSearchCriteriaEmpty()) {
         displayTags();
+        resultPics = noMetadataPics;
+        sortPics();
+        loadMorePics();
+        ui->statusbar->showMessage("显示无元数据图片，共 " + QString::number(resultPics.size()) + " 张图片");
         return;
     }
     ui->statusbar->showMessage("正在搜索...");
@@ -776,9 +805,38 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
     if (progress >= total) {
         delete importer;
         importer = nullptr;
+        ui->progressWidget->hide();
+        ui->progressLabel->setText("");
+        ui->progressStatusLabel->setText("");
+        ui->statusbar->showMessage(
+            "图片导入完成，共扫描 " + QString::number(total) + " 文件，用时 " +
+            QString::number(
+                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - ImportStartTime).count()) +
+            " 秒");
+        database.reloadDatabase();
+        emit reloadWorkerDatabase();
         loadTags(); // load new tags from database
+        if (isSearchCriteriaEmpty()) {
+            noMetadataPics = database.getNoMetadataPics();
+            picSearch();
+        }
     }
-    // TODO: update status bar with progress
+    ui->progressBar->setMaximum(static_cast<int>(total));
+    ui->progressBar->setValue(static_cast<int>(progress));
+
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - ImportStartTime).count();
+
+    if (timeDiff > 0 && progress > 0) {
+        double timeDiffSeconds = static_cast<double>(timeDiff) / 1000.0;
+        double speed = static_cast<double>(progress) / timeDiffSeconds; // items per second
+        size_t etaSeconds = static_cast<size_t>((total - progress) / speed);
+        ui->progressStatusLabel->setText(QString("%1 / %2 | 速度：%3 文件每秒 | 剩余时间：%4 秒")
+                                             .arg(progress)
+                                             .arg(total)
+                                             .arg(QString::number(speed, 'f', 2))
+                                             .arg(etaSeconds));
+    }
 }
 void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory
     while (ui->picDisplayLayout->count() > 0) {
@@ -815,25 +873,46 @@ void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from 
     ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
 }
 void MainWindow::handleAddNewPicsAction() {
-    if (importer) return;
+    if (importer) {
+        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+        return;
+    }
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描文件夹...");
     importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress);
+    ui->progressWidget->show();
+    ui->progressBar->setValue(0);
+    ui->progressLabel->setText("正在导入图片...");
+    ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleAddPowerfulPixivDownloaderAction() {
-    if (importer) return;
+    if (importer) {
+        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+        return;
+    }
     QString dir = QFileDialog::getExistingDirectory(
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
     importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Pixiv);
+    ui->progressWidget->show();
+    ui->progressBar->setValue(0);
+    ui->progressLabel->setText("正在导入Pixiv图片...");
+    ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleAddGallery_dlTwitterAction() {
-    if (importer) return;
+    if (importer) {
+        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+        return;
+    }
     QString dir =
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
     importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Twitter);
+    ui->progressWidget->show();
+    ui->progressBar->setValue(0);
+    ui->progressLabel->setText("正在导入Twitter图片...");
+    ImportStartTime = std::chrono::steady_clock::now();
 }

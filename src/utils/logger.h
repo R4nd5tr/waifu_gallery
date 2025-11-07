@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -37,7 +38,7 @@ public:
         return *this;
     }
 
-    static void setLogFile(const std::string& filename);
+    static void setLogFile(const std::filesystem::path& logFile);
 
 private:
     LogLevel level_;

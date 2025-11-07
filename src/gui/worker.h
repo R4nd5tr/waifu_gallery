@@ -25,6 +25,7 @@ public:
                     bool selectedTweetTagChanged,
                     bool searchTextChanged,
                     size_t requestId);
+    void reloadDatabase() { database.reloadDatabase(); };
 signals:
     void searchComplete(const std::vector<PicInfo>& resultPics,
                         std::vector<std::tuple<std::string, int, bool>> availableTags,

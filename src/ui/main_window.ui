@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1100</width>
-    <height>852</height>
+    <width>1099</width>
+    <height>790</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -39,7 +39,7 @@
          <x>0</x>
          <y>0</y>
          <width>280</width>
-         <height>721</height>
+         <height>659</height>
         </rect>
        </property>
        <attribute name="label">
@@ -64,7 +64,7 @@
            <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <property name="tabsClosable">
            <bool>false</bool>
@@ -192,7 +192,7 @@
          <x>0</x>
          <y>0</y>
          <width>280</width>
-         <height>721</height>
+         <height>659</height>
         </rect>
        </property>
        <attribute name="label">
@@ -833,6 +833,42 @@ background: rgb(0,200,200);
        <number>4</number>
       </property>
       <item>
+       <widget class="QWidget" name="progressWidget" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_10">
+         <item>
+          <widget class="QLabel" name="progressLabel">
+           <property name="text">
+            <string>工作中</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QProgressBar" name="progressBar">
+           <property name="value">
+            <number>0</number>
+           </property>
+           <property name="format">
+            <string>%p%</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="progressStatusLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
        <widget class="QWidget" name="searchWidget" native="true">
         <property name="minimumSize">
          <size>
@@ -934,7 +970,7 @@ background: rgb(0,200,200);
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>794</width>
+           <width>793</width>
            <height>40</height>
           </rect>
          </property>
@@ -984,8 +1020,8 @@ background: rgb(0,200,200);
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>792</width>
-           <height>699</height>
+           <width>791</width>
+           <height>592</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -1008,7 +1044,7 @@ background: rgb(0,200,200);
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1100</width>
+     <width>1099</width>
      <height>33</height>
     </rect>
    </property>

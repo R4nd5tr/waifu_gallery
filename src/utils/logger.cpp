@@ -46,8 +46,8 @@ Logger::~Logger() {
 #endif
 }
 
-void Logger::setLogFile(const std::string& filename) {
+void Logger::setLogFile(const std::filesystem::path& logFile) {
     std::lock_guard<std::mutex> lock(mutex_);
-    file_.open(filename, std::ios::app);
+    file_.open(logFile, std::ios::app);
     useFile_ = file_.is_open();
 }

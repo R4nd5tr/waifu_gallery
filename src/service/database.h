@@ -40,6 +40,7 @@ public:
     PicDatabase(const std::string& databaseFile = DEFAULT_DATABASE_FILE, DbMode mode = DbMode::Normal);
     explicit PicDatabase(DbMode mode) : PicDatabase(DEFAULT_DATABASE_FILE, mode) {}
     ~PicDatabase();
+    void reloadDatabase() { getTagMapping(); };
 
     void enableForeignKeyRestriction() const;
     void disableForeignKeyRestriction() const;
@@ -183,7 +184,7 @@ private:
     std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping
                                                 // when some unsupported files are in the directory
     // single insert thread
-    std::thread insertThread; // TODO: use separate database file for each thread to achieve parallel insert and merge later?
+    std::thread insertThread;
     std::queue<PicInfo> picQueue;
     std::mutex picMutex;
     std::queue<TweetInfo> tweetQueue;

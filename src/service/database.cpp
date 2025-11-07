@@ -51,8 +51,8 @@ bool PicDatabase::createTables() {
             file_type INTEGER,
             edit_time TEXT DEFAULT NULL,
             download_time TEXT DEFAULT NULL,
-            x_restrict INTEGER DEFAULT NULL,
-            ai_type INTEGER DEFAULT NULL,
+            x_restrict INTEGER DEFAULT 0,
+            ai_type INTEGER DEFAULT 0,
             phash TEXT DEFAULT NULL
         )
     )"; // TODO: add feature vector from deep learning models
@@ -151,7 +151,7 @@ bool PicDatabase::createTables() {
             description TEXT,
             like_count INTEGER DEFAULT 0,
             view_count INTEGER DEFAULT 0,
-            x_restrict INTEGER,
+            x_restrict INTEGER DEFAULT 0,
             ai_type INTEGER DEFAULT 0 
         )
     )";
@@ -620,8 +620,20 @@ bool PicDatabase::updatePixivArtwork(const PixivInfo& pixivInfo) {
             description=excluded.description,
             like_count=excluded.like_count,
             view_count=excluded.view_count,
-            x_restrict=excluded.x_restrict,
-            ai_type=excluded.ai_type
+            -- only update x_restrict when excluded.x_restrict is not NULL and greater than existing
+            x_restrict = CASE
+                WHEN excluded.x_restrict IS NOT NULL
+                     AND (pixiv_artworks.x_restrict IS NULL OR excluded.x_restrict > pixiv_artworks.x_restrict)
+                THEN excluded.x_restrict
+                ELSE pixiv_artworks.x_restrict
+            END,
+            -- only update ai_type when excluded.ai_type is not NULL and greater than existing
+            ai_type = CASE
+                WHEN excluded.ai_type IS NOT NULL
+                     AND (pixiv_artworks.ai_type IS NULL OR excluded.ai_type > pixiv_artworks.ai_type)
+                THEN excluded.ai_type
+                ELSE pixiv_artworks.ai_type
+            END
     )");
     sqlite3_bind_int64(stmt, 1, pixivInfo.pixivID);
     sqlite3_bind_text(stmt, 2, pixivInfo.date.c_str(), -1, SQLITE_STATIC);
@@ -1440,16 +1452,16 @@ bool processSingleFile(const std::filesystem::path& filePath,
 }
 void MultiThreadedImporter::workerThreadFunc() {
     std::vector<PicInfo> picInfos;
-    picInfos.reserve(1500);
+    picInfos.reserve(500);
     std::vector<PixivInfo> pixivInfos;
-    pixivInfos.reserve(1500);
+    pixivInfos.reserve(500);
     std::vector<TweetInfo> tweetInfos;
-    tweetInfos.reserve(1500);
+    tweetInfos.reserve(500);
     std::vector<std::vector<PixivInfo>> pixivInfoVecs;
     pixivInfoVecs.reserve(500);
     size_t index = 0;
     while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
-        if (picInfos.size() >= 1000) {
+        if (picInfos.size() >= 100) {
             if (picMutex.try_lock()) {
                 while (!picInfos.empty()) {
                     picQueue.push(std::move(picInfos.back()));
@@ -1460,7 +1472,7 @@ void MultiThreadedImporter::workerThreadFunc() {
                 cv.notify_one();
             }
         }
-        if (pixivInfos.size() >= 1000) {
+        if (pixivInfos.size() >= 100) {
             if (pixivMutex.try_lock()) {
                 while (!pixivInfos.empty()) {
                     pixivQueue.push(std::move(pixivInfos.back()));
@@ -1471,7 +1483,7 @@ void MultiThreadedImporter::workerThreadFunc() {
                 cv.notify_one();
             }
         }
-        if (tweetInfos.size() >= 1000) {
+        if (tweetInfos.size() >= 100) {
             if (tweetMutex.try_lock()) {
                 while (!tweetInfos.empty()) {
                     tweetQueue.push(std::move(tweetInfos.back()));
@@ -1539,11 +1551,11 @@ void MultiThreadedImporter::insertThreadFunc() {
     PicDatabase threadDb(dbFile, DbMode::Import);
     std::mutex conditionMutex;
     std::vector<PicInfo> picsToInsert;
-    picsToInsert.reserve(2000);
+    picsToInsert.reserve(1000);
     std::vector<PixivInfo> pixivsToInsert;
-    pixivsToInsert.reserve(2000);
+    pixivsToInsert.reserve(1000);
     std::vector<TweetInfo> tweetsToInsert;
-    tweetsToInsert.reserve(2000);
+    tweetsToInsert.reserve(1000);
     std::vector<std::vector<PixivInfo>> pixivVecsToInsert;
     pixivVecsToInsert.reserve(1000);
     while (!stopFlag.load() || importedCount < supportedFileCount.load(std::memory_order_relaxed)) {

@@ -15,6 +15,7 @@ QString getFileTypeStr(ImageFormat fileType) {
         return QString("Unknown");
     }
 }
+const int MAX_TITLE_LENGTH = 20;
 
 // TODO: click resolution label to open image in default viewer,
 //       click file type and size label to open file location
@@ -24,7 +25,6 @@ QString getFileTypeStr(ImageFormat fileType) {
 PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
     : QFrame(parent), ui(new Ui::PictureFrame) {
     ui->setupUi(this);
-    ui->titleLabel->hide();
     ui->resolutionLabel->setText(QString("%1x%2").arg(picinfo.width).arg(picinfo.height));
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
                                           .arg(getFileTypeStr(picinfo.fileType))
@@ -33,7 +33,6 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::PixivID:
         if (picinfo.pixivInfo.size() > 0) {
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
             ui->idLabel->setFont(QFont("", 10, QFont::Bold));
@@ -42,7 +41,6 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::PixivAuthorID:
         if (picinfo.pixivInfo.size() > 0) {
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::number(picinfo.pixivInfo[0].authorID));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
             ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
@@ -51,7 +49,6 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::PixivAuthorName:
         if (picinfo.pixivInfo.size() > 0) {
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
             ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
@@ -60,7 +57,6 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::PixivTitle:
         if (picinfo.pixivInfo.size() > 0) {
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->titleLabel->setFont(QFont("", 10, QFont::Bold));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
@@ -68,7 +64,6 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     case SearchField::TweetAuthorID:
         if (picinfo.tweetInfo.size() > 0) {
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::number(picinfo.tweetInfo[0].authorID));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
             ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
@@ -91,20 +86,24 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         break;
     default:
         if (picinfo.pixivInfo.size() > 0) {
-            ui->titleLabel->show();
             ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
         } else if (picinfo.tweetInfo.size() > 0) {
-            ui->titleLabel->show();
             QString description = QString::fromStdString(picinfo.tweetInfo[0].description).split('\n').first();
-            const int maxLength = 20;
-            if (description.length() > maxLength) {
-                description = description.left(maxLength) + "...";
+            if (description.length() > MAX_TITLE_LENGTH) {
+                description = description.left(MAX_TITLE_LENGTH) + "...";
             }
             ui->titleLabel->setText(description);
             ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
             ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
+        } else {
+            QString filename = QString::fromStdString(picinfo.filePaths.begin()->filename().string());
+            if (filename.length() > MAX_TITLE_LENGTH) {
+                filename = filename.left(MAX_TITLE_LENGTH) + "...";
+            }
+            ui->titleLabel->setText(filename);
+            ui->idLabel->setText("N/A");
         }
         break;
     }

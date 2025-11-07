@@ -12,12 +12,13 @@
 #include <QThread>
 #include <QTimer>
 #include <QWidget>
+#include <chrono>
 
 namespace Ui {
 class MainWindow;
 }
 
-enum class SortBy { None, ID, DownloadDate, EditDate, Size };
+enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Height };
 
 enum class SortOrder { Ascending, Descending };
 
@@ -61,8 +62,11 @@ signals:
                     bool selectedTweetTagChanged,
                     bool searchTextChanged,
                     size_t requestId);
+    void reloadWorkerDatabase();
 
 protected:
+    bool firstShow_ = true;
+    void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     bool event(QEvent* event) override;
 
@@ -163,9 +167,13 @@ private:
     void removeExcludedPixivTags(QPushButton* button);
     void removeIncludedTweetTags(QPushButton* button);
     void removeExcludedTweetTags(QPushButton* button);
-    QTimer* tagClickTimer;
-    QTimer* tagSearchTimer;
+    QTimer* tagClickTimer;  // use for double click detection
+    QTimer* tagSearchTimer; // use for debouncing removing selected tags
     bool tagDoubleClicked = false;
+    bool isSelectedTagsEmpty() {
+        return includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
+               includedTweetTags.empty() && excludedTweetTags.empty();
+    };
 
     void handleWindowSizeChange();
 
@@ -173,10 +181,11 @@ private:
 
     void tagSearch(const QString& text);
 
-    void handleAddNewPicsAction();                             // TODO: implement directory choosing dialog
-    void handleAddPowerfulPixivDownloaderAction();             // specify parser type
-    void handleAddGallery_dlTwitterAction();                   // specify parser type
-    void displayImportProgress(size_t progress, size_t total); // TODO: implement progress window and bar
+    void handleAddNewPicsAction();                 // TODO: load images after import
+    void handleAddPowerfulPixivDownloaderAction(); // specify parser type
+    void handleAddGallery_dlTwitterAction();       // specify parser type
+    void displayImportProgress(size_t progress, size_t total);
+    std::chrono::steady_clock::time_point ImportStartTime;
 
     // searching
     bool selectedTagChanged = false;
@@ -193,9 +202,11 @@ private:
     void displayTags(const std::vector<std::tuple<std::string, int, bool>>& tags = {},
                      const std::vector<std::pair<std::string, int>>& pixivTags = {},
                      const std::vector<std::pair<std::string, int>>& twitterHashtags = {});
+    bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
 
     // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
     uint displayIndex;
+    std::vector<PicInfo> noMetadataPics; // pics without metadata, displayed when no filters are set
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache

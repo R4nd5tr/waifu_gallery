@@ -44,10 +44,10 @@ struct TweetInfo { // represents one tweet
     uint32_t viewCount = 0;
     std::unordered_set<std::string> hashtags;
     std::string description;
-    std::vector<PicInfo> pics;
+    std::vector<PicInfo> pics; // optional information about pictures in this tweet
 };
 
-struct PixivInfo { // represents one pixiv illustration
+struct PixivInfo { // represents one pixiv artwork
     int64_t pixivID = 0;
     std::string date;
     std::vector<std::string> tags;
