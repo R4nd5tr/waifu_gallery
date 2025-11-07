@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../service/database.h"
-#include "picture_frame.h"
+#include "widgets/picture_frame.h"
 #include <QObject>
 #include <QPixmap>
 #include <filesystem>

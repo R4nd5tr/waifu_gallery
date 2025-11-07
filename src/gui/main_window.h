@@ -1,8 +1,8 @@
 #pragma once
 #include "../service/database.h"
 #include "../service/model.h"
-#include "picture_frame.h"
 #include "thread_pool.h"
+#include "widgets/picture_frame.h"
 #include "worker.h"
 #include <QCoreApplication>
 #include <QListWidgetItem>

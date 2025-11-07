@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../service/database.h"
-#include "../service/model.h"
+#include "../../service/database.h"
+#include "../../service/model.h"
 #include <QFrame>
 #include <QPixmap>
 
