@@ -90,7 +90,7 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
-         <widget class="QLabel" name="titleLabel">
+         <widget class="ClickableLabel" name="titleLabel">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -120,7 +120,7 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
-         <widget class="QLabel" name="illustratorLabel">
+         <widget class="ClickableLabel" name="illustratorLabel">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -146,7 +146,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="QLabel" name="resolutionLabel">
+         <widget class="ClickableLabel" name="resolutionLabel">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -163,7 +163,7 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
-         <widget class="QLabel" name="idLabel">
+         <widget class="ClickableLabel" name="idLabel">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -189,7 +189,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="QLabel" name="fileTypeAndSizeLabel">
+         <widget class="ClickableLabel" name="fileTypeAndSizeLabel">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -208,6 +208,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ClickableLabel</class>
+   <extends>QLabel</extends>
+   <header>clickable_label.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

@@ -16,11 +16,11 @@ QString getFileTypeStr(ImageFormat fileType) {
     }
 }
 const int MAX_TITLE_LENGTH = 20;
-
-// TODO: click resolution label to open image in default viewer,
-//       click file type and size label to open file location
-//       click illustrator label to open illustrator's pixiv page
-//       click id label to open image's pixiv/tweet page
+const std::string PIXIV_BASE_URL = "https://www.pixiv.net/artworks/";
+const std::string PIXIV_AUTHOR_URL = "https://www.pixiv.net/users/";
+const std::string TWITTER_BASE_URL = "https://twitter.com/i/web/status/";
+const std::string TWITTER_AUTHOR_URL = "https://twitter.com/";
+const QFont HIGHLIGHT_FONT("", 10, QFont::Bold);
 
 PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
     : QFrame(parent), ui(new Ui::PictureFrame) {
@@ -29,82 +29,61 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
                                           .arg(getFileTypeStr(picinfo.fileType))
                                           .arg(static_cast<double>(picinfo.size) / (1024 * 1024), 0, 'f', 2));
-    switch (searchField) { // highlight search result
-    case SearchField::PixivID:
-        if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-            ui->idLabel->setFont(QFont("", 10, QFont::Bold));
+    imgPaths = picinfo.filePaths;
+
+    ui->titleLabel->setResponsive(false);
+
+    connect(ui->resolutionLabel, &ClickableLabel::clicked, this, &PictureFrame::openFileWithDefaultApp);
+    connect(ui->fileTypeAndSizeLabel, &ClickableLabel::clicked, this, &PictureFrame::openFileLocation);
+    connect(ui->illustratorLabel, &ClickableLabel::clicked, this, &PictureFrame::openIllustratorUrl);
+    connect(ui->idLabel, &ClickableLabel::clicked, this, &PictureFrame::openIdUrl);
+
+    if (picinfo.pixivInfo.size() > 0) { // display pixiv info if available
+        ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
+        ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
+        ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
+
+        illustratorURL = QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(picinfo.pixivInfo[0].authorID));
+        idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.pixivIdIndices.begin()->first));
+    } else if (picinfo.tweetInfo.size() > 0) { // display tweet info if available
+        QString description = QString::fromStdString(picinfo.tweetInfo[0].description).split('\n').first();
+        if (description.length() > MAX_TITLE_LENGTH) {
+            description = description.left(MAX_TITLE_LENGTH) + "...";
         }
+        ui->titleLabel->setText(description);
+        ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
+        ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
+
+        illustratorURL = QString::fromStdString(TWITTER_AUTHOR_URL + picinfo.tweetInfo[0].authorName);
+        idURL = QString::fromStdString(TWITTER_BASE_URL + std::to_string(picinfo.tweetInfo[0].tweetID));
+    } else { // fallback to file name
+        QString filename = QString::fromStdString(picinfo.filePaths.begin()->filename().string());
+        if (filename.length() > MAX_TITLE_LENGTH) {
+            filename = filename.left(MAX_TITLE_LENGTH) + "...";
+        }
+        ui->titleLabel->setText(filename);
+        ui->idLabel->setText("N/A");
+        ui->illustratorLabel->setResponsive(false);
+        ui->idLabel->setResponsive(false);
+
+        illustratorURL = "";
+        idURL = "";
+    }
+    switch (searchField) { // highlight search result
+    case SearchField::PixivTitle:
+        ui->titleLabel->setFont(HIGHLIGHT_FONT);
         break;
     case SearchField::PixivAuthorID:
-        if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->setText(QString::number(picinfo.pixivInfo[0].authorID));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-            ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
-        }
-        break;
     case SearchField::PixivAuthorName:
-        if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivInfo[0].pixivID)));
-            ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-            ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
-        }
-        break;
-    case SearchField::PixivTitle:
-        if (picinfo.pixivInfo.size() > 0) {
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
-            ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-            ui->titleLabel->setFont(QFont("", 10, QFont::Bold));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-        }
-        break;
-    case SearchField::TweetAuthorID:
-        if (picinfo.tweetInfo.size() > 0) {
-            ui->titleLabel->setText(QString::number(picinfo.tweetInfo[0].authorID));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-            ui->idLabel->setFont(QFont("", 10, QFont::Bold));
-        }
-        break;
-    case SearchField::TweetAuthorName:
-        if (picinfo.tweetInfo.size() > 0) {
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-            ui->idLabel->setFont(QFont("", 10, QFont::Bold));
-        }
-        break;
     case SearchField::TweetAuthorNick:
-        if (picinfo.tweetInfo.size() > 0) {
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-            ui->illustratorLabel->setFont(QFont("", 10, QFont::Bold));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-        }
+        ui->illustratorLabel->setFont(HIGHLIGHT_FONT);
+        break;
+    case SearchField::PixivID:
+    case SearchField::TweetAuthorID:
+    case SearchField::TweetAuthorName:
+        ui->idLabel->setFont(HIGHLIGHT_FONT);
         break;
     default:
-        if (picinfo.pixivInfo.size() > 0) {
-            ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
-        } else if (picinfo.tweetInfo.size() > 0) {
-            QString description = QString::fromStdString(picinfo.tweetInfo[0].description).split('\n').first();
-            if (description.length() > MAX_TITLE_LENGTH) {
-                description = description.left(MAX_TITLE_LENGTH) + "...";
-            }
-            ui->titleLabel->setText(description);
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
-        } else {
-            QString filename = QString::fromStdString(picinfo.filePaths.begin()->filename().string());
-            if (filename.length() > MAX_TITLE_LENGTH) {
-                filename = filename.left(MAX_TITLE_LENGTH) + "...";
-            }
-            ui->titleLabel->setText(filename);
-            ui->idLabel->setText("N/A");
-        }
         break;
     }
 }
