@@ -7,8 +7,6 @@
 #include <QFrame>
 #include <QPixmap>
 #include <QUrl>
-#define NOMINMAX
-#include <windows.h>
 
 namespace Ui {
 class PictureFrame;
