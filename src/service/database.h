@@ -158,7 +158,7 @@ private:
     }
 };
 
-class MultiThreadedImporter {
+class MultiThreadedImporter { // TODO: implement skip existing files for auto import
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,

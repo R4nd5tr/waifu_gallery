@@ -142,6 +142,7 @@ private:
     void updateMaxHeight(const QString& text);
     void updateMinWidth(const QString& text);
     void updateMinHeight(const QString& text);
+    void clearResolutionFilters();
     QTimer* resolutionTimer;
     void handleResolutionTimerTimeout();
 
@@ -155,7 +156,6 @@ private:
 
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
-    QTimer* textSearchTimer;
 
     void handleListWidgetItemSingleClick(QListWidgetItem* item);
     QListWidgetItem* lastClickedTagItem = nullptr;

@@ -11,7 +11,7 @@
 
 enum class LogLevel { Debug, Info, Warning, Error };
 
-class Logger {
+class Logger { // TODO: implement log file rotation
 public:
     Logger(LogLevel level);
     ~Logger();

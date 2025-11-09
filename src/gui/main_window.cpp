@@ -67,12 +67,10 @@ void MainWindow::connectSignalSlots() {
     // debounce timers
     resolutionTimer = new QTimer(this);
     ratioSortTimer = new QTimer(this);
-    textSearchTimer = new QTimer(this);
     tagClickTimer = new QTimer(this);
     tagSearchTimer = new QTimer(this);
     resolutionTimer->setSingleShot(true);
     ratioSortTimer->setSingleShot(true);
-    textSearchTimer->setSingleShot(true);
     tagClickTimer->setSingleShot(true);
     tagSearchTimer->setSingleShot(true);
 
@@ -100,6 +98,7 @@ void MainWindow::connectSignalSlots() {
     connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
+    connect(ui->clearResolutionFilterButton, &QPushButton::clicked, this, &MainWindow::clearResolutionFilters);
     connect(resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
 
     // sorting controls
@@ -119,8 +118,7 @@ void MainWindow::connectSignalSlots() {
     // text search controls
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
-    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, [this]() { textSearchTimer->start(DEBOUNCE_DELAY); });
-    connect(textSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
+    connect(ui->searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::picSearch);
 
     // tag list controls
     connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
@@ -310,6 +308,17 @@ void MainWindow::updateMinHeight(const QString& text) {
     } else {
         minHeight = 0;
     }
+}
+void MainWindow::clearResolutionFilters() {
+    ui->maxWidthEdit->clear();
+    ui->minWidthEdit->clear();
+    ui->maxHeightEdit->clear();
+    ui->minHeightEdit->clear();
+    maxWidth = std::numeric_limits<uint>::max();
+    minWidth = 0;
+    maxHeight = std::numeric_limits<uint>::max();
+    minHeight = 0;
+    refreshPicDisplay();
 }
 void MainWindow::handleResolutionTimerTimeout() {
     refreshPicDisplay();
@@ -802,7 +811,7 @@ void MainWindow::displayImage(uint64_t picId, QImage&& img) {
     }
 }
 void MainWindow::displayImportProgress(size_t progress, size_t total) {
-    if (progress >= total) {
+    if (progress >= total) { // import complete
         delete importer;
         importer = nullptr;
         ui->progressWidget->hide();
@@ -820,7 +829,9 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
             noMetadataPics = database.getNoMetadataPics();
             picSearch();
         }
+        return;
     }
+    // update progress bar and status
     ui->progressBar->setMaximum(static_cast<int>(total));
     ui->progressBar->setValue(static_cast<int>(progress));
 

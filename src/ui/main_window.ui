@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1099</width>
-    <height>790</height>
+    <width>1098</width>
+    <height>771</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -39,7 +39,7 @@
          <x>0</x>
          <y>0</y>
          <width>280</width>
-         <height>659</height>
+         <height>640</height>
         </rect>
        </property>
        <attribute name="label">
@@ -64,7 +64,7 @@
            <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>0</number>
+           <number>2</number>
           </property>
           <property name="tabsClosable">
            <bool>false</bool>
@@ -192,13 +192,13 @@
          <x>0</x>
          <y>0</y>
          <width>280</width>
-         <height>659</height>
+         <height>640</height>
         </rect>
        </property>
        <attribute name="label">
         <string>筛选排序</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_5" stretch="3,0">
+       <layout class="QVBoxLayout" name="verticalLayout_5" stretch="5,3">
         <property name="leftMargin">
          <number>5</number>
         </property>
@@ -210,11 +210,17 @@
           <property name="title">
            <string>筛选</string>
           </property>
-          <layout class="QVBoxLayout" name="verticalLayout_6">
+          <layout class="QVBoxLayout" name="verticalLayout_6" stretch="0,0,0,0,0,0,0,0,0,0,0,0,0">
            <item>
             <layout class="QHBoxLayout" name="horizontalLayout_13">
              <item>
               <widget class="QLabel" name="label_11">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>限制级别</string>
                </property>
@@ -302,6 +308,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_15">
              <item>
               <widget class="QLabel" name="label_12">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>AI类型</string>
                </property>
@@ -367,6 +379,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_2">
              <item>
               <widget class="QLabel" name="label_3">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>文件格式</string>
                </property>
@@ -442,6 +460,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_9">
              <item>
               <widget class="QLabel" name="label_4">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>分辨率</string>
                </property>
@@ -459,6 +483,13 @@
                 </size>
                </property>
               </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="clearResolutionFilterButton">
+               <property name="text">
+                <string>清空</string>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>
@@ -557,6 +588,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_12">
              <item>
               <widget class="QLabel" name="label_6">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>排列顺序</string>
                </property>
@@ -607,6 +644,12 @@
             <layout class="QHBoxLayout" name="horizontalLayout_11">
              <item>
               <widget class="QLabel" name="label_5">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
                <property name="text">
                 <string>宽高比</string>
                </property>
@@ -641,7 +684,7 @@
                <item>
                 <widget class="QLabel" name="label_7">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -654,7 +697,7 @@
                <item>
                 <widget class="QLabel" name="label_8">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -670,7 +713,7 @@
                <item>
                 <widget class="QLabel" name="label_9">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -700,9 +743,7 @@
                 <number>2</number>
                </property>
                <property name="styleSheet">
-                <string notr="true">QSlider::sub-page:horizontal, QSlider::add-page:horizontal {
-background: rgb(0,200,200);
-}</string>
+                <string notr="true"/>
                </property>
                <property name="minimum">
                 <number>-40</number>
@@ -733,6 +774,9 @@ background: rgb(0,200,200);
                </property>
                <property name="tickPosition">
                 <enum>QSlider::TickPosition::NoTicks</enum>
+               </property>
+               <property name="tickInterval">
+                <number>0</number>
                </property>
               </widget>
              </item>
@@ -861,7 +905,7 @@ background: rgb(0,200,200);
          <item>
           <widget class="QLabel" name="progressStatusLabel">
            <property name="text">
-            <string/>
+            <string>已完成/总数 | 速度： | 预计用时：</string>
            </property>
           </widget>
          </item>
@@ -970,7 +1014,7 @@ background: rgb(0,200,200);
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>793</width>
+           <width>792</width>
            <height>40</height>
           </rect>
          </property>
@@ -1020,8 +1064,8 @@ background: rgb(0,200,200);
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>791</width>
-           <height>592</height>
+           <width>790</width>
+           <height>573</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -1044,7 +1088,7 @@ background: rgb(0,200,200);
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1099</width>
+     <width>1098</width>
      <height>33</height>
     </rect>
    </property>
@@ -1085,12 +1129,12 @@ background: rgb(0,200,200);
   </action>
   <action name="addPowerfulPixivDownloaderAction">
    <property name="text">
-    <string>导入Powerful Pixiv Downloader下载的图片...</string>
+    <string>导入Powerful Pixiv Downloader下载的文件...</string>
    </property>
   </action>
   <action name="addGallery_dlTwitterAction">
    <property name="text">
-    <string>导入gallery-dl下载的Twitter图片...</string>
+    <string>导入gallery-dl从Twitter下载的文件...</string>
    </property>
   </action>
  </widget>
