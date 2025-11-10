@@ -38,8 +38,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>280</width>
-         <height>640</height>
+         <width>145</width>
+         <height>123</height>
         </rect>
        </property>
        <attribute name="label">
@@ -760,9 +760,6 @@
                <property name="sliderPosition">
                 <number>0</number>
                </property>
-               <property name="tracking">
-                <bool>true</bool>
-               </property>
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
                </property>
@@ -773,10 +770,10 @@
                 <bool>false</bool>
                </property>
                <property name="tickPosition">
-                <enum>QSlider::TickPosition::NoTicks</enum>
+                <enum>QSlider::TickPosition::TicksBelow</enum>
                </property>
                <property name="tickInterval">
-                <number>0</number>
+                <number>10</number>
                </property>
               </widget>
              </item>
@@ -1134,7 +1131,7 @@
   </action>
   <action name="addGallery_dlTwitterAction">
    <property name="text">
-    <string>导入gallery-dl从Twitter下载的文件...</string>
+    <string>导入gallery-dl下载的Twitter文件...</string>
    </property>
   </action>
  </widget>
