@@ -15,3 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+#define WG_VERSION_MAJOR 0
+#define WG_VERSION_MINOR 0
+#define WG_VERSION_PATCH 0
+#define WG_VERSION_STATUS "beta"
+#define WG__STRINGIFY(x) #x
+#define WG_STRINGFY(x) WG__STRINGIFY(x)
+#define WG_VERSION                                                                                                               \
+    WG_STRINGFY(WG_VERSION_MAJOR) "." WG_STRINGFY(WG_VERSION_MINOR) "." WG_STRINGFY(WG_VERSION_PATCH) "-" WG_VERSION_STATUS

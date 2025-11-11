@@ -1,5 +1,23 @@
+/*
+ * Waifu Gallery - A Qt-based image gallery application.
+ * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "parser.h"
-#include "../utils/logger.h"
+#include "utils/logger.h"
 #include <algorithm>
 #include <cctype>
 #include <fstream>
@@ -501,13 +519,12 @@ ImageHeaderInfo parseImageHeader(const std::vector<uint8_t>& buffer) {
 
 std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<uint8_t>& buffer, ImageFormat fileType) {
     ImageHeaderInfo headerInfo = parseImageHeader(buffer);
-
     if (headerInfo.isValid) {
         fileType = headerInfo.format;
         return {headerInfo.width, headerInfo.height, fileType};
     }
-
     // 回退到完整解码
+    Warn() << "Failed to parse image header, falling back to full decoding.";
     return getImageResolution(buffer, fileType);
 }
 // get {file creation time, last modified time} in ISO 8601 format from windows API
