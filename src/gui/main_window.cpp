@@ -151,6 +151,7 @@ void MainWindow::loadTags() {
     allTags = database.getTags();
     allPixivTags = database.getPixivTags();
     allTwitterHashtags = database.getTwitterHashtags();
+    Info() << "Loaded tags from database.";
 }
 void MainWindow::displayTags(const std::vector<std::tuple<std::string, int, bool>>& availableTags,
                              const std::vector<std::pair<std::string, int>>& availablePixivTags,
@@ -829,6 +830,7 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
             noMetadataPics = database.getNoMetadataPics();
             picSearch();
         }
+        Info() << "Import completed. Total files imported: " << total;
         return;
     }
     // update progress bar and status
@@ -895,6 +897,7 @@ void MainWindow::handleAddNewPicsAction() {
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入图片...");
+    Info() << "Started importing pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleAddPowerfulPixivDownloaderAction() {
@@ -910,6 +913,7 @@ void MainWindow::handleAddPowerfulPixivDownloaderAction() {
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Pixiv图片...");
+    Info() << "Started importing pixiv pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleAddGallery_dlTwitterAction() {
@@ -925,5 +929,6 @@ void MainWindow::handleAddGallery_dlTwitterAction() {
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
+    Info() << "Started importing twitter pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
 }

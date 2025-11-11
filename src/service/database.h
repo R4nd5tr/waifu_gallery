@@ -158,7 +158,7 @@ private:
     }
 };
 
-class MultiThreadedImporter { // TODO: implement skip existing files for auto import
+class MultiThreadedImporter { // TODO: implement skip existing files for auto import; add cancel operation?
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,
@@ -198,7 +198,7 @@ private:
     std::condition_variable cv;
 
     void workerThreadFunc();
-    void insertThreadFunc();
+    void insertThreadFunc(); // TODO:use only one transaction and commit at the end for cancel operation?
 };
 
 // class DatabaseAutoTagger {

@@ -11,6 +11,6 @@ std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& dir
         files.push_back(entry.path());
         fileCount++;
     }
-    Info() << "Total files collected:" << fileCount;
+    Info() << "Total files collected:" << fileCount << "from directory:" << directory.string();
     return files;
 }

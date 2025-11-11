@@ -26,7 +26,8 @@
                 "CMAKE_TOOLCHAIN_FILE": "<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_TARGET_TRIPLET": "x64-windows",
                 "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
-                "BUILD_TEST_TARGET": "OFF"
+                "BUILD_TEST_TARGET": "OFF",
+                "CMAKE_CXX_FLAGS": "/DQT_NO_DEBUG_OUTPUT"
             }
         }
     ],

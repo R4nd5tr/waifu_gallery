@@ -31,7 +31,7 @@ file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configur
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
 
 # target
-add_executable(waifu_gallery ${SRC_FILES} ${UI_FILES})
+add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES})
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
 target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 

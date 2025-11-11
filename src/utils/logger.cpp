@@ -7,7 +7,6 @@ bool Logger::useFile_ = false;
 Logger::Logger(LogLevel level) : level_(level) {}
 
 Logger::~Logger() {
-    std::lock_guard<std::mutex> lock(mutex_);
     std::string msg = ss_.str();
 
 #ifdef QT_CORE_LIB
@@ -26,6 +25,7 @@ Logger::~Logger() {
         break;
     }
 #else
+    std::lock_guard<std::mutex> lock(mutex_);
     std::ostream* out = &std::cout;
     if (useFile_ && file_.is_open()) out = &file_;
     switch (level_) {
