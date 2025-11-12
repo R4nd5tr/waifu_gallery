@@ -29,9 +29,11 @@ set(PROJECT_LIBS Qt6::Core Qt6::Widgets Qt6::Sql xxHash::xxhash WebP::webp WebP:
 set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src)
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configure CMake before build
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
+file(GLOB RES_FILES ${PROJECT_SOURCE_DIR}/res/*.qrc)
+file(GLOB RC_FILES ${PROJECT_SOURCE_DIR}/res/*.rc)
 
 # target
-add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES})
+add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES} ${RES_FILES} ${RC_FILES})
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
 target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 

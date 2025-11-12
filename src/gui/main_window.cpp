@@ -161,6 +161,7 @@ void MainWindow::connectSignalSlots() {
     connect(ui->addNewPicsAction, &QAction::triggered, this, &MainWindow::handleAddNewPicsAction);
     connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
     connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
+    connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
 }
 QString getTagString(std::string tag, int count) {
     return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
@@ -949,4 +950,14 @@ void MainWindow::handleAddGallery_dlTwitterAction() {
     ui->progressLabel->setText("正在导入Twitter图片...");
     Info() << "Started importing twitter pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
+}
+void MainWindow::handleShowAboutAction() {
+    if (!aboutDialog) {
+        aboutDialog = new AboutDialog(this);
+        aboutDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(aboutDialog, &QObject::destroyed, this, [this]() { aboutDialog = nullptr; });
+    }
+    aboutDialog->show();
+    aboutDialog->raise();
+    aboutDialog->activateWindow();
 }

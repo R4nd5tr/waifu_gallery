@@ -95,6 +95,7 @@ int main(int argc, char* argv[]) {
     qInstallMessageHandler(customMessageHandler);
     Info() << "Application started.";
     QApplication app(argc, argv);
+    app.setWindowIcon(QIcon(":/icons/app.ico"));
     MainWindow window;
     window.show();
     return app.exec();

@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/licenses">
+    <file>gpl-3.0-standalone.html</file>
+  </qresource>
+</RCC>

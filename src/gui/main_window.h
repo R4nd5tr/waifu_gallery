@@ -17,6 +17,7 @@
  */
 
 #pragma once
+#include "about_dialog.h"
 #include "service/database.h"
 #include "service/model.h"
 #include "thread_pool.h"
@@ -199,11 +200,15 @@ private:
 
     void tagSearch(const QString& text);
 
+    // Action handlers
     void handleAddNewPicsAction();
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type
     void handleAddGallery_dlTwitterAction();       // specify parser type
     void displayImportProgress(size_t progress, size_t total);
     std::chrono::steady_clock::time_point ImportStartTime;
+
+    AboutDialog* aboutDialog = nullptr;
+    void handleShowAboutAction();
 
     // searching
     bool selectedTagChanged = false;
