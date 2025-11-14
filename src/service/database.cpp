@@ -25,6 +25,8 @@
 #include <filesystem>
 #include <iostream>
 
+// utility functions
+
 int64_t uint64_to_int64(uint64_t u) {
     int64_t i;
     std::memcpy(&i, &u, sizeof(u));
@@ -36,11 +38,16 @@ uint64_t int64_to_uint64(int64_t i) {
     return u;
 }
 
+// PicDatabase class implementation
+
 PicDatabase::PicDatabase(const std::string& databaseFile, DbMode mode) {
     initDatabase(databaseFile);
     setMode(mode);
-    if (mode == DbMode::Import) return;
-    getTagMapping();
+    if (mode == DbMode::Import) {
+        initImportedFiles();
+        return;
+    }
+    initTagMapping();
 }
 PicDatabase::~PicDatabase() {
     if (db) {
@@ -48,6 +55,9 @@ PicDatabase::~PicDatabase() {
         db = nullptr;
     }
 }
+
+// init functions
+
 void PicDatabase::initDatabase(const std::string& databaseFile) {
     if (sqlite3_open(databaseFile.c_str(), &db) != SQLITE_OK) {
         Error() << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
@@ -191,6 +201,21 @@ bool PicDatabase::createTables() {
             count INTEGER DEFAULT 0
         )
     )";
+    const std::string importedDirectoriesTable = R"(
+        CREATE TABLE IF NOT EXISTS imported_directories (
+            dir_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dir_path TEXT NOT NULL UNIQUE
+        )
+    )";
+    const std::string importedFilesTable = R"(
+        CREATE TABLE IF NOT EXISTS imported_files (
+            dir_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            PRIMARY KEY (dir_id, filename),
+
+            FOREIGN KEY (dir_id) REFERENCES imported_directories(dir_id) ON DELETE CASCADE
+        )
+    )";
     const std::vector<std::string> tables = {// pixiv
                                              pixivArtworksTable,
                                              pixivArtworksTagsTable,
@@ -205,7 +230,10 @@ bool PicDatabase::createTables() {
                                              pictureFilesTable,
                                              picturePixivIdsTable,
                                              pictureTweetIdsTable,
-                                             tagsTable};
+                                             tagsTable,
+                                             // imported files tracking
+                                             importedDirectoriesTable,
+                                             importedFilesTable};
     const std::vector<std::string> indexes = {
         // foreign key indexes
         "CREATE INDEX IF NOT EXISTS idx_picture_pixiv_ids_id ON picture_pixiv_ids(id)",
@@ -229,7 +257,9 @@ bool PicDatabase::createTables() {
         // tag search indexes
         "CREATE INDEX IF NOT EXISTS idx_picture_tags_id ON picture_tags(tag_id, id)",
         "CREATE INDEX IF NOT EXISTS idx_tweet_hashtags_tweet_id ON tweet_hashtags(hashtag_id, tweet_id)",
-        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_pixiv_id ON pixiv_artworks_tags(tag_id, pixiv_id)"};
+        "CREATE INDEX IF NOT EXISTS idx_pixiv_artworks_tags_pixiv_id ON pixiv_artworks_tags(tag_id, pixiv_id)",
+        // imported files tracking indexes
+        "CREATE INDEX IF NOT EXISTS idx_imported_directories_dir_path ON imported_directories(dir_path)"};
     beginTransaction();
     for (const auto& tableSql : tables) {
         if (!execute(tableSql)) {
@@ -248,7 +278,7 @@ bool PicDatabase::createTables() {
     commitTransaction();
     return true;
 }
-void PicDatabase::getTagMapping() {
+void PicDatabase::initTagMapping() {
     tagToId.clear();
     idToTag.clear();
     twitterHashtagToId.clear();
@@ -260,7 +290,7 @@ void PicDatabase::getTagMapping() {
 
     stmt = prepare("SELECT id, tag FROM tags");
     if (!stmt) {
-        Warn() << "Failed to prepare statement for fetching tags.";
+        Error() << "Failed to prepare statement for fetching tags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -273,7 +303,7 @@ void PicDatabase::getTagMapping() {
 
     stmt = prepare("SELECT id, hashtag FROM twitter_hashtags");
     if (!stmt) {
-        Warn() << "Failed to prepare statement for fetching twitter hashtags.";
+        Error() << "Failed to prepare statement for fetching twitter hashtags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -285,7 +315,7 @@ void PicDatabase::getTagMapping() {
     sqlite3_finalize(stmt);
     stmt = prepare("SELECT id, tag FROM pixiv_tags");
     if (!stmt) {
-        Warn() << "Failed to prepare statement for fetching pixiv tags.";
+        Error() << "Failed to prepare statement for fetching pixiv tags.";
         return;
     }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -298,6 +328,33 @@ void PicDatabase::getTagMapping() {
     Info() << "Tag mappings loaded. Tags:" << tagToId.size() << "Twitter Hashtags:" << twitterHashtagToId.size()
            << "Pixiv Tags:" << pixivTagToId.size();
 }
+void PicDatabase::initImportedFiles() {
+    importedFiles.clear();
+    sqlite3_stmt* stmt = nullptr;
+    stmt = prepare(R"(
+        SELECT id.dirPath, f.fileName
+        FROM imported_files f
+        JOIN imported_directories id ON f.dirID = id.dirID
+    )");
+    if (!stmt) {
+        Error() << "Failed to prepare statement for fetching imported files.";
+        return;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char* dirPathCStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char* fileNameCStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (dirPathCStr && fileNameCStr) {
+            std::string dirPath(dirPathCStr);
+            std::string fileName(fileNameCStr);
+            importedFiles[dirPath].insert(fileName);
+        }
+    }
+    sqlite3_finalize(stmt);
+    Info() << "Imported files tracking initialized. Directories:" << importedFiles.size();
+}
+
+// insert functions
+
 bool PicDatabase::insertPicInfo(const PicInfo& picInfo) {
     if (!insertPicture(picInfo)) {
         Error() << "insertPicture failed.";
@@ -726,6 +783,9 @@ bool PicDatabase::updatePixivArtworkTags(const PixivInfo& pixivInfo) {
     }
     return true;
 }
+
+// query functions
+
 PicInfo PicDatabase::getPicInfo(uint64_t id, int64_t tweetID, int64_t pixivID) const {
     PicInfo info{};
     sqlite3_stmt* stmt = nullptr;
@@ -941,6 +1001,9 @@ PixivInfo PicDatabase::getPixivInfo(int64_t pixivID) const {
     sqlite3_finalize(stmt);
     return info;
 }
+
+// import functions
+
 void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePath, ParserType parserType) {
     std::string ext = filePath.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
@@ -974,7 +1037,13 @@ void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePa
 void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory,
                                            ParserType parserType,
                                            ImportProgressCallback progressCallback) {
-    auto files = collectFiles(directory);
+    auto collectedFiles = collectFiles(directory);
+    std::vector<std::filesystem::path> files;
+    for (const auto& filePath : collectedFiles) {
+        if (!isFileImported(filePath)) {
+            files.push_back(filePath);
+        }
+    }
     disableForeignKeyRestriction();
 
     const size_t BATCH_SIZE = 1000;
@@ -985,6 +1054,7 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
         auto start_time = std::chrono::high_resolution_clock::now();
         for (size_t j = i; j < batch_end; j++) {
             processAndImportSingleFile(files[j], parserType);
+            addImportedFile(files[j]);
             processed++;
         }
         if (!commitTransaction()) {
@@ -1003,6 +1073,8 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
         // Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
         //        << eta_seconds << "s";
     }
+    syncTables();
+    enableForeignKeyRestriction();
     // Info() << "Import completed. Total files processed:" << processed;
 }
 void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-import operations
@@ -1072,8 +1144,61 @@ void PicDatabase::importTagSet(const std::vector<std::pair<std::string, bool>>& 
         sqlite3_finalize(stmt);
     }
 }
+bool PicDatabase::isFileImported(const std::filesystem::path& filePath) const {
+    std::string dir = filePath.parent_path().string();
+    std::string filename = filePath.filename().string();
+    if (importedFiles.find(dir) != importedFiles.end()) {
+        if (importedFiles.at(dir).find(filename) != importedFiles.at(dir).end()) {
+            return true;
+        }
+    }
+    return false;
+}
+void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
+    if (isFileImported(filePath)) return;
+    sqlite3_stmt* stmt = nullptr;
+
+    std::string dir = filePath.parent_path().string();
+    std::string filename = filePath.filename().string();
+    if (importedFiles.find(dir) == importedFiles.end()) {
+        importedFiles[dir] = std::unordered_set<std::string>();
+    }
+    importedFiles[dir].insert(filename);
+
+    stmt = prepare(R"(
+        WITH dir AS (
+            INSERT INTO imported_directories (dir_path)
+            VALUES (?)
+            ON CONFLICT(dir_path) DO NOTHING
+            RETURNING dir_id
+        ),
+        existing_dir AS (
+            SELECT dir_id FROM imported_directories WHERE dir_path = ?
+        ),
+        final_dir AS (
+            SELECT dir_id FROM dir
+            UNION ALL
+            SELECT dir_id FROM existing_dir
+        )
+        INSERT INTO imported_files (dir_id, filename)
+        VALUES ((SELECT dir_id FROM final_dir), ?)
+        ON CONFLICT(dir_id, filename) DO NOTHING
+    )");
+    sqlite3_bind_text(stmt, 1, dir.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, dir.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, filename.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        Error() << "Failed to insert imported file: " << sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        return;
+    }
+    sqlite3_finalize(stmt);
+}
+
+// Search functions
+
 std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::string>& includedTags,
-                                             const std::unordered_set<std::string>& excludedTags) {
+                                             const std::unordered_set<std::string>& excludedTags) const {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
 
@@ -1111,7 +1236,7 @@ std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<std::strin
     return results;
 }
 std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::string>& includedTags,
-                                                  const std::unordered_set<std::string>& excludedTags) {
+                                                  const std::unordered_set<std::string>& excludedTags) const {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
 
@@ -1156,7 +1281,7 @@ std::vector<uint64_t> PicDatabase::pixivTagSearch(const std::unordered_set<std::
     return results;
 }
 std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<std::string>& includedTags,
-                                                      const std::unordered_set<std::string>& excludedTags) {
+                                                      const std::unordered_set<std::string>& excludedTags) const {
     std::vector<uint64_t> results;
     if (includedTags.empty() && excludedTags.empty()) return results;
 
@@ -1200,7 +1325,7 @@ std::vector<uint64_t> PicDatabase::tweetHashtagSearch(const std::unordered_set<s
     sqlite3_finalize(stmt);
     return results;
 }
-std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string& searchText, SearchField searchField) {
+std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string& searchText, SearchField searchField) const {
     std::unordered_map<uint64_t, int64_t> results; // id -> tweet_id or pixiv_id
     if (searchText.empty() || searchField == SearchField::None) return results;
     sqlite3_stmt* stmt = nullptr;
@@ -1358,6 +1483,9 @@ std::unordered_map<uint64_t, int64_t> PicDatabase::textSearch(const std::string&
     }
     return results;
 }
+
+// Get tag lists
+
 std::vector<std::tuple<std::string, int, bool>> PicDatabase::getTags() const {
     std::vector<std::tuple<std::string, int, bool>> tagCounts;
     sqlite3_stmt* stmt = prepare("SELECT tag, count, is_character FROM tags");
@@ -1403,25 +1531,8 @@ std::vector<std::pair<std::string, int>> PicDatabase::getTwitterHashtags() const
     });
     return tagCounts;
 }
-void PicDatabase::enableForeignKeyRestriction() const {
-    if (!execute("PRAGMA foreign_keys = ON;")) {
-        Warn() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
-    }
-}
-void PicDatabase::disableForeignKeyRestriction() const {
-    if (!execute("PRAGMA foreign_keys = OFF;")) {
-        Warn() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
-    }
-}
-bool PicDatabase::beginTransaction() {
-    return execute("BEGIN TRANSACTION;");
-}
-bool PicDatabase::commitTransaction() {
-    return execute("COMMIT;");
-}
-bool PicDatabase::rollbackTransaction() {
-    return execute("ROLLBACK;");
-}
+
+// Multi-threaded importer implementation
 
 MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& directory,
                                              ImportProgressCallback progressCallback,
@@ -1429,19 +1540,20 @@ MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& direct
                                              std::string dbFile,
                                              size_t threadCount)
     : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
-    files = collectFiles(directory);
-    supportedFileCount = files.size();
+    importDirectory = directory;
+    insertThread = std::thread(&MultiThreadedImporter::insertThreadFunc, this);
     for (size_t i = 0; i < threadCount; ++i) {
         workers.emplace_back(&MultiThreadedImporter::workerThreadFunc, this);
     }
-    insertThread = std::thread(&MultiThreadedImporter::insertThreadFunc, this);
 }
 MultiThreadedImporter::~MultiThreadedImporter() {
     forceStop();
     finish();
 }
 void MultiThreadedImporter::forceStop() {
+    if (finished) return;
     stopFlag.store(true);
+    finish();
 }
 bool MultiThreadedImporter::finish() {
     if (finished) return true;
@@ -1454,12 +1566,12 @@ bool MultiThreadedImporter::finish() {
         }
     }
     workers.clear();
-    finished = true;
     stopFlag.store(true);
     cv.notify_all();
     if (insertThread.joinable()) {
         insertThread.join();
     }
+    finished = true;
     return true;
 }
 bool processSingleFile(const std::filesystem::path& filePath,
@@ -1504,6 +1616,13 @@ void MultiThreadedImporter::workerThreadFunc() {
     std::vector<std::vector<PixivInfo>> pixivInfoVecs;
     pixivInfoVecs.reserve(500);
     size_t index = 0;
+
+    // Wait until files are collected
+    while (!readyFlag.load(std::memory_order_acquire) && !stopFlag.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (stopFlag.load()) return;
+
     while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
         if (picInfos.size() >= 100) {
             if (picMutex.try_lock()) {
@@ -1549,7 +1668,7 @@ void MultiThreadedImporter::workerThreadFunc() {
                 cv.notify_one();
             }
         }
-        if (stopFlag.load()) break;
+        if (stopFlag.load()) return;
         const auto& filePath = files[index];
         if (!processSingleFile(filePath, parserType, picInfos, pixivInfos, tweetInfos, pixivInfoVecs))
             supportedFileCount.fetch_sub(1, std::memory_order_relaxed);
@@ -1602,6 +1721,19 @@ void MultiThreadedImporter::insertThreadFunc() {
     tweetsToInsert.reserve(1000);
     std::vector<std::vector<PixivInfo>> pixivVecsToInsert;
     pixivVecsToInsert.reserve(1000);
+
+    // Collect files to import
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(importDirectory)) {
+        if (!entry.is_regular_file() || threadDb.isFileImported(entry.path())) {
+            continue;
+        }
+        files.push_back(entry.path());
+    }
+    supportedFileCount = files.size();
+    Info() << "Total files to import: " << supportedFileCount.load();
+    readyFlag.store(true);
+
+    threadDb.beginTransaction();
     while (!stopFlag.load() || importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
         if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
         std::unique_lock<std::mutex> lock(conditionMutex);
@@ -1616,16 +1748,11 @@ void MultiThreadedImporter::insertThreadFunc() {
                     picQueue.pop();
                 }
                 picMutex.unlock();
-                threadDb.beginTransaction();
                 for (const auto& picInfo : picsToInsert) {
                     threadDb.insertPicInfo(picInfo);
                     importedCount++;
                 }
                 picsToInsert.clear();
-                if (!threadDb.commitTransaction()) {
-                    Warn() << "Batch commit failed in insert thread, rolling back";
-                    threadDb.rollbackTransaction();
-                }
             }
         }
         if (!pixivQueue.empty()) {
@@ -1635,16 +1762,11 @@ void MultiThreadedImporter::insertThreadFunc() {
                     pixivQueue.pop();
                 }
                 pixivMutex.unlock();
-                threadDb.beginTransaction();
                 for (const auto& pixivInfo : pixivsToInsert) {
                     threadDb.insertPixivInfo(pixivInfo);
                     importedCount++;
                 }
                 pixivsToInsert.clear();
-                if (!threadDb.commitTransaction()) {
-                    Warn() << "Batch commit failed in insert thread, rolling back";
-                    threadDb.rollbackTransaction();
-                }
             }
         }
         if (!tweetQueue.empty()) {
@@ -1654,16 +1776,11 @@ void MultiThreadedImporter::insertThreadFunc() {
                     tweetQueue.pop();
                 }
                 tweetMutex.unlock();
-                threadDb.beginTransaction();
                 for (const auto& tweetInfo : tweetsToInsert) {
                     threadDb.insertTweetInfo(tweetInfo);
                     importedCount++;
                 }
                 tweetsToInsert.clear();
-                if (!threadDb.commitTransaction()) {
-                    Warn() << "Batch commit failed in insert thread, rolling back";
-                    threadDb.rollbackTransaction();
-                }
             }
         }
         if (!pixivVecQueue.empty()) {
@@ -1673,7 +1790,6 @@ void MultiThreadedImporter::insertThreadFunc() {
                     pixivVecQueue.pop();
                 }
                 pixivVecMutex.unlock();
-                threadDb.beginTransaction();
                 for (const auto& pixivInfoVec : pixivVecsToInsert) {
                     for (const auto& pixivInfo : pixivInfoVec) {
                         threadDb.updatePixivInfo(pixivInfo);
@@ -1681,13 +1797,21 @@ void MultiThreadedImporter::insertThreadFunc() {
                     }
                 }
                 pixivVecsToInsert.clear();
-                if (!threadDb.commitTransaction()) {
-                    Warn() << "Batch commit failed in insert thread, rolling back";
-                    threadDb.rollbackTransaction();
-                }
             }
         }
     }
+    if (stopFlag.load()) {
+        Info() << "Import stopped by user, rolling back. " << "Directory: " << importDirectory;
+        threadDb.rollbackTransaction();
+        return;
+    }
     threadDb.syncTables();
+    for (const auto& filePath : files) {
+        threadDb.addImportedFile(filePath);
+    }
+    if (!threadDb.commitTransaction()) {
+        Error() << "Import commit failed, rolling back. " << "Directory: " << importDirectory;
+        threadDb.rollbackTransaction();
+    }
     if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
 }

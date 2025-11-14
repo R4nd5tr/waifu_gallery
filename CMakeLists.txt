@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(waifu_gallery 
-        VERSION 0.0.0
-        LANGUAGES CXX)
+project(waifu_gallery LANGUAGES CXX)
 
 # setup configuration
 set(CMAKE_CXX_STANDARD 17)
@@ -33,7 +31,11 @@ file(GLOB RES_FILES ${PROJECT_SOURCE_DIR}/res/*.qrc)
 file(GLOB RC_FILES ${PROJECT_SOURCE_DIR}/res/*.rc)
 
 # target
-add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES} ${RES_FILES} ${RC_FILES})
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_executable(waifu_gallery ${SRC_FILES} ${UI_FILES} ${RES_FILES} ${RC_FILES}) # No WIN32 flag in Debug
+else()
+    add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES} ${RES_FILES} ${RC_FILES})
+endif()
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
 target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 

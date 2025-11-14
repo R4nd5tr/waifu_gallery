@@ -19,9 +19,8 @@
 #define WG_VERSION_MAJOR 0
 #define WG_VERSION_MINOR 0
 #define WG_VERSION_PATCH 0
-#define WG_VERSION_STATUS "beta"
+#define WG_VERSION_STATUS "alpha"
 #define WG__STRINGIFY(x) #x
 #define WG_STRINGFY(x) WG__STRINGIFY(x)
 
-#define WG_VERSION                                                                                                               \
-    WG_STRINGFY(WG_VERSION_MAJOR) "." WG_STRINGFY(WG_VERSION_MINOR) "." WG_STRINGFY(WG_VERSION_PATCH) " " WG_VERSION_STATUS
+#define WG_VERSION WG_STRINGFY(WG_VERSION_MAJOR.WG_VERSION_MINOR.WG_VERSION_PATCH) WG_VERSION_STATUS

@@ -21,25 +21,21 @@
 #include <string>
 #include <vector>
 
-struct Settings {
-    int windowWidth = 800;
-    int windowHeight = 600;
-    std::vector<std::filesystem::path> picDirectories;
-    std::vector<std::filesystem::path> pixivDirectories;
-    std::vector<std::filesystem::path> tweetDirectories;
-    bool autoScanOnStartup = false;
-    bool copyImage = false;
-    bool openImage = false;
-    bool copyImagePath = false;
-    bool openImagePath = false;
-};
+const std::string SETTINGS_FILE_PATH = "settings.json";
 
-class SettingsManager {
+class Settings {
 public:
-    SettingsManager();
-    ~SettingsManager();
+    Settings() = default;
+    ~Settings() = default;
     void loadSettings();
     void saveSettings();
 
-private:
+    static bool settingsLoaded;
+
+    static uint32_t windowWidth;
+    static uint32_t windowHeight;
+    static std::vector<std::filesystem::path> picDirectories;
+    static std::vector<std::filesystem::path> pixivDirectories;
+    static std::vector<std::filesystem::path> tweetDirectories;
+    static bool autoScanOnStartup;
 };

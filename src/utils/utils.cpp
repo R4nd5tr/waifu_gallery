@@ -21,14 +21,12 @@
 
 std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory) {
     std::vector<std::filesystem::path> files;
-    int fileCount = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
         if (!entry.is_regular_file()) {
             continue;
         }
         files.push_back(entry.path());
-        fileCount++;
     }
-    Info() << "Total files collected:" << fileCount << "from directory:" << directory.string();
+    Info() << "Total files collected:" << files.size() << "from directory:" << directory.string();
     return files;
 }

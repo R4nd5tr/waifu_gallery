@@ -58,13 +58,23 @@ public:
     PicDatabase(const std::string& databaseFile = DEFAULT_DATABASE_FILE, DbMode mode = DbMode::Normal);
     explicit PicDatabase(DbMode mode) : PicDatabase(DEFAULT_DATABASE_FILE, mode) {}
     ~PicDatabase();
-    void reloadDatabase() { getTagMapping(); };
 
-    void enableForeignKeyRestriction() const;
-    void disableForeignKeyRestriction() const;
-    bool beginTransaction();
-    bool commitTransaction();
-    bool rollbackTransaction();
+    void reloadDatabase() { initTagMapping(); };
+
+    // transaction and mode management
+    void enableForeignKeyRestriction() const {
+        if (!execute("PRAGMA foreign_keys = ON;")) {
+            Warn() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
+        }
+    }
+    void disableForeignKeyRestriction() const {
+        if (!execute("PRAGMA foreign_keys = OFF;")) {
+            Warn() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
+        }
+    }
+    bool beginTransaction() { return execute("BEGIN TRANSACTION;"); }
+    bool commitTransaction() { return execute("COMMIT;"); }
+    bool rollbackTransaction() { return execute("ROLLBACK;"); }
     void setMode(DbMode mode) {
         if (currentMode == mode) return;
         execute("PRAGMA journal_mode = WAL");
@@ -123,12 +133,12 @@ public:
 
     // search functions TODO: merge SQL queries
     std::vector<uint64_t> tagSearch(const std::unordered_set<std::string>& includedTags,
-                                    const std::unordered_set<std::string>& excludedTags);
+                                    const std::unordered_set<std::string>& excludedTags) const;
     std::vector<uint64_t> pixivTagSearch(const std::unordered_set<std::string>& includedTags,
-                                         const std::unordered_set<std::string>& excludedTags);
+                                         const std::unordered_set<std::string>& excludedTags) const;
     std::vector<uint64_t> tweetHashtagSearch(const std::unordered_set<std::string>& includedTags,
-                                             const std::unordered_set<std::string>& excludedTags);
-    std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField);
+                                             const std::unordered_set<std::string>& excludedTags) const;
+    std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField) const;
 
     // import functions
     void importFilesFromDirectory(const std::filesystem::path& directory,
@@ -140,6 +150,9 @@ public:
 
     void importTagSet(const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter), index is tag ID
 
+    bool isFileImported(const std::filesystem::path& filePath) const;
+    void addImportedFile(const std::filesystem::path& filePath);
+
 private:
     DbMode currentMode = DbMode::None;
     sqlite3* db = nullptr;
@@ -150,10 +163,12 @@ private:
     std::unordered_map<int, std::string> idToTwitterHashtag;
     std::unordered_map<int, std::string> idToPixivTag;
     std::unordered_set<int64_t> newPixivIDs;
+    std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles; // directory -> set of imported file names
 
     void initDatabase(const std::string& databaseFile);
     bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
-    void getTagMapping();
+    void initTagMapping();
+    void initImportedFiles();
 
     bool execute(const std::string& sql) const {
         char* errorMsg = nullptr;
@@ -176,7 +191,7 @@ private:
     }
 };
 
-class MultiThreadedImporter { // TODO: implement skip existing files for auto import; add cancel operation?
+class MultiThreadedImporter { // TODO: implement skip existing files for auto import, Incremental update; add cancel operation?
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,
@@ -194,9 +209,12 @@ private:
     ImportProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
     ParserType parserType;
     std::string dbFile;
+    std::filesystem::path importDirectory;
 
     std::vector<std::thread> workers;
     std::vector<std::filesystem::path> files;
+    std::atomic<bool> readyFlag = false;
+    std::condition_variable cvReady;
     std::atomic<size_t> nextFileIndex = 0;
     size_t importedCount = 0;
     std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping

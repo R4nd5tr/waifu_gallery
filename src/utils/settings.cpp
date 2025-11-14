@@ -15,3 +15,96 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+#include "settings.h"
+#include "utils/logger.h"
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
+bool Settings::settingsLoaded = false;
+
+uint32_t Settings::windowWidth = 800;
+uint32_t Settings::windowHeight = 600;
+std::vector<std::filesystem::path> Settings::picDirectories;
+std::vector<std::filesystem::path> Settings::pixivDirectories;
+std::vector<std::filesystem::path> Settings::tweetDirectories;
+bool Settings::autoScanOnStartup = false;
+
+void Settings::loadSettings() {
+    if (settingsLoaded) {
+        Info() << "Settings already loaded." << std::endl;
+        return;
+    }
+    try {
+        if (std::filesystem::exists(SETTINGS_FILE_PATH)) {
+            std::ifstream inFile(SETTINGS_FILE_PATH);
+            json j;
+            inFile >> j;
+            windowWidth = j.value("windowWidth", 800);
+            windowHeight = j.value("windowHeight", 600);
+            {
+                auto tmp = j.value("picDirectories", std::vector<std::string>{});
+                picDirectories.clear();
+                for (const auto& s : tmp)
+                    picDirectories.emplace_back(s);
+            }
+            {
+                auto tmp = j.value("pixivDirectories", std::vector<std::string>{});
+                pixivDirectories.clear();
+                for (const auto& s : tmp)
+                    pixivDirectories.emplace_back(s);
+            }
+            {
+                auto tmp = j.value("tweetDirectories", std::vector<std::string>{});
+                tweetDirectories.clear();
+                for (const auto& s : tmp)
+                    tweetDirectories.emplace_back(s);
+            }
+            autoScanOnStartup = j.value("autoScanOnStartup", false);
+        } else {
+            Info() << "Settings file not found. Using default settings." << std::endl;
+        }
+    } catch (const std::exception& e) {
+        Error() << "Error loading settings: " << e.what() << std::endl;
+    }
+    settingsLoaded = true;
+    Info() << "Settings loaded: " << "Window Size(" << windowWidth << "x" << windowHeight << "), "
+           << "Auto Scan On Startup(" << (autoScanOnStartup ? "true" : "false") << ")" << std::endl;
+}
+void Settings::saveSettings() {
+    if (!settingsLoaded) {
+        Info() << "Settings not loaded. Skipping save." << std::endl;
+        return;
+    }
+    try {
+        json j;
+        j["windowWidth"] = windowWidth;
+        j["windowHeight"] = windowHeight;
+        {
+            std::vector<std::string> tmp;
+            for (const auto& path : picDirectories)
+                tmp.push_back(path.string());
+            j["picDirectories"] = tmp;
+        }
+        {
+            std::vector<std::string> tmp;
+            for (const auto& path : pixivDirectories)
+                tmp.push_back(path.string());
+            j["pixivDirectories"] = tmp;
+        }
+        {
+            std::vector<std::string> tmp;
+            for (const auto& path : tweetDirectories)
+                tmp.push_back(path.string());
+            j["tweetDirectories"] = tmp;
+        }
+        j["autoScanOnStartup"] = autoScanOnStartup;
+
+        std::ofstream outFile(SETTINGS_FILE_PATH);
+        outFile << j.dump(4);
+    } catch (const std::exception& e) {
+        Error() << "Error saving settings: " << e.what() << std::endl;
+    }
+    Info() << "Settings saved." << std::endl;
+}
