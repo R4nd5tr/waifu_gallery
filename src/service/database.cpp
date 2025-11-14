@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based image gallery application.
+ * Waifu Gallery - A Qt-based anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -45,9 +45,9 @@ PicDatabase::PicDatabase(const std::string& databaseFile, DbMode mode) {
     setMode(mode);
     if (mode == DbMode::Import) {
         initImportedFiles();
-        return;
+    } else {
+        initTagMapping();
     }
-    initTagMapping();
 }
 PicDatabase::~PicDatabase() {
     if (db) {

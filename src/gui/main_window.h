@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based image gallery application.
+ * Waifu Gallery - A Qt-based anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -203,13 +203,16 @@ private:
 
     // Action handlers
     void handleAddNewPicsAction();
-    void handleAddPowerfulPixivDownloaderAction(); // specify parser type
-    void handleAddGallery_dlTwitterAction();       // specify parser type
+    void handleAddPowerfulPixivDownloaderAction(); // specify parser type pixiv
+    void handleAddGallery_dlTwitterAction();       // specify parser type twitter
     void displayImportProgress(size_t progress, size_t total);
     std::chrono::steady_clock::time_point ImportStartTime;
 
     AboutDialog* aboutDialog = nullptr;
     void handleShowAboutAction();
+
+    // cancel progress
+    void handleCancelProgress();
 
     // searching
     bool selectedTagChanged = false;
@@ -234,7 +237,7 @@ private:
     std::vector<PicInfo> resultPics;
     std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
-    std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage?
+    std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage? implement LRU cache?
     void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call loadMorePics()
     bool isMatchFilter(const PicInfo& pic);
     void loadMorePics();

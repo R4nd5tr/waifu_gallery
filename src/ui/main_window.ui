@@ -34,8 +34,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>145</width>
-         <height>123</height>
+         <width>280</width>
+         <height>640</height>
         </rect>
        </property>
        <attribute name="label">
@@ -902,6 +902,13 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QPushButton" name="cancelProgressButton">
+           <property name="text">
+            <string>取消</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
@@ -1071,7 +1078,7 @@
            <x>0</x>
            <y>0</y>
            <width>790</width>
-           <height>573</height>
+           <height>572</height>
           </rect>
          </property>
          <property name="sizePolicy">
@@ -1119,6 +1126,7 @@
     <property name="title">
      <string>选项</string>
     </property>
+    <addaction name="action"/>
    </widget>
    <addaction name="fileMenu"/>
    <addaction name="settingsMenu"/>
@@ -1156,6 +1164,11 @@
   <action name="showAboutAction">
    <property name="text">
     <string>关于</string>
+   </property>
+  </action>
+  <action name="action">
+   <property name="text">
+    <string>设置...</string>
    </property>
   </action>
  </widget>

@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based image gallery application.
+ * Waifu Gallery - A Qt-based anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -163,6 +163,9 @@ void MainWindow::connectSignalSlots() {
     connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
     connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
     connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
+
+    // cancel progress
+    connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::handleCancelProgress);
 }
 QString getTagString(std::string tag, int count) {
     return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
@@ -967,4 +970,18 @@ void MainWindow::handleShowAboutAction() {
     aboutDialog->show();
     aboutDialog->raise();
     aboutDialog->activateWindow();
+}
+void MainWindow::handleCancelProgress() {
+    if (importer) {
+        ui->statusbar->showMessage("正在取消导入任务，请稍候...");
+        Info() << "Cancelling import task...";
+        importer->forceStop();
+        delete importer;
+        importer = nullptr;
+        ui->progressWidget->hide();
+        ui->progressLabel->setText("");
+        ui->progressStatusLabel->setText("");
+        ui->statusbar->showMessage("导入任务已取消。");
+        Info() << "Import task cancelled.";
+    }
 }
