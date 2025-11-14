@@ -332,9 +332,9 @@ void PicDatabase::initImportedFiles() {
     importedFiles.clear();
     sqlite3_stmt* stmt = nullptr;
     stmt = prepare(R"(
-        SELECT id.dirPath, f.fileName
+        SELECT id.dir_path, f.filename
         FROM imported_files f
-        JOIN imported_directories id ON f.dirID = id.dirID
+        JOIN imported_directories id ON f.dir_id = id.dir_id
     )");
     if (!stmt) {
         Error() << "Failed to prepare statement for fetching imported files.";
@@ -1165,32 +1165,45 @@ void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
     }
     importedFiles[dir].insert(filename);
 
+    // Step 1: Insert or ignore the directory
     stmt = prepare(R"(
-        WITH dir AS (
-            INSERT INTO imported_directories (dir_path)
-            VALUES (?)
-            ON CONFLICT(dir_path) DO NOTHING
-            RETURNING dir_id
-        ),
-        existing_dir AS (
-            SELECT dir_id FROM imported_directories WHERE dir_path = ?
-        ),
-        final_dir AS (
-            SELECT dir_id FROM dir
-            UNION ALL
-            SELECT dir_id FROM existing_dir
-        )
-        INSERT INTO imported_files (dir_id, filename)
-        VALUES ((SELECT dir_id FROM final_dir), ?)
-        ON CONFLICT(dir_id, filename) DO NOTHING
+        INSERT INTO imported_directories (dir_path)
+        VALUES (?)
+        ON CONFLICT(dir_path) DO NOTHING
     )");
     sqlite3_bind_text(stmt, 1, dir.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, dir.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, filename.c_str(), -1, SQLITE_TRANSIENT);
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        Error() << "Failed to insert imported file: " << sqlite3_errmsg(db);
+        Error() << "Failed to insert directory: " << sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
         return;
+    }
+    sqlite3_finalize(stmt);
+
+    // Step 2: Get the dir_id
+    int64_t dirId = -1;
+    stmt = prepare(R"(
+        SELECT dir_id FROM imported_directories WHERE dir_path = ?
+    )");
+    sqlite3_bind_text(stmt, 1, dir.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        dirId = sqlite3_column_int64(stmt, 0);
+    } else {
+        Error() << "Failed to fetch dir_id: " << sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        return;
+    }
+    sqlite3_finalize(stmt);
+
+    // Step 3: Insert the file
+    stmt = prepare(R"(
+        INSERT INTO imported_files (dir_id, filename)
+        VALUES (?, ?)
+        ON CONFLICT(dir_id, filename) DO NOTHING
+    )");
+    sqlite3_bind_int64(stmt, 1, dirId);
+    sqlite3_bind_text(stmt, 2, filename.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        Error() << "Failed to insert imported file: " << sqlite3_errmsg(db);
     }
     sqlite3_finalize(stmt);
 }
@@ -1547,7 +1560,6 @@ MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& direct
     }
 }
 MultiThreadedImporter::~MultiThreadedImporter() {
-    forceStop();
     finish();
 }
 void MultiThreadedImporter::forceStop() {
@@ -1566,7 +1578,6 @@ bool MultiThreadedImporter::finish() {
         }
     }
     workers.clear();
-    stopFlag.store(true);
     cv.notify_all();
     if (insertThread.joinable()) {
         insertThread.join();
@@ -1734,7 +1745,7 @@ void MultiThreadedImporter::insertThreadFunc() {
     readyFlag.store(true);
 
     threadDb.beginTransaction();
-    while (!stopFlag.load() || importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
+    while (!stopFlag.load() && importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
         if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
         std::unique_lock<std::mutex> lock(conditionMutex);
         cv.wait(lock, [this]() {
@@ -1793,13 +1804,14 @@ void MultiThreadedImporter::insertThreadFunc() {
                 for (const auto& pixivInfoVec : pixivVecsToInsert) {
                     for (const auto& pixivInfo : pixivInfoVec) {
                         threadDb.updatePixivInfo(pixivInfo);
-                        importedCount++;
                     }
+                    importedCount++;
                 }
                 pixivVecsToInsert.clear();
             }
         }
     }
+    Info() << "Finalizing import. Directory: " << importDirectory;
     if (stopFlag.load()) {
         Info() << "Import stopped by user, rolling back. " << "Directory: " << importDirectory;
         threadDb.rollbackTransaction();
@@ -1813,5 +1825,6 @@ void MultiThreadedImporter::insertThreadFunc() {
         Error() << "Import commit failed, rolling back. " << "Directory: " << importDirectory;
         threadDb.rollbackTransaction();
     }
+    Info() << "Import completed. Directory: " << importDirectory;
     if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
 }

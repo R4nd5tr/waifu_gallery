@@ -34,8 +34,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>280</width>
-         <height>640</height>
+         <width>145</width>
+         <height>123</height>
         </rect>
        </property>
        <attribute name="label">
@@ -1148,7 +1148,7 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>导入新图片...</string>
+    <string>导入非下载器图片...</string>
    </property>
   </action>
   <action name="addPowerfulPixivDownloaderAction">
