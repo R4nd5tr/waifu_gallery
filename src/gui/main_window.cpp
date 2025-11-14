@@ -51,7 +51,7 @@ void MainWindow::fillComboBox() {
     ui->searchComboBox->addItem("pixiv作者ID");
     ui->searchComboBox->addItem("pixiv作者名");
     ui->searchComboBox->addItem("pixiv标题");
-    ui->searchComboBox->addItem("推特ID");
+    ui->searchComboBox->addItem("推文ID");
     ui->searchComboBox->addItem("推特作者ID");
     ui->searchComboBox->addItem("推特作者名");
     ui->searchComboBox->addItem("推特作者别名");
@@ -137,6 +137,7 @@ void MainWindow::connectSignalSlots() {
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
     connect(ui->searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::picSearch);
+    connect(ui->clearTextSearchButton, &QPushButton::clicked, this, &MainWindow::clearSearchText);
 
     // tag list controls
     connect(ui->generalTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
@@ -486,6 +487,12 @@ void MainWindow::updateSearchField(int index) {
 void MainWindow::updateSearchText(const QString& text) {
     searchText = text.toStdString();
     searchTextChanged = true;
+}
+void MainWindow::clearSearchText() {
+    ui->searchLineEdit->clear();
+    searchText = "";
+    searchTextChanged = true;
+    picSearch();
 }
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
     tagClickTimer->start(DOUBLE_CLICK_DELAY);

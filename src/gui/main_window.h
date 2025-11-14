@@ -175,6 +175,7 @@ private:
 
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
+    void clearSearchText();
 
     void handleListWidgetItemSingleClick(QListWidgetItem* item);
     QListWidgetItem* lastClickedTagItem = nullptr;
