@@ -1,0 +1,56 @@
+Waifu Gallery 第三方开源组件声明
+
+本软件基于以下开源项目构建：
+
+1. xxHash
+   许可证: BSD 2-Clause License
+   用途: 快速哈希算法
+   项目地址: https://github.com/Cyan4973/xxHash
+   修改: 无
+
+2. SQLite
+   许可证: Public Domain
+   用途: 嵌入式数据库
+   项目地址: https://www.sqlite.org/
+   修改: 无
+
+3. stb
+   许可证: MIT License / Public Domain
+   用途: 图像处理库
+   项目地址: https://github.com/nothings/stb
+   修改: 无
+
+4. rapidcsv
+   许可证: BSD 3-Clause License  
+   用途: CSV 文件解析
+   项目地址: https://github.com/d99kris/rapidcsv
+   修改: 无
+
+5. nlohmann/json
+   许可证: MIT License
+   用途: JSON 解析和序列化
+   项目地址: https://github.com/nlohmann/json
+   修改: 无
+
+6. Qt Framework
+   许可证: GNU General Public License v3.0
+   用途: GUI 应用程序框架
+   项目地址: https://www.qt.io/
+   修改: 无
+
+7. libwebp
+   许可证: BSD 3-Clause License
+   用途: WebP 图像格式支持
+   项目地址: https://developers.google.com/speed/webp
+   修改: 无
+
+8. AppIcon Forge
+   许可证: MIT License
+   用途: 应用程序图标生成工具
+   项目地址: https://github.com/zhangyu1818/appicon-forge
+
+9. Fluent UI System Icons
+   许可证: MIT License
+   用途: 用户界面图标
+   项目地址: https://github.com/microsoft/fluentui-system-icons
+   修改: 无
