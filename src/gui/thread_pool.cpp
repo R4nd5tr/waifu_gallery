@@ -25,6 +25,7 @@
 const size_t IMAGE_RESOLUTION_LIMIT = 256;
 
 const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
+
 ImageLoadThreadPool::ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads) : mainWindow(mainWindow) {
     for (size_t i = 0; i < numThreads; ++i) {
         workers.emplace_back(&ImageLoadThreadPool::workerFunction, this);
@@ -33,7 +34,7 @@ ImageLoadThreadPool::ImageLoadThreadPool(MainWindow* mainWindow, size_t numThrea
 ImageLoadThreadPool::~ImageLoadThreadPool() {
     stop();
 }
-void ImageLoadThreadPool::loadImage(PicInfo picInfo) {
+void ImageLoadThreadPool::loadImage(const PicInfo& picInfo) {
     if (picInfo.filePaths.empty()) {
         Warn() << "No file paths available for PicInfo ID:" << picInfo.id;
         return;

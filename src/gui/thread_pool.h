@@ -49,7 +49,7 @@ public:
     ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
     ~ImageLoadThreadPool();
 
-    void loadImage(PicInfo picInfo);
+    void loadImage(const PicInfo& picInfo);
     void clearTasks();
 
 private:

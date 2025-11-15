@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>settingsDialog</class>
- <widget class="QDialog" name="settingsDialog">
+ <class>SettingsDialog</class>
+ <widget class="QDialog" name="SettingsDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>设置 Waifu Gallery</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -30,9 +30,9 @@
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_5">
        <item>
-        <widget class="QCheckBox" name="checkBox">
+        <widget class="QCheckBox" name="importOnStartCheckBox">
          <property name="text">
-          <string>应用启动时自动扫描新增文件</string>
+          <string>启动时自动导入新增文件</string>
          </property>
         </widget>
        </item>
@@ -43,7 +43,7 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
-           <widget class="QListWidget" name="listWidget"/>
+           <widget class="QListWidget" name="picDirsList"/>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
@@ -61,14 +61,14 @@
              </spacer>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton">
+             <widget class="QPushButton" name="addPicDirButton">
               <property name="text">
                <string>新增</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_3">
+             <widget class="QPushButton" name="delPicDirButton">
               <property name="text">
                <string>删除</string>
               </property>
@@ -86,7 +86,7 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
-           <widget class="QListWidget" name="listWidget_2"/>
+           <widget class="QListWidget" name="pixivPicDirsList"/>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -104,14 +104,14 @@
              </spacer>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_2">
+             <widget class="QPushButton" name="addPixivDirButton">
               <property name="text">
                <string>新增</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_4">
+             <widget class="QPushButton" name="delPixivDirButton">
               <property name="text">
                <string>删除</string>
               </property>
@@ -129,7 +129,7 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <widget class="QListWidget" name="listWidget_3"/>
+           <widget class="QListWidget" name="twitterPicDirsList"/>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_3">
@@ -147,14 +147,14 @@
              </spacer>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_5">
+             <widget class="QPushButton" name="addTwitterDirButton">
               <property name="text">
                <string>新增</string>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="pushButton_6">
+             <widget class="QPushButton" name="delTwitterDirButton">
               <property name="text">
                <string>删除</string>
               </property>
@@ -186,7 +186,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>settingsDialog</receiver>
+   <receiver>SettingsDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -202,7 +202,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>settingsDialog</receiver>
+   <receiver>SettingsDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

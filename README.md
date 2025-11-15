@@ -39,9 +39,9 @@ Waifu Gallery 是基于 Qt6 开发的桌面应用程序，专门为管理二次�
 ## 使用指南
 
 ### 1. **导入图片**：  
- - 在菜单栏点击`文件-导入新图片`，选择包含普通图片或非下载器下载图片的文件夹，程序会自动扫描并导入。  
- - 点击`文件-导入Powerful Pixiv Downloader下载的图片`，选择包含[powerful pixiv downloader](https://github.com/xuejianxianzun/PixivBatchDownloader)下载的图片或元数据的文件夹，程序会用专用解析器解析文件名和元数据文件，导入标签和作者等信息。
- - 点击`文件-导入gallery-dl下载的Twitter图片`，选择包含gallery-dl下载的Twitter图片或元数据的文件夹，程序同样会用专用解析器导入相关内容。  
+ - 在菜单栏点击`文件-导入非下载器图片...`，选择包含普通图片或非下载器下载图片的文件夹，程序会自动扫描并导入。  
+ - 点击`文件-导入Powerful Pixiv Downloader下载的文件...`，选择包含[powerful pixiv downloader](https://github.com/xuejianxianzun/PixivBatchDownloader)下载的图片或元数据的文件夹，程序会用专用解析器解析文件名和元数据文件，导入标签和作者等信息。
+ - 点击`文件-导入gallery-dl下载的Twitter文件...`，选择包含[gallery-dl](https://github.com/mikf/gallery-dl)下载的Twitter图片或元数据的文件夹，程序同样会用专用解析器导入相关内容。  
 
 本工具支持所有二次元插画，若图片带有下载器元数据，则可按平台标签、作者、作品标题等更多维度进行搜索和筛选。
 

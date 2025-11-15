@@ -179,7 +179,7 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
     std::vector<PixivInfo> result;
     std::ifstream file(pixivCsvFilePath);
     if (!file.is_open()) {
-        std::cerr << "Failed to open file: " << pixivCsvFilePath << std::endl;
+        Error() << "Failed to open file: " << pixivCsvFilePath;
         return result;
     }
     rapidcsv::Document doc(file, rapidcsv::LabelParams(0, -1));

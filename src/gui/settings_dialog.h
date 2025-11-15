@@ -17,28 +17,33 @@
  */
 
 #pragma once
-#include <filesystem>
-#include <string>
-#include <vector>
+#include "utils/settings.h"
+#include <QDialog>
+#include <QFileDialog>
 
-const std::string SETTINGS_FILE_PATH = "settings.json";
+namespace Ui {
+class SettingsDialog;
+}
 
-class Settings {
+class SettingsDialog : public QDialog {
+    Q_OBJECT
 public:
-    static void loadSettings();
-    static void saveSettings();
+    explicit SettingsDialog(QWidget* parent = nullptr);
+    ~SettingsDialog();
+    void loadSettings();
+    void saveSettings();
 
-    static void setWidthHeight(uint32_t width, uint32_t height) {
-        windowWidth = width;
-        windowHeight = height;
-    }
+    void addPicDirectory();
+    void deletePicDirectory();
+    void addPixivDirectory();
+    void deletePixivDirectory();
+    void addTwitterDirectory();
+    void deleteTwitterDirectory();
 
-    static bool settingsLoaded;
-
-    static uint32_t windowWidth;
-    static uint32_t windowHeight;
-    static std::vector<std::filesystem::path> picDirectories;
-    static std::vector<std::filesystem::path> pixivDirectories;
-    static std::vector<std::filesystem::path> tweetDirectories;
-    static bool autoImportOnStartup;
+private:
+    Ui::SettingsDialog* ui;
+    bool importOnStartup;
+    std::vector<std::filesystem::path> picDirectories;
+    std::vector<std::filesystem::path> pixivDirectories;
+    std::vector<std::filesystem::path> tweetDirectories;
 };

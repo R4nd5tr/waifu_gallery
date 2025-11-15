@@ -20,6 +20,7 @@
 #include "about_dialog.h"
 #include "service/database.h"
 #include "service/model.h"
+#include "settings_dialog.h"
 #include "thread_pool.h"
 #include "widgets/picture_frame.h"
 #include "worker.h"
@@ -197,22 +198,24 @@ private:
 
     void handleWindowSizeChange();
 
-    void handlescrollBarValueChange(int value);
+    void displayMorePicOnScroll(int value);
 
     void tagSearch(const QString& text);
 
     // Action handlers
+    std::chrono::steady_clock::time_point ImportStartTime;
     void handleAddNewPicsAction();
     void handleAddPowerfulPixivDownloaderAction(); // specify parser type pixiv
     void handleAddGallery_dlTwitterAction();       // specify parser type twitter
-    void displayImportProgress(size_t progress, size_t total);
-    std::chrono::steady_clock::time_point ImportStartTime;
-
     AboutDialog* aboutDialog = nullptr;
     void handleShowAboutAction();
+    SettingsDialog* settingsDialog = nullptr;
+    void handleShowSettingsAction();
 
-    // cancel progress
-    void handleCancelProgress();
+    // task progress
+    void displayImportProgress(size_t progress, size_t total);
+    void finalizeImportProgress(size_t totalImported);
+    void cancelProgress();
 
     // searching
     bool selectedTagChanged = false;
@@ -238,9 +241,9 @@ private:
     std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage? implement LRU cache?
-    void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call loadMorePics()
+    void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call displayMorePics()
     bool isMatchFilter(const PicInfo& pic);
-    void loadMorePics();
+    void displayMorePics();
     void sortPics(); // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();

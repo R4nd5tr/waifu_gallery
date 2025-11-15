@@ -60,7 +60,7 @@ PicDatabase::~PicDatabase() {
 
 void PicDatabase::initDatabase(const std::string& databaseFile) {
     if (sqlite3_open(databaseFile.c_str(), &db) != SQLITE_OK) {
-        Error() << "Error opening database: " << sqlite3_errmsg(db) << std::endl;
+        Error() << "Error opening database: " << sqlite3_errmsg(db);
         return;
     }
     if (!createTables()) {
@@ -896,12 +896,16 @@ std::vector<PicInfo> PicDatabase::getNoMetadataPics() const {
         SELECT p.id
         FROM pictures p
         LEFT JOIN picture_pixiv_ids ppi ON p.id = ppi.id
-        LEFT JOIN picture_tweet_ids pti ON p.id = pti.id
         LEFT JOIN pixiv_artworks pa ON ppi.pixiv_id = pa.pixiv_id
+        LEFT JOIN picture_tweet_ids pti ON p.id = pti.id
         LEFT JOIN tweets t ON pti.tweet_id = t.tweet_id
         WHERE 
             (ppi.id IS NULL AND pti.id IS NULL)
-            OR (ppi.id IS NOT NULL AND pa.pixiv_id IS NULL)
+            OR (ppi.id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM picture_pixiv_ids sub_ppi
+                LEFT JOIN pixiv_artworks sub_pa ON sub_ppi.pixiv_id = sub_pa.pixiv_id
+                WHERE sub_ppi.id = p.id AND sub_pa.pixiv_id IS NOT NULL
+            ))
             OR (pti.id IS NOT NULL AND t.tweet_id IS NULL)
     )");
     while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -1108,23 +1112,36 @@ void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-
     }
     for (const auto& pixivID : newPixivIDs) {
         stmt = prepare(R"(
-            UPDATE pictures SET x_restrict = (
-                SELECT x_restrict FROM pixiv_artworks WHERE pixiv_id = ?
-            ), ai_type = (
-                SELECT ai_type FROM pixiv_artworks WHERE pixiv_id = ?
-            ) WHERE id IN (
+            UPDATE pictures
+            SET x_restrict = CASE
+                WHEN x_restrict IS NULL OR x_restrict < (
+                    SELECT x_restrict FROM pixiv_artworks WHERE pixiv_id = ?
+                )
+                THEN (SELECT x_restrict FROM pixiv_artworks WHERE pixiv_id = ?)
+                ELSE x_restrict
+            END,
+            ai_type = CASE
+                WHEN ai_type IS NULL OR ai_type < (
+                    SELECT ai_type FROM pixiv_artworks WHERE pixiv_id = ?
+                )
+                THEN (SELECT ai_type FROM pixiv_artworks WHERE pixiv_id = ?)
+                ELSE ai_type
+            END
+            WHERE id IN (
                 SELECT id FROM picture_pixiv_ids WHERE pixiv_id = ?
             )
         )");
         sqlite3_bind_int64(stmt, 1, pixivID);
         sqlite3_bind_int64(stmt, 2, pixivID);
         sqlite3_bind_int64(stmt, 3, pixivID);
+        sqlite3_bind_int64(stmt, 4, pixivID);
+        sqlite3_bind_int64(stmt, 5, pixivID);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             Warn() << "Failed to sync pixiv info for pixiv_id:" << pixivID << "Error:" << sqlite3_errmsg(db);
         }
+        sqlite3_finalize(stmt);
     }
     execute("PRAGMA foreign_keys = ON");
-    sqlite3_finalize(stmt);
 }
 void PicDatabase::importTagSet(const std::vector<std::pair<std::string, bool>>& tagSet) {
     sqlite3_stmt* stmt = nullptr;
@@ -1560,6 +1577,7 @@ MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& direct
     }
 }
 MultiThreadedImporter::~MultiThreadedImporter() {
+    forceStop();
     finish();
 }
 void MultiThreadedImporter::forceStop() {
@@ -1811,7 +1829,7 @@ void MultiThreadedImporter::insertThreadFunc() {
             }
         }
     }
-    Info() << "Finalizing import. Directory: " << importDirectory;
+    Info() << "Finalizing import";
     if (stopFlag.load()) {
         Info() << "Import stopped by user, rolling back. " << "Directory: " << importDirectory;
         threadDb.rollbackTransaction();

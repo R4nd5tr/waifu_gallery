@@ -19,14 +19,19 @@
 #include "main_window.h"
 #include "service/database.h"
 #include "ui_main_window.h"
+#include "utils/settings.h"
 #include <QFileDialog>
 #include <QScrollBar>
 #include <QString>
 
 const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 
+// MainWindow implementation
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
+    Settings::loadSettings();
+    resize(Settings::windowWidth, Settings::windowHeight);
     initInterface();
     initWorkerThreads();
     connectSignalSlots();
@@ -38,7 +43,11 @@ MainWindow::~MainWindow() {
     delete ui;
     searchWorkerThread->quit();
     searchWorkerThread->wait();
+    Settings::saveSettings();
 }
+
+// Initialize functions
+
 void MainWindow::initInterface() {
     ui->selectedTagScrollArea->hide();
     ui->progressWidget->hide();
@@ -155,17 +164,17 @@ void MainWindow::connectSignalSlots() {
     connect(ui->searchTagTextEdit, &QLineEdit::textChanged, this, &MainWindow::tagSearch);
 
     // scroll area scrollbar
-    connect(
-        ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::handlescrollBarValueChange);
+    connect(ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::displayMorePicOnScroll);
 
     // menu actions
     connect(ui->addNewPicsAction, &QAction::triggered, this, &MainWindow::handleAddNewPicsAction);
     connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
     connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
     connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
+    connect(ui->showSettingsAction, &QAction::triggered, this, &MainWindow::handleShowSettingsAction);
 
     // cancel progress
-    connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::handleCancelProgress);
+    connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::cancelProgress);
 }
 QString getTagString(std::string tag, int count) {
     return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
@@ -245,6 +254,9 @@ void MainWindow::displayTags(const std::vector<std::tuple<std::string, int, bool
         ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(twitterHashtags[i].first));
     }
 }
+
+// Functions for filters and sorting
+
 void MainWindow::updateShowJPG(bool checked) {
     showJPG = checked;
     refreshPicDisplay();
@@ -484,6 +496,9 @@ void MainWindow::sortPics() {
     };
     std::sort(resultPics.begin(), resultPics.end(), comparator);
 }
+
+// Functions for text and tag search
+
 void MainWindow::updateSearchField(int index) {
     searchField = static_cast<SearchField>(index);
 }
@@ -657,6 +672,53 @@ void MainWindow::tagSearch(const QString& text) {
         }
     }
 }
+// Main search function
+void MainWindow::picSearch() {
+    imageLoadThreadPool.clearTasks();
+    clearAllPicFrames();
+    if (isSearchCriteriaEmpty()) {
+        displayTags();
+        resultPics = noMetadataPics;
+        sortPics();
+        displayMorePics();
+        ui->statusbar->showMessage("显示无元数据图片，共 " + QString::number(resultPics.size()) + " 张图片");
+        return;
+    }
+    ui->statusbar->showMessage("正在搜索...");
+    searchRequestId++;
+    emit searchPics(includedTags,
+                    excludedTags,
+                    includedPixivTags,
+                    excludedPixivTags,
+                    includedTweetTags,
+                    excludedTweetTags,
+                    searchText,
+                    searchField,
+                    selectedTagChanged,
+                    selectedPixivTagChanged,
+                    selectedTweetTagChanged,
+                    searchTextChanged,
+                    searchRequestId);
+}
+void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
+                                     std::vector<std::tuple<std::string, int, bool>> availableTags,
+                                     std::vector<std::pair<std::string, int>> availablePixivTags,
+                                     std::vector<std::pair<std::string, int>> availableTweetTags,
+                                     size_t requestId) {
+    if (requestId != searchRequestId) return;
+    resultPics = std::move(pics);
+    selectedTagChanged = false;
+    selectedPixivTagChanged = false;
+    selectedTweetTagChanged = false;
+    searchTextChanged = false;
+    displayTags(availableTags, availablePixivTags, availableTweetTags);
+    ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
+    sortPics();
+    displayMorePics();
+}
+
+// Functions for window resizing and layout
+
 void MainWindow::handleWindowSizeChange() {
     int width = ui->picBrowseWidget->width();
     widgetsPerRow = width / 270;
@@ -692,59 +754,15 @@ void MainWindow::showEvent(QShowEvent* event) {
 }
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
+    Settings::setWidthHeight(width(), height());
     handleWindowSizeChange();
 }
-void MainWindow::handlescrollBarValueChange(int value) {
-    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 100) {
-        loadMorePics();
-    }
-}
-void MainWindow::picSearch() {
-    imageLoadThreadPool.clearTasks();
-    clearAllPicFrames();
-    if (isSearchCriteriaEmpty()) {
-        displayTags();
-        resultPics = noMetadataPics;
-        sortPics();
-        loadMorePics();
-        ui->statusbar->showMessage("显示无元数据图片，共 " + QString::number(resultPics.size()) + " 张图片");
-        return;
-    }
-    ui->statusbar->showMessage("正在搜索...");
-    searchRequestId++;
-    emit searchPics(includedTags,
-                    excludedTags,
-                    includedPixivTags,
-                    excludedPixivTags,
-                    includedTweetTags,
-                    excludedTweetTags,
-                    searchText,
-                    searchField,
-                    selectedTagChanged,
-                    selectedPixivTagChanged,
-                    selectedTweetTagChanged,
-                    searchTextChanged,
-                    searchRequestId);
-}
-void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
-                                     std::vector<std::tuple<std::string, int, bool>> availableTags,
-                                     std::vector<std::pair<std::string, int>> availablePixivTags,
-                                     std::vector<std::pair<std::string, int>> availableTweetTags,
-                                     size_t requestId) {
-    if (requestId != searchRequestId) return;
-    resultPics = std::move(pics);
-    selectedTagChanged = false;
-    selectedPixivTagChanged = false;
-    selectedTweetTagChanged = false;
-    searchTextChanged = false;
-    displayTags(availableTags, availablePixivTags, availableTweetTags);
-    ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
-    sortPics();
-    loadMorePics();
-}
+
+// Functions for picture display and loading
+
 void MainWindow::refreshPicDisplay() {
     removePicFramesFromLayout();
-    loadMorePics();
+    displayMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (!showJPG && pic.fileType == ImageFormat::JPG) return false;
@@ -766,7 +784,7 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (minHeight != 0 && pic.height < minHeight) return false;
     return true;
 }
-void MainWindow::loadMorePics() {
+void MainWindow::displayMorePics() {
     int picsLoaded = 0;
     while (displayIndex < resultPics.size() && picsLoaded < LOAD_PIC_BATCH) {
         const PicInfo& pic = resultPics[displayIndex];
@@ -806,78 +824,9 @@ void MainWindow::loadMorePics() {
         }
     }
 }
-bool MainWindow::event(QEvent* event) {
-    if (event->type() == ImageLoadCompleteEvent::EventType) {
-        auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
-        displayImage(imageEvent->id, std::move(imageEvent->img));
-        return true;
-    }
-    if (event->type() == ImportProgressReportEvent::EventType) {
-        auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
-        displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
-        return true;
-    }
-    return QMainWindow::event(event);
-}
-void MainWindow::displayImage(uint64_t picId, QImage&& img) {
-    size_t cacheLimit = MAX_PIC_CACHE;
-    if (resultPics.size() > MAX_PIC_CACHE) {
-        cacheLimit = resultPics.size();
-    }
-    if (imageThumbCache.size() >= cacheLimit) {
-        for (auto iter = imageThumbCache.begin(); iter != imageThumbCache.end();) {
-            if (idToFrameMap.find(iter->first) == idToFrameMap.end()) {
-                iter = imageThumbCache.erase(iter);
-            } else {
-                ++iter;
-            }
-        }
-    }
-    QPixmap pixmap = QPixmap::fromImage(std::move(img));
-    imageThumbCache[picId] = pixmap;
-    auto frameIt = idToFrameMap.find(picId);
-    if (frameIt != idToFrameMap.end()) {
-        frameIt->second->setPixmap(pixmap);
-    }
-}
-void MainWindow::displayImportProgress(size_t progress, size_t total) {
-    if (progress >= total) { // import complete
-        delete importer;
-        importer = nullptr;
-        ui->progressWidget->hide();
-        ui->progressLabel->setText("");
-        ui->progressStatusLabel->setText("");
-        ui->statusbar->showMessage(
-            "图片导入完成，共扫描 " + QString::number(total) + " 文件，用时 " +
-            QString::number(
-                std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - ImportStartTime).count()) +
-            " 秒");
-        database.reloadDatabase();
-        emit reloadWorkerDatabase();
-        loadTags(); // load new tags from database
-        if (isSearchCriteriaEmpty()) {
-            noMetadataPics = database.getNoMetadataPics();
-            picSearch();
-        }
-        Info() << "Import completed. Total files imported: " << total;
-        return;
-    }
-    // update progress bar and status
-    ui->progressBar->setMaximum(static_cast<int>(total));
-    ui->progressBar->setValue(static_cast<int>(progress));
-
-    auto currentTime = std::chrono::steady_clock::now();
-    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - ImportStartTime).count();
-
-    if (timeDiff > 0 && progress > 0) {
-        double timeDiffSeconds = static_cast<double>(timeDiff) / 1000.0;
-        double speed = static_cast<double>(progress) / timeDiffSeconds; // items per second
-        size_t etaSeconds = static_cast<size_t>((total - progress) / speed);
-        ui->progressStatusLabel->setText(QString("%1 / %2 | 速度：%3 文件每秒 | 剩余时间：%4 秒")
-                                             .arg(progress)
-                                             .arg(total)
-                                             .arg(QString::number(speed, 'f', 2))
-                                             .arg(etaSeconds));
+void MainWindow::displayMorePicOnScroll(int value) {
+    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 200) {
+        displayMorePics();
     }
 }
 void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory
@@ -914,6 +863,124 @@ void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from 
     currentRow = 0;
     ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
 }
+
+// Custom event handling for image loading and import progress
+
+bool MainWindow::event(QEvent* event) {
+    if (event->type() == ImageLoadCompleteEvent::EventType) {
+        auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
+        displayImage(imageEvent->id, std::move(imageEvent->img));
+        return true;
+    }
+    if (event->type() == ImportProgressReportEvent::EventType) {
+        auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
+        displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
+        return true;
+    }
+    return QMainWindow::event(event);
+}
+void MainWindow::displayImage(uint64_t picId, QImage&& img) {
+    size_t cacheLimit = MAX_PIC_CACHE;
+    if (resultPics.size() > MAX_PIC_CACHE) {
+        cacheLimit = resultPics.size();
+    }
+    if (imageThumbCache.size() >= cacheLimit) {
+        for (auto iter = imageThumbCache.begin(); iter != imageThumbCache.end();) {
+            if (idToFrameMap.find(iter->first) == idToFrameMap.end()) {
+                iter = imageThumbCache.erase(iter);
+            } else {
+                ++iter;
+            }
+        }
+    }
+    QPixmap pixmap = QPixmap::fromImage(std::move(img));
+    imageThumbCache[picId] = pixmap;
+    auto frameIt = idToFrameMap.find(picId);
+    if (frameIt != idToFrameMap.end()) {
+        frameIt->second->setPixmap(pixmap);
+    }
+}
+void MainWindow::displayImportProgress(size_t progress, size_t total) {
+    if (progress >= total) { // import complete
+        finalizeImportProgress(total);
+        return;
+    }
+    // update progress bar and status
+    ui->progressBar->setMaximum(static_cast<int>(total));
+    ui->progressBar->setValue(static_cast<int>(progress));
+
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - ImportStartTime).count();
+
+    if (timeDiff > 0 && progress > 0) {
+        double timeDiffSeconds = static_cast<double>(timeDiff) / 1000.0;
+        double speed = static_cast<double>(progress) / timeDiffSeconds; // items per second
+        size_t etaSeconds = static_cast<size_t>((total - progress) / speed);
+        ui->progressStatusLabel->setText(QString("%1 / %2 | 速度：%3 文件每秒 | 剩余时间：%4 秒")
+                                             .arg(progress)
+                                             .arg(total)
+                                             .arg(QString::number(speed, 'f', 2))
+                                             .arg(etaSeconds));
+    }
+}
+void MainWindow::finalizeImportProgress(size_t totalImported) {
+    // record imported directory
+    std::filesystem::path importedPath;
+    ParserType parserType;
+    std::tie(importedPath, parserType) = importer->getImportingDir();
+    switch (parserType) {
+    case ParserType::None:
+        Settings::picDirectories.push_back(importedPath);
+        break;
+    case ParserType::Pixiv:
+        Settings::pixivDirectories.push_back(importedPath);
+        break;
+    case ParserType::Twitter:
+        Settings::tweetDirectories.push_back(importedPath);
+    default:
+        break;
+    }
+    delete importer;
+    importer = nullptr;
+
+    // hide progress
+    ui->progressWidget->hide();
+    ui->progressLabel->setText("");
+    ui->progressStatusLabel->setText("");
+    ui->statusbar->showMessage(
+        "图片导入完成，共扫描 " + QString::number(totalImported) + " 文件，用时 " +
+        QString::number(
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - ImportStartTime).count()) +
+        " 秒");
+
+    // reload database and update UI
+    database.reloadDatabase();
+    emit reloadWorkerDatabase();
+    loadTags(); // load new tags from database
+    if (isSearchCriteriaEmpty()) {
+        noMetadataPics = database.getNoMetadataPics();
+        picSearch();
+    }
+    Info() << "Import completed. Total files imported: " << totalImported;
+    return;
+}
+void MainWindow::cancelProgress() {
+    if (importer) {
+        ui->statusbar->showMessage("正在取消导入任务，请稍候...");
+        Info() << "Cancelling import task...";
+        importer->forceStop();
+        delete importer;
+        importer = nullptr;
+        ui->progressWidget->hide();
+        ui->progressLabel->setText("");
+        ui->progressStatusLabel->setText("");
+        ui->statusbar->showMessage("导入任务已取消。");
+        Info() << "Import task cancelled.";
+    }
+}
+
+// Handlers for menu actions
+
 void MainWindow::handleAddNewPicsAction() {
     if (importer) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
@@ -971,17 +1038,13 @@ void MainWindow::handleShowAboutAction() {
     aboutDialog->raise();
     aboutDialog->activateWindow();
 }
-void MainWindow::handleCancelProgress() {
-    if (importer) {
-        ui->statusbar->showMessage("正在取消导入任务，请稍候...");
-        Info() << "Cancelling import task...";
-        importer->forceStop();
-        delete importer;
-        importer = nullptr;
-        ui->progressWidget->hide();
-        ui->progressLabel->setText("");
-        ui->progressStatusLabel->setText("");
-        ui->statusbar->showMessage("导入任务已取消。");
-        Info() << "Import task cancelled.";
+void MainWindow::handleShowSettingsAction() {
+    if (!settingsDialog) {
+        settingsDialog = new SettingsDialog(this);
+        settingsDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(settingsDialog, &QObject::destroyed, this, [this]() { settingsDialog = nullptr; });
     }
+    settingsDialog->show();
+    settingsDialog->raise();
+    settingsDialog->activateWindow();
 }

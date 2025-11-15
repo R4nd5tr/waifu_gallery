@@ -174,7 +174,7 @@ private:
         char* errorMsg = nullptr;
         int rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errorMsg);
         if (rc != SQLITE_OK) {
-            Error() << "Error executing SQL: " << errorMsg << std::endl;
+            Error() << "Error executing SQL: " << errorMsg;
             sqlite3_free(errorMsg);
             return false;
         }
@@ -184,7 +184,7 @@ private:
         sqlite3_stmt* stmt = nullptr;
         int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
         if (rc != SQLITE_OK) {
-            Error() << "Error preparing SQL statement: " << sqlite3_errmsg(db) << std::endl;
+            Error() << "Error preparing SQL statement: " << sqlite3_errmsg(db);
             return nullptr;
         }
         return stmt;
@@ -202,6 +202,7 @@ public:
 
     bool finish();
     void forceStop();
+    std::pair<std::filesystem::path, ParserType> getImportingDir() const { return {importDirectory, parserType}; }
 
 private:
     bool finished = false;

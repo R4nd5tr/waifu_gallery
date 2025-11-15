@@ -29,11 +29,11 @@ uint32_t Settings::windowHeight = 600;
 std::vector<std::filesystem::path> Settings::picDirectories;
 std::vector<std::filesystem::path> Settings::pixivDirectories;
 std::vector<std::filesystem::path> Settings::tweetDirectories;
-bool Settings::autoScanOnStartup = false;
+bool Settings::autoImportOnStartup = false;
 
 void Settings::loadSettings() {
     if (settingsLoaded) {
-        Info() << "Settings already loaded." << std::endl;
+        Info() << "Settings already loaded.";
         return;
     }
     try {
@@ -61,20 +61,20 @@ void Settings::loadSettings() {
                 for (const auto& s : tmp)
                     tweetDirectories.emplace_back(s);
             }
-            autoScanOnStartup = j.value("autoScanOnStartup", false);
+            autoImportOnStartup = j.value("autoImportOnStartup", false);
         } else {
-            Info() << "Settings file not found. Using default settings." << std::endl;
+            Info() << "Settings file not found. Using default settings.";
         }
     } catch (const std::exception& e) {
-        Error() << "Error loading settings: " << e.what() << std::endl;
+        Error() << "Error loading settings: " << e.what();
     }
     settingsLoaded = true;
     Info() << "Settings loaded: " << "Window Size(" << windowWidth << "x" << windowHeight << "), "
-           << "Auto Scan On Startup(" << (autoScanOnStartup ? "true" : "false") << ")" << std::endl;
+           << "Auto Scan On Startup(" << (autoImportOnStartup ? "true" : "false") << ")";
 }
 void Settings::saveSettings() {
     if (!settingsLoaded) {
-        Info() << "Settings not loaded. Skipping save." << std::endl;
+        Info() << "Settings not loaded. Skipping save.";
         return;
     }
     try {
@@ -99,12 +99,12 @@ void Settings::saveSettings() {
                 tmp.push_back(path.string());
             j["tweetDirectories"] = tmp;
         }
-        j["autoScanOnStartup"] = autoScanOnStartup;
+        j["autoImportOnStartup"] = autoImportOnStartup;
 
         std::ofstream outFile(SETTINGS_FILE_PATH);
         outFile << j.dump(4);
     } catch (const std::exception& e) {
-        Error() << "Error saving settings: " << e.what() << std::endl;
+        Error() << "Error saving settings: " << e.what();
     }
-    Info() << "Settings saved." << std::endl;
+    Info() << "Settings saved.";
 }
