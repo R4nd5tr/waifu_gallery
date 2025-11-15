@@ -24,8 +24,8 @@ using json = nlohmann::json;
 
 bool Settings::settingsLoaded = false;
 
-uint32_t Settings::windowWidth = 800;
-uint32_t Settings::windowHeight = 600;
+uint32_t Settings::windowWidth = 1200;
+uint32_t Settings::windowHeight = 800;
 std::vector<std::filesystem::path> Settings::picDirectories;
 std::vector<std::filesystem::path> Settings::pixivDirectories;
 std::vector<std::filesystem::path> Settings::tweetDirectories;
