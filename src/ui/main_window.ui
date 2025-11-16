@@ -1112,9 +1112,11 @@
     <property name="title">
      <string>文件</string>
     </property>
-    <addaction name="addNewPicsAction"/>
-    <addaction name="addPowerfulPixivDownloaderAction"/>
-    <addaction name="addGallery_dlTwitterAction"/>
+    <addaction name="importNewPicsAction"/>
+    <addaction name="importPowerfulPixivDownloaderAction"/>
+    <addaction name="importGallery_dlTwitterAction"/>
+    <addaction name="separator"/>
+    <addaction name="importExistingDirectoriesAction"/>
    </widget>
    <widget class="QMenu" name="helpMenu">
     <property name="title">
@@ -1140,7 +1142,7 @@
     <string>R-18</string>
    </property>
   </action>
-  <action name="addNewPicsAction">
+  <action name="importNewPicsAction">
    <property name="checkable">
     <bool>false</bool>
    </property>
@@ -1151,12 +1153,12 @@
     <string>导入非下载器图片...</string>
    </property>
   </action>
-  <action name="addPowerfulPixivDownloaderAction">
+  <action name="importPowerfulPixivDownloaderAction">
    <property name="text">
     <string>导入Powerful Pixiv Downloader下载的文件...</string>
    </property>
   </action>
-  <action name="addGallery_dlTwitterAction">
+  <action name="importGallery_dlTwitterAction">
    <property name="text">
     <string>导入gallery-dl下载的Twitter文件...</string>
    </property>
@@ -1169,6 +1171,11 @@
   <action name="showSettingsAction">
    <property name="text">
     <string>设置...</string>
+   </property>
+  </action>
+  <action name="importExistingDirectoriesAction">
+   <property name="text">
+    <string>重新扫描已导入的文件夹</string>
    </property>
   </action>
  </widget>

@@ -30,8 +30,11 @@ const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Ty
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
+
     Settings::loadSettings();
     resize(Settings::windowWidth, Settings::windowHeight);
+    if (Settings::autoImportOnStartup) handleImportExistingDirectoriesAction();
+
     initInterface();
     initWorkerThreads();
     connectSignalSlots();
@@ -167,9 +170,13 @@ void MainWindow::connectSignalSlots() {
     connect(ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::displayMorePicOnScroll);
 
     // menu actions
-    connect(ui->addNewPicsAction, &QAction::triggered, this, &MainWindow::handleAddNewPicsAction);
-    connect(ui->addPowerfulPixivDownloaderAction, &QAction::triggered, this, &MainWindow::handleAddPowerfulPixivDownloaderAction);
-    connect(ui->addGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleAddGallery_dlTwitterAction);
+    connect(ui->importNewPicsAction, &QAction::triggered, this, &MainWindow::handleImportNewPicsAction);
+    connect(ui->importPowerfulPixivDownloaderAction,
+            &QAction::triggered,
+            this,
+            &MainWindow::handleImportPowerfulPixivDownloaderAction);
+    connect(ui->importGallery_dlTwitterAction, &QAction::triggered, this, &MainWindow::handleImportGallery_dlTwitterAction);
+    connect(ui->importExistingDirectoriesAction, &QAction::triggered, this, &MainWindow::handleImportExistingDirectoriesAction);
     connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
     connect(ui->showSettingsAction, &QAction::triggered, this, &MainWindow::handleShowSettingsAction);
 
@@ -924,24 +931,48 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
     }
 }
 void MainWindow::finalizeImportProgress(size_t totalImported) {
-    // record imported directory
-    std::filesystem::path importedPath;
-    ParserType parserType;
-    std::tie(importedPath, parserType) = importer->getImportingDir();
-    switch (parserType) {
-    case ParserType::None:
-        Settings::picDirectories.push_back(importedPath);
-        break;
-    case ParserType::Pixiv:
-        Settings::pixivDirectories.push_back(importedPath);
-        break;
-    case ParserType::Twitter:
-        Settings::tweetDirectories.push_back(importedPath);
-    default:
-        break;
+    if (importPaths.empty()) { // single import task
+        // record imported directory
+        std::filesystem::path importedPath;
+        ParserType parserType;
+        std::tie(importedPath, parserType) = importer->getImportingDir();
+        switch (parserType) {
+        case ParserType::None:
+            if (std::find(Settings::picDirectories.begin(), Settings::picDirectories.end(), importedPath) ==
+                Settings::picDirectories.end()) {
+                Settings::picDirectories.push_back(importedPath);
+            }
+            break;
+        case ParserType::Pixiv:
+            if (std::find(Settings::pixivDirectories.begin(), Settings::pixivDirectories.end(), importedPath) ==
+                Settings::pixivDirectories.end()) {
+                Settings::pixivDirectories.push_back(importedPath);
+            }
+            break;
+        case ParserType::Twitter:
+            if (std::find(Settings::tweetDirectories.begin(), Settings::tweetDirectories.end(), importedPath) ==
+                Settings::tweetDirectories.end()) {
+                Settings::tweetDirectories.push_back(importedPath);
+            }
+        default:
+            break;
+        }
+
+        delete importer;
+        importer = nullptr;
+    } else { // re-importing from multiple directories
+        importPaths.pop_back();
+        delete importer;
+        importer = nullptr;
+        if (!importPaths.empty()) {
+            ui->progressBar->setValue(0);
+            ImportStartTime = std::chrono::steady_clock::now();
+            ui->progressStatusLabel->setText(QString("- / - | 速度：- 文件每秒 | 剩余时间：- 秒"));
+            importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
+            Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
+            return;
+        }
     }
-    delete importer;
-    importer = nullptr;
 
     // hide progress
     ui->progressWidget->hide();
@@ -968,12 +999,17 @@ void MainWindow::cancelProgress() {
     if (importer) {
         ui->statusbar->showMessage("正在取消导入任务，请稍候...");
         Info() << "Cancelling import task...";
+
         importer->forceStop();
         delete importer;
         importer = nullptr;
+
+        importPaths.clear();
+
         ui->progressWidget->hide();
         ui->progressLabel->setText("");
         ui->progressStatusLabel->setText("");
+
         ui->statusbar->showMessage("导入任务已取消。");
         Info() << "Import task cancelled.";
     }
@@ -981,7 +1017,7 @@ void MainWindow::cancelProgress() {
 
 // Handlers for menu actions
 
-void MainWindow::handleAddNewPicsAction() {
+void MainWindow::handleImportNewPicsAction() {
     if (importer) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
@@ -996,7 +1032,7 @@ void MainWindow::handleAddNewPicsAction() {
     Info() << "Started importing pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
 }
-void MainWindow::handleAddPowerfulPixivDownloaderAction() {
+void MainWindow::handleImportPowerfulPixivDownloaderAction() {
     if (importer) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
@@ -1012,7 +1048,7 @@ void MainWindow::handleAddPowerfulPixivDownloaderAction() {
     Info() << "Started importing pixiv pictures from directory: " << dir.toStdString();
     ImportStartTime = std::chrono::steady_clock::now();
 }
-void MainWindow::handleAddGallery_dlTwitterAction() {
+void MainWindow::handleImportGallery_dlTwitterAction() {
     if (importer) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
@@ -1026,6 +1062,29 @@ void MainWindow::handleAddGallery_dlTwitterAction() {
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
     Info() << "Started importing twitter pictures from directory: " << dir.toStdString();
+    ImportStartTime = std::chrono::steady_clock::now();
+}
+void MainWindow::handleImportExistingDirectoriesAction() {
+    if (importer) {
+        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+        return;
+    }
+    ui->statusbar->showMessage("正在重新扫描已导入的图片文件夹...");
+    Info() << "Started re-importing pictures from existing directories.";
+    for (const auto& dir : Settings::picDirectories) {
+        importPaths.push_back({dir, ParserType::None});
+    }
+    for (const auto& dir : Settings::pixivDirectories) {
+        importPaths.push_back({dir, ParserType::Pixiv});
+    }
+    for (const auto& dir : Settings::tweetDirectories) {
+        importPaths.push_back({dir, ParserType::Twitter});
+    }
+    importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
+    Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
+    ui->progressWidget->show();
+    ui->progressBar->setValue(0);
+    ui->progressLabel->setText("正在重新扫描已导入文件夹...");
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleShowAboutAction() {

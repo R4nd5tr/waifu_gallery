@@ -204,9 +204,12 @@ private:
 
     // Action handlers
     std::chrono::steady_clock::time_point ImportStartTime;
-    void handleAddNewPicsAction();
-    void handleAddPowerfulPixivDownloaderAction(); // specify parser type pixiv
-    void handleAddGallery_dlTwitterAction();       // specify parser type twitter
+    std::vector<std::pair<std::filesystem::path, ParserType>> importPaths; // paths to import with specified parser types
+    void handleImportNewPicsAction();
+    void handleImportPowerfulPixivDownloaderAction(); // specify parser type pixiv
+    void handleImportGallery_dlTwitterAction();       // specify parser type twitter
+    void handleImportExistingDirectoriesAction();
+
     AboutDialog* aboutDialog = nullptr;
     void handleShowAboutAction();
     SettingsDialog* settingsDialog = nullptr;
