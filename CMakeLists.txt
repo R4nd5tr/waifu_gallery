@@ -22,7 +22,7 @@ find_package(Stb REQUIRED)
 set(PROJECT_LIBS Qt6::Core Qt6::Widgets Qt6::Sql xxHash::xxhash WebP::webp WebP::webpdecoder WebP::webpdemux nlohmann_json::nlohmann_json unofficial::sqlite3::sqlite3)
 
 # src files
-set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src)
+set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/external)
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configure CMake before build
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
 file(GLOB RES_FILES ${PROJECT_SOURCE_DIR}/res/*.qrc)

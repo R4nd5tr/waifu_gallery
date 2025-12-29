@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based anime illustration gallery application.
+ * Waifu Gallery - A anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+// refactor the data model in the future?
+// use one struct to represent social media info (tweet, pixiv, etc.) and use feature hash for primary key?
 
 enum class RestrictType { // keep in sync with autotagger module
     Unknown,

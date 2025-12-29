@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based anime illustration gallery application.
+ * Waifu Gallery - A anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,3 +21,7 @@
 #include <vector>
 
 std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory);
+
+std::string bitsToBase64(const std::vector<uint8_t>& data);
+
+std::vector<uint8_t> base64ToBits(const std::string& base64);

@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based anime illustration gallery application.
+ * Waifu Gallery - A anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -70,6 +70,12 @@ void PicDatabase::initDatabase(const std::string& databaseFile) {
     Info() << "Database initialized";
 }
 bool PicDatabase::createTables() {
+    const std::string metadataTable = R"(
+        CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    )";
     const std::string picturesTable = R"(
         CREATE TABLE IF NOT EXISTS pictures (
             id INTEGER PRIMARY KEY NOT NULL,
@@ -81,14 +87,14 @@ bool PicDatabase::createTables() {
             download_time TEXT DEFAULT NULL,
             x_restrict INTEGER DEFAULT 0,
             ai_type INTEGER DEFAULT 0,
-            phash TEXT DEFAULT NULL
+            feature_hash TEXT DEFAULT NULL
         )
-    )"; // TODO: add feature vector from deep learning models
+    )";
     const std::string pictureTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
             tag_id INTEGER NOT NULL,
-            probability REAL DEFAULT 1.0,
+            probability REAL DEFAULT 0.0,
             PRIMARY KEY (id, tag_id),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
@@ -216,7 +222,8 @@ bool PicDatabase::createTables() {
             FOREIGN KEY (dir_id) REFERENCES imported_directories(dir_id) ON DELETE CASCADE
         )
     )";
-    const std::vector<std::string> tables = {// pixiv
+    const std::vector<std::string> tables = {metadataTable,
+                                             // pixiv
                                              pixivArtworksTable,
                                              pixivArtworksTagsTable,
                                              pixivTagsTable,
@@ -1143,8 +1150,17 @@ void PicDatabase::syncTables(std::unordered_set<int64_t> newPixivIDs) { // post-
     }
     execute("PRAGMA foreign_keys = ON");
 }
-void PicDatabase::importTagSet(const std::vector<std::pair<std::string, bool>>& tagSet) {
+void PicDatabase::importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tagSet) {
     sqlite3_stmt* stmt = nullptr;
+    stmt = prepare(R"(
+        INSERT OR UPDATE INTO metadata(key, value) VALUES ('tagset_model', ?)
+    )");
+    sqlite3_bind_text(stmt, 1, modelName.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        Error() << "Failed to insert/update tagset_model: " << sqlite3_errmsg(db);
+    }
+    sqlite3_finalize(stmt);
+
     for (int tagId = 0; tagId < tagSet.size(); tagId++) {
         stmt = prepare(R"(
             INSERT INTO tags(id, tag, is_character) VALUES (?, ?, ?)
@@ -1155,8 +1171,6 @@ void PicDatabase::importTagSet(const std::vector<std::pair<std::string, bool>>& 
         sqlite3_bind_int(stmt, 3, isCharacter ? 1 : 0);
         if (sqlite3_step(stmt) != SQLITE_DONE) {
             Error() << "Failed to insert tag: " << sqlite3_errmsg(db);
-            sqlite3_finalize(stmt);
-            continue;
         }
         sqlite3_finalize(stmt);
     }
@@ -1760,7 +1774,7 @@ void MultiThreadedImporter::insertThreadFunc() {
     }
     supportedFileCount = files.size();
     Info() << "Total files to import: " << supportedFileCount.load();
-    readyFlag.store(true);
+    readyFlag.store(true, std::memory_order_release);
 
     threadDb.beginTransaction();
     while (!stopFlag.load() && importedCount < supportedFileCount.load(std::memory_order_relaxed)) {

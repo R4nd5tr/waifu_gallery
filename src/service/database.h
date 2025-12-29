@@ -1,5 +1,5 @@
 /*
- * Waifu Gallery - A Qt-based anime illustration gallery application.
+ * Waifu Gallery - A anime illustration gallery application.
  * Copyright (C) 2025 R4nd5tr <r4nd5tr@outlook.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -147,11 +147,14 @@ public:
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
     // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
     void syncTables(std::unordered_set<int64_t> newPixivIDs = {}); // TODO: Incremental update?
-
-    void importTagSet(const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter), index is tag ID
-
     bool isFileImported(const std::filesystem::path& filePath) const;
     void addImportedFile(const std::filesystem::path& filePath);
+
+    // tagger functions
+    void getModelName() const;
+    void importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter)
+    std::vector<std::pair<uint64_t, std::filesystem::path>> getUntaggedPics();                              // (picID, filePath)
+    void updatePicTags(uint64_t picID, const std::vector<int>& tagIds, const std::vector<float>& probabilities);
 
 private:
     DbMode currentMode = DbMode::None;
@@ -159,7 +162,7 @@ private:
     std::unordered_map<std::string, int> tagToId;
     std::unordered_map<std::string, int> twitterHashtagToId;
     std::unordered_map<std::string, int> pixivTagToId;
-    std::unordered_map<int, std::string> idToTag;
+    std::unordered_map<int, std::string> idToTag; // maybe swich to vector in future?
     std::unordered_map<int, std::string> idToTwitterHashtag;
     std::unordered_map<int, std::string> idToPixivTag;
     std::unordered_set<int64_t> newPixivIDs;
@@ -237,21 +240,3 @@ private:
     void workerThreadFunc();
     void insertThreadFunc(); // TODO:use only one transaction and commit at the end for cancel operation?
 };
-
-// class DatabaseAutoTagger {
-// public:
-//     DatabaseAutoTagger(const std::string& databaseFile = DEFAULT_DATABASE_FILE);
-//     ~DatabaseAutoTagger();
-
-// private:
-//     std::vector<std::pair<uint64_t, std::filesystem::path>> picFilesForTagging; // (picID, filePath)
-//     std::atomic<size_t> nextIndex = 0;
-//     std::vector<std::thread> preprocessWorkers;
-//     std::queue<std::pair<uint64_t, std::vector<float>>> preprocessedPic; // (picID, imageData)
-//     std::mutex preprocessedMutex;
-//     std::condition_variable preprocessedCv;
-//     std::thread analyzeThread;
-//     std::atomic<bool> stopFlag = false;
-//     void preprocessWorkerFunc();
-//     void analyzeThreadFunc();
-// };
