@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <set>
@@ -26,62 +27,67 @@
 #include <unordered_set>
 #include <vector>
 
-// refactor the data model in the future?
-// use one struct to represent social media info (tweet, pixiv, etc.) and use feature hash for primary key?
-
+enum class PlatformType { Unknown, Pixiv, Twitter };
 enum class RestrictType { // keep in sync with autotagger module
     Unknown,
-    AllAges, // rating: General
+    AllAges, // General
     Sensitive,
     Questionable,
-    R18, // rating: Explicit
+    R18, // Explicit
     R18G
 };
 enum class AIType { Unknown, NotAI, AI };
 enum class ImageFormat { Unknown, JPG, PNG, GIF, WebP };
 
-struct PicInfo;
-
 struct PicTag {
-    std::string tag;
-    bool isCharacter;
+    uint32_t tagId;
     float probability; // confidence score for the tag
 };
+struct ImageSource {
+    PlatformType platform;
+    int64_t platformID;
+    uint32_t imageIndex;
+};
+struct PlatformID {
+    PlatformType platform;
+    int64_t platformID;
+};
+struct StringTag {
+    std::string tag;
+    bool isCharacter;
+};
+struct PlatformStringTag {
+    PlatformType platform;
+    std::string tag;
+};
 
-struct TweetInfo { // represents one tweet
-    int64_t tweetID = 0;
+struct PicInfo;
+
+struct Metadata { // represents one social media post(one tweet, one pixiv artwork, etc.)
+    PlatformType platformType = PlatformType::Unknown;
+    int64_t id = 0;
     std::string date;
+
     int64_t authorID;
     std::string authorName;
     std::string authorNick;
     std::string authorDescription;
-    std::string authorProfileImage;
-    std::string authorProfileBanner;
-    uint32_t favoriteCount = 0;
-    uint32_t quoteCount = 0;
-    uint32_t replyCount = 0;
-    uint32_t retweetCount = 0;
-    uint32_t bookmarkCount = 0;
-    uint32_t viewCount = 0;
-    std::unordered_set<std::string> hashtags;
-    std::string description;
-    std::vector<PicInfo> pics; // optional information about pictures in this tweet
-};
 
-struct PixivInfo { // represents one pixiv artwork
-    int64_t pixivID = 0;
-    std::string date;
-    std::vector<std::string> tags;
-    std::vector<std::string> tagsTransl;
-    std::string authorName;
-    int64_t authorID;
     std::string title;
     std::string description;
-    uint32_t likeCount = 0;
+    std::vector<uint32_t> tagIds;
+
     uint32_t viewCount = 0;
-    RestrictType xRestrict = RestrictType::Unknown;
+    uint32_t likeCount = 0;
+    uint32_t bookmarkCount = 0;
+    uint32_t replyCount = 0;
+    uint32_t forwardCount = 0;
+    uint32_t quoteCount = 0;
+
+    RestrictType restrictType = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
-    std::vector<PicInfo> pics; // optional information about pictures in this artwork
+
+    std::vector<PicInfo> associatedPics; // optional pictures associated with this metadata
 };
 
 struct PicInfo {     // represents one image file
@@ -90,17 +96,19 @@ struct PicInfo {     // represents one image file
     uint32_t height;
     uint32_t size;
     ImageFormat fileType = ImageFormat::Unknown;
-    std::string editTime;                            // last modified time of the file
-    std::string downloadTime;                        // ISO 8601 format time
-    std::string phash;                               // perceptual hash for image similarity search
-    std::unordered_map<int64_t, int> tweetIdIndices; //(tweetID, index)
-    std::unordered_map<int64_t, int> pixivIdIndices; //(pixivID, index)
-    std::vector<PicTag> tags;
-    std::unordered_set<std::filesystem::path> filePaths; // identical file can appear in multiple locations
-    std::vector<TweetInfo> tweetInfo;                    // optional information about tweets containing this picture
-    std::vector<PixivInfo> pixivInfo;                    // optional information about pixiv artworks containing this picture
-    RestrictType xRestrict = RestrictType::Unknown;
+    std::vector<std::filesystem::path> filePaths; // identical file can appear in multiple locations
+
+    std::string editTime;     // last modified time of the file
+    std::string downloadTime; // ISO 8601 format time
+
+    std::vector<PicTag> tags;            // tag IDs from the database
+    std::array<uint8_t, 64> featureHash; // perceptual hash for image similarity search
+
+    std::vector<ImageSource> sourceIdentifiers; // source platform identifiers
+    RestrictType restrictType = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
+
+    std::vector<Metadata> associatedMetadata; // optional metadata associated with this picture
 
     float getRatio() const {
         if (height > 0) {

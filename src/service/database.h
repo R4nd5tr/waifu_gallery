@@ -36,22 +36,32 @@
 
 using ImportProgressCallback = std::function<void(size_t processed, size_t total)>;
 
-enum class SearchField {
-    None,
-    PicID,
-    PixivID,
-    PixivAuthorID,
-    PixivAuthorName,
-    PixivTitle,
-    TweetID,
-    TweetAuthorID,
-    TweetAuthorName,
-    TweetAuthorNick
-};
+enum class SearchField { None, PlatformID, AuthorID, AuthorName, AuthorNick, Title };
 
 const std::string DEFAULT_DATABASE_FILE = "database.db";
 
 enum class DbMode { None, Normal, Import, Query };
+
+class SQLiteStatement { // RAII wrapper for sqlite3_stmt
+public:
+    SQLiteStatement() : stmt_(nullptr) {}
+    SQLiteStatement(sqlite3* db, const std::string& sql) : stmt_(nullptr) {
+        if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt_, nullptr) != SQLITE_OK) {
+            Error() << "Failed to prepare statement:" << sql << "Error:" << sqlite3_errmsg(db);
+            stmt_ = nullptr;
+        }
+    }
+    ~SQLiteStatement() {
+        if (stmt_) {
+            sqlite3_finalize(stmt_);
+            stmt_ = nullptr;
+        }
+    }
+    sqlite3_stmt* get() const { return stmt_; }
+
+private:
+    sqlite3_stmt* stmt_;
+};
 
 class PicDatabase {
 public:
@@ -102,43 +112,47 @@ public:
         currentMode = mode;
     }
 
-    // getters  TODO: batch get and merge SQL queries
-    PicInfo getPicInfo(uint64_t id, int64_t tweetID = 0, int64_t pixivID = 0) const;
+    // getters
+    PicInfo getPicInfo(uint64_t id, bool loadAssociatedMetadata = false) const;
+    Metadata getMetadata(PlatformType platform, int64_t platformID, bool loadAssociatedPics = false) const;
+    Metadata getMetadata(ImageSource identifier) const { return getMetadata(identifier.platform, identifier.platformID); }
+    Metadata getMetadata(const PlatformID& platformID, bool loadAssociatedPics = false) const {
+        return getMetadata(platformID.platform, platformID.platformID, loadAssociatedPics);
+    }
     std::vector<PicInfo> getNoMetadataPics() const;
-    TweetInfo getTweetInfo(int64_t tweetID) const;
-    PixivInfo getPixivInfo(int64_t pixivID) const;
-    std::vector<std::tuple<std::string, int, bool>> getTags() const; // (tag, count, isCharacter)
-    std::vector<std::pair<std::string, int>> getTwitterHashtags() const;
-    std::vector<std::pair<std::string, int>> getPixivTags() const;
-    // insert picture
-    bool insertPicInfo(const PicInfo& picInfo);
-    bool insertPicture(const PicInfo& picInfo);
-    bool insertPictureFilePath(const PicInfo& picInfo);
-    bool insertPictureTags(const PicInfo& picInfo);
-    bool insertPictureTags(uint64_t id, int tagId, float probability);
-    bool insertPicturePixivId(const PicInfo& picInfo);
-    bool insertPictureTweetId(const PicInfo& picInfo);
-    // insert tweet
-    bool insertTweetInfo(const TweetInfo& tweetInfo);
-    bool insertTweet(const TweetInfo& tweetInfo);
-    bool insertTweetHashtags(const TweetInfo& tweetInfo);
-    // insert pixiv (for text metadata files)
-    bool insertPixivInfo(const PixivInfo& pixivInfo);
-    bool insertPixivArtwork(const PixivInfo& pixivInfo);
-    bool insertPixivArtworkTags(const PixivInfo& pixivInfo);
-    // update pixiv (for csv/json files)
-    bool updatePixivInfo(const PixivInfo& pixivInfo);
-    bool updatePixivArtwork(const PixivInfo& pixivInfo);
-    bool updatePixivArtworkTags(const PixivInfo& pixivInfo);
+    std::vector<std::pair<StringTag, uint32_t>> getTagCounts() const; // for gui tag selection panel display
+    std::vector<std::pair<PlatformStringTag, uint32_t>> getPlatformTagCounts() const;
+    StringTag getStringTag(uint32_t tagId) const {
+        if (currentMode == DbMode::Query) {
+            Error() << "Cannot get tag by ID in Query mode.";
+        }
+        if (tagId < tags.size()) {
+            return tags[tagId];
+        }
+        return StringTag{};
+    }
+    PlatformStringTag getPlatformStringTag(uint32_t tagId) const {
+        if (currentMode == DbMode::Query) {
+            Error() << "Cannot get platform tag by ID in Query mode.";
+        }
+        if (tagId < platformTags.size()) {
+            return platformTags[tagId];
+        }
+        return PlatformStringTag{};
+    }
 
-    // search functions TODO: merge SQL queries
-    std::vector<uint64_t> tagSearch(const std::unordered_set<std::string>& includedTags,
-                                    const std::unordered_set<std::string>& excludedTags) const;
-    std::vector<uint64_t> pixivTagSearch(const std::unordered_set<std::string>& includedTags,
-                                         const std::unordered_set<std::string>& excludedTags) const;
-    std::vector<uint64_t> tweetHashtagSearch(const std::unordered_set<std::string>& includedTags,
-                                             const std::unordered_set<std::string>& excludedTags) const;
-    std::unordered_map<uint64_t, int64_t> textSearch(const std::string& searchText, SearchField searchField) const;
+    // insert functions
+    bool insertPicture(const ParsedPicture& picInfo);
+    bool insertMetadata(const ParsedMetadata& metadataInfo);
+    bool updateMetadata(const ParsedMetadata& metadataInfo);
+
+    // search functions
+    std::vector<uint64_t> tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                    const std::unordered_set<uint32_t>& excludedTagIds) const;
+    std::vector<PlatformID> platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                              const std::unordered_set<uint32_t>& excludedTagIds) const;
+    std::unordered_set<PlatformID>
+    textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
 
     // import functions
     void importFilesFromDirectory(const std::filesystem::path& directory,
@@ -146,7 +160,7 @@ public:
                                   ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
     // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
-    void syncTables(std::unordered_set<int64_t> newPixivIDs = {}); // TODO: Incremental update?
+    void syncTables(std::unordered_set<PlatformID> newMetadataIds = {});
     bool isFileImported(const std::filesystem::path& filePath) const;
     void addImportedFile(const std::filesystem::path& filePath);
 
@@ -155,21 +169,27 @@ public:
     void importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter)
     std::vector<std::pair<uint64_t, std::filesystem::path>> getUntaggedPics();                              // (picID, filePath)
     void updatePicTags(uint64_t picID, const std::vector<int>& tagIds, const std::vector<float>& probabilities);
+    bool insertPictureTags(uint64_t id, int tagId, float probability);
 
 private:
     DbMode currentMode = DbMode::None;
     sqlite3* db = nullptr;
-    std::unordered_map<std::string, int> tagToId;
-    std::unordered_map<std::string, int> twitterHashtagToId;
-    std::unordered_map<std::string, int> pixivTagToId;
-    std::unordered_map<int, std::string> idToTag; // maybe swich to vector in future?
-    std::unordered_map<int, std::string> idToTwitterHashtag;
-    std::unordered_map<int, std::string> idToPixivTag;
-    std::unordered_set<int64_t> newPixivIDs;
+
+    // in-memory tag mapping
+    std::unordered_map<std::string, uint32_t> tagToId;
+    std::unordered_map<PlatformStringTag, uint32_t> platformTagToId;
+    std::vector<StringTag> tags;                 // index is tag ID
+    std::vector<PlatformStringTag> platformTags; // index is platform tag ID
+
+    // feature hash cache for similarity search
+    std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>> picFeatureHashes; // (picID, featureHash)
+
+    // import related
+    std::unordered_set<PlatformID> newMetadataIds;                                  // for syncTables use
     std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles; // directory -> set of imported file names
 
     void initDatabase(const std::string& databaseFile);
-    bool createTables(); // TODO: Perceptual hash((tag, xrestrict, ai_type)(picture, phash))
+    bool createTables();
     void initTagMapping();
     void initImportedFiles();
 
@@ -183,22 +203,14 @@ private:
         }
         return true;
     }
-    sqlite3_stmt* prepare(const std::string& sql) const {
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
-            Error() << "Error preparing SQL statement: " << sqlite3_errmsg(db);
-            return nullptr;
-        }
-        return stmt;
-    }
+    SQLiteStatement prepare(const std::string& sql) const { return SQLiteStatement(db, sql); }
 };
 
-class MultiThreadedImporter { // TODO: implement skip existing files for auto import, Incremental update; add cancel operation?
+class MultiThreadedImporter {
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,
-                          ParserType parserType = ParserType::None,
+                          ParserType prserType = ParserType::None,
                           std::string dbFile = DEFAULT_DATABASE_FILE,
                           size_t threadCount = std::thread::hardware_concurrency());
     ~MultiThreadedImporter();
@@ -225,14 +237,10 @@ private:
                                                 // when some unsupported files are in the directory
     // single insert thread
     std::thread insertThread;
-    std::queue<PicInfo> picQueue;
-    std::mutex picMutex;
-    std::queue<TweetInfo> tweetQueue;
-    std::mutex tweetMutex;
-    std::queue<PixivInfo> pixivQueue;
-    std::mutex pixivMutex;
-    std::queue<std::vector<PixivInfo>> pixivVecQueue;
-    std::mutex pixivVecMutex;
+    std::queue<ParsedPicture> parsedPictureQueue; // one ParsedPicture represents one image file
+    std::mutex parsedPicQueueMutex;
+    std::queue<std::vector<ParsedMetadata>> metadataVecQueue; // one vector represents one metadata file
+    std::mutex parsedMetadataQueueMutex;
 
     std::atomic<bool> stopFlag = false;
     std::condition_variable cv;

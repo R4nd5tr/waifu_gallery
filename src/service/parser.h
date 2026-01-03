@@ -23,12 +23,56 @@
 #include <string>
 #include <vector>
 
-enum class ParserType { None, Pixiv, Twitter };
+enum class ParserType { None, PowerfulPixivDownloader, GallerydlTwitter };
 
-PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType = ParserType::None);
+struct ParsedMetadata {
+    PlatformType platformType = PlatformType::Unknown;
+    int64_t id = 0;
+    std::string date;
 
-PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath);
-std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath);
-std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFilePath);
+    int64_t authorID;
+    std::string authorName;
+    std::string authorNick;
+    std::string authorDescription;
 
-TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath);
+    std::string title;
+    std::string description;
+    std::vector<std::string> tags;
+    std::vector<std::string> tagsTransl;
+
+    uint32_t viewCount = 0;
+    uint32_t likeCount = 0;
+    uint32_t bookmarkCount = 0;
+    uint32_t replyCount = 0;
+    uint32_t forwardCount = 0;
+    uint32_t quoteCount = 0;
+
+    RestrictType restrictType = RestrictType::Unknown;
+    AIType aiType = AIType::Unknown;
+
+    bool updateIfExists = false;
+};
+
+struct ParsedPicture {
+    uint64_t id = 0;
+
+    uint32_t width;
+    uint32_t height;
+    uint32_t size;
+
+    ImageFormat fileType = ImageFormat::Unknown;
+    std::filesystem::path filePath;
+
+    std::string editTime;
+    std::string downloadTime;
+
+    ImageSource identifier;
+
+    RestrictType restrictType = RestrictType::Unknown;
+};
+
+ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType = ParserType::None);
+
+std::vector<ParsedMetadata> powerfulPixivDownloaderMetadataParser(const std::filesystem::path& metadataFilePath);
+
+ParsedMetadata gallerydlTwitterMetadataParser(const std::filesystem::path& metadataFilePath);

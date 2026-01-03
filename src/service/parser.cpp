@@ -60,7 +60,7 @@ static std::string replacePlusZeroWithZ(const std::string& s) {
     return out;
 }
 
-PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
+ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserType parserType) {
     std::vector<uint8_t> buffer = readFileToBuffer(pictureFilePath);
 
     std::string fileName = pictureFilePath.filename().string();
@@ -74,66 +74,71 @@ PicInfo parsePicture(const std::filesystem::path& pictureFilePath, ParserType pa
     std::string creationTime, lastModifiedTime;
     std::tie(creationTime, lastModifiedTime) = getFileTimestamps(pictureFilePath);
 
-    PicInfo picInfo;
-    picInfo.id = calcFileHash(buffer);
-    picInfo.filePaths.insert(pictureFilePath);
-    picInfo.width = width;
-    picInfo.height = height;
-    picInfo.size = static_cast<uint32_t>(buffer.size());
-    picInfo.fileType = fileType;
-    picInfo.editTime = lastModifiedTime;
-    picInfo.downloadTime = creationTime;
-    if (parserType == ParserType::Pixiv) {
+    ParsedPicture parsedPic;
+    parsedPic.id = calcFileHash(buffer);
+    parsedPic.filePath = pictureFilePath;
+    parsedPic.width = width;
+    parsedPic.height = height;
+    parsedPic.size = static_cast<uint32_t>(buffer.size());
+    parsedPic.fileType = fileType;
+    parsedPic.editTime = lastModifiedTime;
+    parsedPic.downloadTime = creationTime;
+    switch (parserType) {
+    case ParserType::PowerfulPixivDownloader:
         // extract pixiv ID and index from filename
         if (fileName.find("_p") == std::string::npos) {
             std::string stem = pictureFilePath.stem().string();
             if (std::all_of(stem.begin(), stem.end(), ::isdigit)) {
                 uint32_t pixivId = static_cast<uint32_t>(std::stoul(stem));
-                picInfo.pixivIdIndices[pixivId] = 0;
+                parsedPic.identifier = ImageSource{PlatformType::Pixiv, pixivId, 0};
             }
         } else {
             std::regex pattern(R"(.*?(\d+)_p(\d+).*)");
             std::smatch match;
             if (std::regex_match(fileName, match, pattern) && match.size() == 3) {
                 uint32_t pixivId = static_cast<uint32_t>(std::stoul(match[1].str()));
-                int index = std::stoi(match[2].str());
-                picInfo.pixivIdIndices[pixivId] = index;
+                uint32_t index = static_cast<uint32_t>(std::stoul(match[2].str()));
+                parsedPic.identifier = ImageSource{PlatformType::Pixiv, pixivId, index};
             }
         }
-        // determine xRestrict from file path
+        // determine restrictType from file path
         if (pictureFilePath.string().find("R-18") != std::string::npos ||
             pictureFilePath.string().find("R18") != std::string::npos) {
-            picInfo.xRestrict = RestrictType::R18;
+            parsedPic.restrictType = RestrictType::R18;
         }
-    }
-    if (parserType == ParserType::Twitter) {
+        break;
+    case ParserType::GallerydlTwitter:
         size_t firstUnderscore = fileName.find('_');
         size_t dot = fileName.find('.', firstUnderscore + 1);
         if (firstUnderscore != std::string::npos && dot != std::string::npos) {
             std::string tweetIdStr = fileName.substr(0, firstUnderscore);
             std::string indexStr = fileName.substr(firstUnderscore + 1, dot - firstUnderscore - 1);
             int64_t tweetId = std::stoll(tweetIdStr);
-            int index = std::stoi(indexStr) - 1;
-            picInfo.tweetIdIndices[tweetId] = index;
+            uint32_t index = static_cast<uint32_t>(std::stoul(indexStr));
+            parsedPic.identifier = ImageSource{PlatformType::Twitter, tweetId, index};
         }
+        break;
+    default:
+        break;
     }
-    return picInfo;
+    return parsedPic;
 }
-PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath) {
+ParsedMetadata parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath) {
     std::ifstream file(pixivMetadataFilePath);
     if (!file.is_open()) {
         Error() << "Failed to open file:" << pixivMetadataFilePath.string();
-        return PixivInfo{};
+        return ParsedMetadata{};
     }
     std::string line;
-    PixivInfo info{};
+    ParsedMetadata info{};
+    info.platformType = PlatformType::Pixiv;
     while (std::getline(file, line)) {
         if (line == "Id" || line == "ID") {
             std::getline(file, line);
-            info.pixivID = static_cast<int64_t>(std::stoll(line));
-        } else if (line == "xRestrict") {
+            info.id = static_cast<int64_t>(std::stoll(line));
+        } else if (line == "restrictType") {
             std::getline(file, line);
-            info.xRestrict = toXRestrictTypeEnum(line);
+            info.restrictType = toXRestrictTypeEnum(line);
         } else if (line == "AI") {
             std::getline(file, line);
             info.aiType = toAITypeEnum(line);
@@ -175,8 +180,8 @@ PixivInfo parsePixivMetadata(const std::filesystem::path& pixivMetadataFilePath)
     }
     return info;
 }
-std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath) {
-    std::vector<PixivInfo> result;
+std::vector<ParsedMetadata> parsePixivCsv(const std::filesystem::path& pixivCsvFilePath) {
+    std::vector<ParsedMetadata> result;
     std::ifstream file(pixivCsvFilePath);
     if (!file.is_open()) {
         Error() << "Failed to open file: " << pixivCsvFilePath;
@@ -189,8 +194,10 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
     bool hasAI = std::find(colNames.begin(), colNames.end(), "AI") != colNames.end();
 
     for (size_t i = 0; i < rowCount; ++i) {
-        PixivInfo info;
-        info.pixivID = doc.GetCell<int64_t>("id", i);
+        ParsedMetadata info;
+        info.platformType = PlatformType::Pixiv;
+        info.updateIfExists = true;
+        info.id = doc.GetCell<int64_t>("id", i);
         info.tags = splitAndTrim(doc.GetCell<std::string>("tags", i));
         info.tagsTransl = splitAndTrim(doc.GetCell<std::string>("tags_transl", i));
         info.authorName = doc.GetCell<std::string>("user", i);
@@ -201,15 +208,15 @@ std::vector<PixivInfo> parsePixivCsv(const std::filesystem::path& pixivCsvFilePa
             info.likeCount = doc.GetCell<uint32_t>("likeCount", i);
         if (std::find(colNames.begin(), colNames.end(), "viewCount") != colNames.end())
             info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
-        info.xRestrict = toXRestrictTypeEnum(doc.GetCell<std::string>("xRestrict", i));
+        info.restrictType = toXRestrictTypeEnum(doc.GetCell<std::string>("restrictType", i));
         if (hasAI) info.aiType = toAITypeEnum(doc.GetCell<std::string>("AI", i));
         info.date = replacePlusZeroWithZ(doc.GetCell<std::string>("date", i));
         result.push_back(info);
     }
     return result;
 }
-std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFilePath) {
-    std::vector<PixivInfo> result;
+std::vector<ParsedMetadata> parsePixivJson(const std::filesystem::path& pixivJsonFilePath) {
+    std::vector<ParsedMetadata> result;
     std::vector<uint8_t> data = readFileToBuffer(pixivJsonFilePath);
     auto json = nlohmann::json::parse(data, nullptr, false);
     if (json.is_discarded() || !json.is_array()) {
@@ -217,15 +224,17 @@ std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFile
         return result;
     }
     for (const auto& obj : json) {
-        PixivInfo info;
-        info.pixivID = obj.value("idNum", 0LL);
+        ParsedMetadata info;
+        info.platformType = PlatformType::Pixiv;
+        info.updateIfExists = true;
+        info.id = obj.value("idNum", 0LL);
         info.title = obj.value("title", "");
         info.description = obj.value("description", "");
         info.authorName = obj.value("user", "");
         info.authorID = std::stoul(obj.value("userId", ""));
         info.likeCount = obj.value("likeCount", 0);
         info.viewCount = obj.value("viewCount", 0);
-        info.xRestrict = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
+        info.restrictType = static_cast<RestrictType>(obj.value("restrictType", 0) + 1);
         info.aiType = static_cast<AIType>(obj.value("aiType", 0));
         info.date = replacePlusZeroWithZ(obj.value("date", ""));
 
@@ -245,24 +254,40 @@ std::vector<PixivInfo> parsePixivJson(const std::filesystem::path& pixivJsonFile
     }
     return result;
 }
-TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath) {
-    TweetInfo info;
-    std::vector<uint8_t> data = readFileToBuffer(tweetJsonFilePath);
+std::vector<ParsedMetadata> powerfulPixivDownloaderMetadataParser(const std::filesystem::path& metadataFilePath) {
+    if (!std::filesystem::exists(metadataFilePath)) {
+        Error() << "Metadata file does not exist:" << metadataFilePath.string();
+        return {};
+    }
+    std::vector<ParsedMetadata> result;
+    if (metadataFilePath.extension() == ".json") {
+        return parsePixivJson(metadataFilePath);
+    } else if (metadataFilePath.extension() == ".csv") {
+        return parsePixivCsv(metadataFilePath);
+    } else if (metadataFilePath.extension() == ".txt") {
+        return {parsePixivMetadata(metadataFilePath)};
+    }
+    return result;
+}
+
+ParsedMetadata gallerydlTwitterMetadataParser(const std::filesystem::path& metadataFilePath) {
+    ParsedMetadata info;
+    std::vector<uint8_t> data = readFileToBuffer(metadataFilePath);
     auto json = nlohmann::json::parse(data.begin(), data.end());
     if (!json.is_object()) {
         Error() << "Failed to parse JSON: not an object";
         return info;
     }
-
-    info.tweetID = json.value("tweet_id", 0LL);
+    info.platformType = PlatformType::Twitter;
+    info.id = json.value("tweet_id", 0LL);
     info.date = json.value("date", "");
     info.date[10] = 'T'; // ensure ISO 8601 format
     info.date += "Z";
     info.description = json.value("content", "");
-    info.favoriteCount = json.value("favorite_count", 0);
+    info.likeCount = json.value("favorite_count", 0);
     info.quoteCount = json.value("quote_count", 0);
     info.replyCount = json.value("reply_count", 0);
-    info.retweetCount = json.value("retweet_count", 0);
+    info.forwardCount = json.value("retweet_count", 0);
     info.bookmarkCount = json.value("bookmark_count", 0);
     info.viewCount = json.value("view_count", 0);
 
@@ -273,14 +298,12 @@ TweetInfo parseTweetJson(const std::filesystem::path& tweetJsonFilePath) {
         info.authorName = authorObj.value("name", "");
         info.authorNick = authorObj.value("nick", "");
         info.authorDescription = authorObj.value("description", "");
-        info.authorProfileImage = authorObj.value("profile_image", "");
-        info.authorProfileBanner = authorObj.value("profile_banner", "");
     }
 
     // 解析 hashtags 数组
     if (json.contains("hashtags") && json["hashtags"].is_array()) {
         for (const auto& tag : json["hashtags"]) {
-            info.hashtags.insert(tag.get<std::string>());
+            info.tags.push_back(tag.get<std::string>());
         }
     }
     return info;
