@@ -54,10 +54,23 @@ public:
     ~SQLiteStatement() {
         if (stmt_) {
             sqlite3_finalize(stmt_);
-            stmt_ = nullptr;
         }
     }
     sqlite3_stmt* get() const { return stmt_; }
+
+    SQLiteStatement(const SQLiteStatement&) = delete;
+    SQLiteStatement& operator=(const SQLiteStatement&) = delete;
+    SQLiteStatement(SQLiteStatement&& other) noexcept : stmt_(other.stmt_) { other.stmt_ = nullptr; }
+    SQLiteStatement& operator=(SQLiteStatement&& other) noexcept {
+        if (this != &other) {
+            if (stmt_) {
+                sqlite3_finalize(stmt_);
+            }
+            stmt_ = other.stmt_;
+            other.stmt_ = nullptr;
+        }
+        return *this;
+    }
 
 private:
     sqlite3_stmt* stmt_;

@@ -84,7 +84,7 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
     parsedPic.editTime = lastModifiedTime;
     parsedPic.downloadTime = creationTime;
     switch (parserType) {
-    case ParserType::PowerfulPixivDownloader:
+    case ParserType::PowerfulPixivDownloader: {
         // extract pixiv ID and index from filename
         if (fileName.find("_p") == std::string::npos) {
             std::string stem = pictureFilePath.stem().string();
@@ -107,7 +107,8 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
             parsedPic.restrictType = RestrictType::R18;
         }
         break;
-    case ParserType::GallerydlTwitter:
+    }
+    case ParserType::GallerydlTwitter: {
         size_t firstUnderscore = fileName.find('_');
         size_t dot = fileName.find('.', firstUnderscore + 1);
         if (firstUnderscore != std::string::npos && dot != std::string::npos) {
@@ -118,6 +119,7 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
             parsedPic.identifier = ImageSource{PlatformType::Twitter, tweetId, index};
         }
         break;
+    }
     default:
         break;
     }

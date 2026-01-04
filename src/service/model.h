@@ -21,6 +21,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -60,6 +61,28 @@ struct PlatformStringTag {
     PlatformType platform;
     std::string tag;
 };
+namespace std {
+template <> struct hash<PlatformStringTag> {
+    std::size_t operator()(const PlatformStringTag& tag) const noexcept {
+        std::size_t platformHash = std::hash<int>()(static_cast<int>(tag.platform));
+        std::size_t stringHash = std::hash<std::string>()(tag.tag);
+        return platformHash ^ (stringHash << 1);
+    }
+};
+template <> struct hash<PlatformID> {
+    std::size_t operator()(const PlatformID& id) const noexcept {
+        std::size_t platformHash = std::hash<int>()(static_cast<int>(id.platform));
+        std::size_t idHash = std::hash<int64_t>()(id.platformID);
+        return platformHash ^ (idHash << 1);
+    }
+};
+} // namespace std
+inline bool operator==(const PlatformStringTag& lhs, const PlatformStringTag& rhs) {
+    return lhs.platform == rhs.platform && lhs.tag == rhs.tag;
+}
+inline bool operator==(const PlatformID& lhs, const PlatformID& rhs) {
+    return lhs.platform == rhs.platform && lhs.platformID == rhs.platformID;
+}
 
 struct PicInfo;
 

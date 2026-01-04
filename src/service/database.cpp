@@ -394,7 +394,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
             platform, platform_id, date, author_id, author_name, author_nick, 
             author_description, title, description, view_count, like_count, bookmark_count,
             reply_count, forward_count, quote_count, restrict_type, ai_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )");
     sqlite3_bind_int(stmt.get(), 1, static_cast<int>(metadataInfo.platformType));
     sqlite3_bind_int64(stmt.get(), 2, metadataInfo.id);
@@ -829,28 +829,35 @@ void PicDatabase::syncTables(std::unordered_set<PlatformID> newMetadataIds) { //
     }
     for (const auto& metadataId : newMetadataIds) {
         stmt = prepare(R"(
-            UPDATE pictures p
-            JOIN picture_source ps ON p.id = ps.id
-            LEFT JOIN picture_metadata pm ON 
-                ps.platform = pm.platform 
-                AND ps.platform_id = pm.platform_id
-            SET 
-                p.restrict_type = CASE 
-                    WHEN p.restrict_type IS NULL OR (pm.restrict_type IS NOT NULL AND p.restrict_type < pm.restrict_type)
-                    THEN pm.restrict_type 
-                    ELSE p.restrict_type 
-                END,
-                p.ai_type = CASE 
-                    WHEN p.ai_type IS NULL OR (pm.ai_type IS NOT NULL AND p.ai_type < pm.ai_type)
-                    THEN pm.ai_type 
-                    ELSE p.ai_type 
-                END
-            WHERE ps.platform = ? 
-                AND ps.platform_id = ?
-                AND pm.platform IS NOT NULL
+            UPDATE pictures
+            SET restrict_type = CASE
+                WHEN restrict_type IS NULL OR restrict_type < (
+                    SELECT restrict_type FROM picture_metadata WHERE platform = ? AND platform_id = ?
+                )
+                THEN (SELECT restrict_type FROM picture_metadata WHERE platform = ? AND platform_id = ?)
+                ELSE restrict_type
+            END,
+            ai_type = CASE
+                WHEN ai_type IS NULL OR ai_type < (
+                    SELECT ai_type FROM picture_metadata WHERE platform = ? AND platform_id = ?
+                )
+                THEN (SELECT ai_type FROM picture_metadata WHERE platform = ? AND platform_id = ?)
+                ELSE ai_type
+            END
+            WHERE id IN (
+                SELECT id FROM picture_source WHERE platform = ? AND platform_id = ?
+            )
         )");
         sqlite3_bind_int(stmt.get(), 1, static_cast<int>(metadataId.platform));
         sqlite3_bind_int64(stmt.get(), 2, metadataId.platformID);
+        sqlite3_bind_int(stmt.get(), 3, static_cast<int>(metadataId.platform));
+        sqlite3_bind_int64(stmt.get(), 4, metadataId.platformID);
+        sqlite3_bind_int(stmt.get(), 5, static_cast<int>(metadataId.platform));
+        sqlite3_bind_int64(stmt.get(), 6, metadataId.platformID);
+        sqlite3_bind_int(stmt.get(), 7, static_cast<int>(metadataId.platform));
+        sqlite3_bind_int64(stmt.get(), 8, metadataId.platformID);
+        sqlite3_bind_int(stmt.get(), 9, static_cast<int>(metadataId.platform));
+        sqlite3_bind_int64(stmt.get(), 10, metadataId.platformID);
         if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
             Warn() << "Failed to sync restrict_type and ai_type for platform:" << static_cast<int>(metadataId.platform)
                    << "platform_id:" << metadataId.platformID << "Error:" << sqlite3_errmsg(db);
