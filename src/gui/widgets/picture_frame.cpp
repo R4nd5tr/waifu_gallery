@@ -38,7 +38,6 @@ const std::string PIXIV_BASE_URL = "https://www.pixiv.net/artworks/";
 const std::string PIXIV_AUTHOR_URL = "https://www.pixiv.net/users/";
 const std::string TWITTER_BASE_URL = "https://twitter.com/i/web/status/";
 const std::string TWITTER_AUTHOR_URL = "https://twitter.com/";
-const QFont HIGHLIGHT_FONT("", 10, QFont::Bold);
 
 PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
     : QFrame(parent), ui(new Ui::PictureFrame) {
@@ -56,24 +55,39 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     connect(ui->illustratorLabel, &ClickableLabel::clicked, this, &PictureFrame::openIllustratorUrl);
     connect(ui->idLabel, &ClickableLabel::clicked, this, &PictureFrame::openIdUrl);
 
-    if (picinfo.pixivInfo.size() > 0) { // display pixiv info if available
-        ui->titleLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].title));
-        ui->illustratorLabel->setText(QString::fromStdString(picinfo.pixivInfo[0].authorName));
-        ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.pixivIdIndices.begin()->first)));
+    if (picinfo.associatedMetadata.size() > 0) {
+        switch (picinfo.associatedMetadata[0].platformType) {
+        case PlatformType::Pixiv:
+            ui->titleLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].title));
+            ui->illustratorLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].authorName));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.associatedMetadata[0].id)));
 
-        illustratorURL = QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(picinfo.pixivInfo[0].authorID));
-        idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.pixivIdIndices.begin()->first));
-    } else if (picinfo.tweetInfo.size() > 0) { // display tweet info if available
-        QString description = QString::fromStdString(picinfo.tweetInfo[0].description).split('\n').first();
-        if (description.length() > MAX_TITLE_LENGTH) {
-            description = description.left(MAX_TITLE_LENGTH) + "...";
+            illustratorURL = QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(picinfo.associatedMetadata[0].authorID));
+            idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.associatedMetadata[0].authorID));
+            break;
+        case PlatformType::Twitter: {
+            QString description = QString::fromStdString(picinfo.associatedMetadata[0].description).split('\n').first();
+            if (description.length() > MAX_TITLE_LENGTH) {
+                description = description.left(MAX_TITLE_LENGTH) + "...";
+            }
+            ui->titleLabel->setText(description);
+            ui->illustratorLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].authorNick));
+            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.associatedMetadata[0].authorName)));
+
+            illustratorURL = QString::fromStdString(TWITTER_AUTHOR_URL + picinfo.associatedMetadata[0].authorName);
+            idURL = QString::fromStdString(TWITTER_BASE_URL + std::to_string(picinfo.associatedMetadata[0].id));
+            break;
         }
-        ui->titleLabel->setText(description);
-        ui->illustratorLabel->setText(QString::fromStdString(picinfo.tweetInfo[0].authorNick));
-        ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.tweetInfo[0].authorName)));
+        default:
+            ui->titleLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].title));
+            ui->idLabel->setText(QString::number(picinfo.associatedMetadata[0].id));
+            ui->illustratorLabel->setResponsive(false);
+            ui->idLabel->setResponsive(false);
 
-        illustratorURL = QString::fromStdString(TWITTER_AUTHOR_URL + picinfo.tweetInfo[0].authorName);
-        idURL = QString::fromStdString(TWITTER_BASE_URL + std::to_string(picinfo.tweetInfo[0].tweetID));
+            illustratorURL = "";
+            idURL = "";
+            break;
+        }
     } else { // fallback to file name
         QString filename = QString::fromStdString(picinfo.filePaths.begin()->filename().string());
         if (filename.length() > MAX_TITLE_LENGTH) {
@@ -88,19 +102,26 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         idURL = "";
     }
     switch (searchField) { // highlight search result
-    case SearchField::PixivTitle:
-        ui->titleLabel->setFont(HIGHLIGHT_FONT);
+    case SearchField::Title: {
+        QFont font = ui->titleLabel->font();
+        font.setBold(true);
+        ui->titleLabel->setFont(font);
         break;
-    case SearchField::PixivAuthorID:
-    case SearchField::PixivAuthorName:
-    case SearchField::TweetAuthorNick:
-        ui->illustratorLabel->setFont(HIGHLIGHT_FONT);
+    }
+    case SearchField::AuthorID:
+    case SearchField::AuthorName:
+    case SearchField::AuthorNick: {
+        QFont font = ui->titleLabel->font();
+        font.setBold(true);
+        ui->titleLabel->setFont(font);
         break;
-    case SearchField::PixivID:
-    case SearchField::TweetAuthorID:
-    case SearchField::TweetAuthorName:
-        ui->idLabel->setFont(HIGHLIGHT_FONT);
+    }
+    case SearchField::PlatformID: {
+        QFont font = ui->titleLabel->font();
+        font.setBold(true);
+        ui->titleLabel->setFont(font);
         break;
+    }
     default:
         break;
     }

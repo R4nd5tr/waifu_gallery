@@ -27,7 +27,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tagSelector">
        <property name="geometry">
@@ -60,7 +60,7 @@
            <enum>QTabWidget::TabShape::Rounded</enum>
           </property>
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <property name="tabsClosable">
            <bool>false</bool>
@@ -115,9 +115,9 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="pixivTagTab">
+          <widget class="QWidget" name="platformTagTab">
            <attribute name="title">
-            <string>Pixiv</string>
+            <string>平台标签</string>
            </attribute>
            <layout class="QVBoxLayout" name="attributeTagListLayout">
             <property name="spacing">
@@ -136,32 +136,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QListWidget" name="pixivTagList"/>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="twitterHashtagTab">
-           <attribute name="title">
-            <string>Twitter</string>
-           </attribute>
-           <layout class="QVBoxLayout" name="twitterTagTabLayout">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QListWidget" name="twitterHashtagList"/>
+             <widget class="QListWidget" name="platformTagList"/>
             </item>
            </layout>
           </widget>
@@ -942,6 +917,28 @@
          <property name="bottomMargin">
           <number>0</number>
          </property>
+         <item>
+          <widget class="QComboBox" name="searchPlatformComboBox">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>80</width>
+             <height>16777215</height>
+            </size>
+           </property>
+          </widget>
+         </item>
          <item>
           <widget class="QComboBox" name="searchComboBox">
            <property name="sizePolicy">

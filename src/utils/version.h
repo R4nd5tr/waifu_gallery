@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#define WG_VERSION_MAJOR 0
+#define WG_VERSION_MAJOR 1
 #define WG_VERSION_MINOR 0
 #define WG_VERSION_PATCH 0
 #define WG_VERSION_STATUS "alpha"

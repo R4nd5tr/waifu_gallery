@@ -57,13 +57,23 @@ struct StringTag {
     std::string tag;
     bool isCharacter;
 };
-struct PlatformStringTag {
+struct StringPlatformTag {
     PlatformType platform;
     std::string tag;
 };
+struct TagCount { // for gui tag selection panel display
+    StringTag tag;
+    uint32_t tagId;
+    uint32_t count;
+};
+struct PlatformTagCount { // for gui tag selection panel display
+    StringPlatformTag tag;
+    uint32_t tagId;
+    uint32_t count;
+};
 namespace std {
-template <> struct hash<PlatformStringTag> {
-    std::size_t operator()(const PlatformStringTag& tag) const noexcept {
+template <> struct hash<StringPlatformTag> {
+    std::size_t operator()(const StringPlatformTag& tag) const noexcept {
         std::size_t platformHash = std::hash<int>()(static_cast<int>(tag.platform));
         std::size_t stringHash = std::hash<std::string>()(tag.tag);
         return platformHash ^ (stringHash << 1);
@@ -77,7 +87,7 @@ template <> struct hash<PlatformID> {
     }
 };
 } // namespace std
-inline bool operator==(const PlatformStringTag& lhs, const PlatformStringTag& rhs) {
+inline bool operator==(const StringPlatformTag& lhs, const StringPlatformTag& rhs) {
     return lhs.platform == rhs.platform && lhs.tag == rhs.tag;
 }
 inline bool operator==(const PlatformID& lhs, const PlatformID& rhs) {

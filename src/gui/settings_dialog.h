@@ -35,15 +35,9 @@ public:
 
     void addPicDirectory();
     void deletePicDirectory();
-    void addPixivDirectory();
-    void deletePixivDirectory();
-    void addTwitterDirectory();
-    void deleteTwitterDirectory();
 
 private:
     Ui::SettingsDialog* ui;
     bool importOnStartup;
-    std::vector<std::filesystem::path> picDirectories;
-    std::vector<std::filesystem::path> pixivDirectories;
-    std::vector<std::filesystem::path> tweetDirectories;
+    std::vector<std::pair<std::filesystem::path, ParserType>> picDirectories;
 };

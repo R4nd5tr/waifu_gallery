@@ -17,11 +17,17 @@
  */
 
 #pragma once
-#include <filesystem>
-#include <vector>
+#include "service/model.h"
+#include "service/parser.h"
+#include <QString>
 
-std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory);
+static const std::vector<QString> PLATFORM_TYPE_STRS = {"Unknown", "pixiv", "twitter"};
+static const std::vector<QString> PARSER_TYPE_STRS = {"None", "Powerful Pixiv Downloader", "gallery-dl Twitter"};
 
-std::string bitsToBase64(const std::vector<uint8_t>& data);
+inline QString platformTypeToString(PlatformType platform) {
+    return PLATFORM_TYPE_STRS[static_cast<int>(platform)];
+}
 
-std::vector<uint8_t> base64ToBits(const std::string& base64);
+inline QString parserTypeToString(ParserType parser) {
+    return PARSER_TYPE_STRS[static_cast<int>(parser)];
+}

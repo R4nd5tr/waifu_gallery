@@ -19,7 +19,6 @@
 #include "database.h"
 #include "model.h"
 #include "parser.h"
-#include "utils/utils.h"
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -36,6 +35,17 @@ uint64_t int64_to_uint64(int64_t i) {
     uint64_t u;
     std::memcpy(&u, &i, sizeof(i));
     return u;
+}
+std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& directory) {
+    std::vector<std::filesystem::path> files;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(directory)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        files.push_back(entry.path());
+    }
+    Info() << "Total files collected:" << files.size() << "from directory:" << directory.string();
+    return files;
 }
 
 // PicDatabase class implementation
@@ -280,9 +290,9 @@ void PicDatabase::initTagMapping() {
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         const char* tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0));
         PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
-        platformTags.emplace_back(PlatformStringTag{platform, tag});
+        platformTags.emplace_back(StringPlatformTag{platform, tag});
         if (currentMode == DbMode::Import)
-            platformTagToId[PlatformStringTag{platform, tag}] = static_cast<uint32_t>(platformTags.size() - 1); // same as above
+            platformTagToId[StringPlatformTag{platform, tag}] = static_cast<uint32_t>(platformTags.size() - 1); // same as above
     }
 
     Info() << "Tag mappings loaded. Tags:" << tags.size() << "Platform Tags:" << platformTags.size();
@@ -419,7 +429,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     }
     // insert into picture_metadata_tags table
     for (const auto& tag : metadataInfo.tags) {
-        PlatformStringTag stringTag{metadataInfo.platformType, tag};
+        StringPlatformTag stringTag{metadataInfo.platformType, tag};
         if (platformTagToId.find(stringTag) == platformTagToId.end()) {
             // insert new platform tag
             platformTags.emplace_back(stringTag);
@@ -451,7 +461,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     }
     if (metadataInfo.tags.size() == metadataInfo.tagsTransl.size()) {
         for (size_t i = 0; i < metadataInfo.tags.size(); ++i) {
-            PlatformStringTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
+            StringPlatformTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
             int tagId = platformTagToId.at(stringTag);
             stmt = prepare(R"(
                 UPDATE platform_tags SET translated_tag = ? WHERE tag_id = ?
@@ -528,7 +538,7 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
     }
     // update picture_metadata_tags table
     for (const auto& tag : metadataInfo.tags) {
-        PlatformStringTag stringTag{metadataInfo.platformType, tag};
+        StringPlatformTag stringTag{metadataInfo.platformType, tag};
         if (platformTagToId.find(stringTag) == platformTagToId.end()) {
             // insert new platform tag
             platformTags.emplace_back(stringTag);
@@ -560,7 +570,7 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
     }
     if (metadataInfo.tags.size() == metadataInfo.tagsTransl.size()) {
         for (size_t i = 0; i < metadataInfo.tags.size(); ++i) {
-            PlatformStringTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
+            StringPlatformTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
             int tagId = platformTagToId.at(stringTag);
             stmt = prepare(R"(
                 UPDATE platform_tags SET translated_tag = ? WHERE tag_id = ?
@@ -953,7 +963,7 @@ void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
 std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
                                              const std::unordered_set<uint32_t>& excludedTagIds) const {
     std::vector<uint64_t> results;
-    if (includedTagIds.empty() && excludedTagIds.empty()) return results;
+    if (includedTagIds.empty()) return results;
 
     std::string includedTagIdStr;
     std::string excludedTagIdStr;
@@ -1030,9 +1040,9 @@ std::vector<PlatformID> PicDatabase::platformTagSearch(const std::unordered_set<
     }
     return results;
 }
-std::unordered_set<PlatformID>
+std::vector<PlatformID>
 PicDatabase::textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const {
-    std::unordered_set<PlatformID> results;
+    std::vector<PlatformID> results;
     if (searchText.empty() || searchField == SearchField::None) return results;
     SQLiteStatement stmt;
     bool isNumeric =
@@ -1095,32 +1105,34 @@ PicDatabase::textSearch(const std::string& searchText, PlatformType platformType
         PlatformID platformID;
         platformID.platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
         platformID.platformID = sqlite3_column_int64(stmt.get(), 1);
-        results.insert(platformID);
+        results.emplace_back(platformID);
     }
     return results;
 }
 
-// Get tag lists
+// Get tag counts
 
-std::vector<std::pair<StringTag, uint32_t>> PicDatabase::getTagCounts() const {
-    std::vector<std::pair<StringTag, uint32_t>> tagCounts;
-    SQLiteStatement stmt = prepare("SELECT tag, count, is_character FROM tags ORDER BY count DESC");
+std::vector<TagCount> PicDatabase::getTagCounts() const {
+    std::vector<TagCount> tagCounts;
+    SQLiteStatement stmt = prepare("SELECT tag_id, tag, count, is_character FROM tags ORDER BY count DESC");
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0));
-        uint32_t count = sqlite3_column_int(stmt.get(), 1);
-        bool isCharacter = sqlite3_column_int(stmt.get(), 2) != 0;
-        tagCounts.emplace_back(StringTag{tag, isCharacter}, count);
+        uint32_t tagId = sqlite3_column_int(stmt.get(), 0);
+        std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 1));
+        uint32_t count = sqlite3_column_int(stmt.get(), 2);
+        bool isCharacter = sqlite3_column_int(stmt.get(), 3) != 0;
+        tagCounts.emplace_back(TagCount{StringTag{tag, isCharacter}, tagId, count});
     }
     return tagCounts;
 }
-std::vector<std::pair<PlatformStringTag, uint32_t>> PicDatabase::getPlatformTagCounts() const {
-    std::vector<std::pair<PlatformStringTag, uint32_t>> tagCounts;
-    SQLiteStatement stmt = prepare("SELECT platform, tag, count FROM platform_tags ORDER BY count DESC");
+std::vector<PlatformTagCount> PicDatabase::getPlatformTagCounts() const {
+    std::vector<PlatformTagCount> tagCounts;
+    SQLiteStatement stmt = prepare("SELECT tag_id, platform, tag, count FROM platform_tags ORDER BY count DESC");
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
-        std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 1));
-        int count = sqlite3_column_int(stmt.get(), 2);
-        tagCounts.emplace_back(PlatformStringTag{platform, tag}, count);
+        uint32_t tagId = sqlite3_column_int(stmt.get(), 0);
+        PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
+        std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 2));
+        uint32_t count = sqlite3_column_int(stmt.get(), 3);
+        tagCounts.emplace_back(PlatformTagCount{StringPlatformTag{platform, tag}, tagId, count});
     }
     return tagCounts;
 }

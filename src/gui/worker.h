@@ -30,32 +30,34 @@ public:
     explicit DatabaseWorker(QObject* parent = nullptr);
     ~DatabaseWorker();
 
-    void searchPics(const std::unordered_set<std::string>& includedTags,
-                    const std::unordered_set<std::string>& excludedTags,
-                    const std::unordered_set<std::string>& includedPixivTags,
-                    const std::unordered_set<std::string>& excludedPixivTags,
-                    const std::unordered_set<std::string>& includedTweetTags,
-                    const std::unordered_set<std::string>& excludedTweetTags,
-                    const std::string& searchText,
+    void searchPics(const std::unordered_set<uint32_t>& includedTags,
+                    const std::unordered_set<uint32_t>& excludedTags,
+                    const std::unordered_set<uint32_t>& includedPlatformTags,
+                    const std::unordered_set<uint32_t>& excludedPlatformTags,
+                    PlatformType platform,
                     SearchField searchField,
-                    bool selectedTagChanged,
-                    bool selectedPixivTagChanged,
-                    bool selectedTweetTagChanged,
-                    bool searchTextChanged,
+                    const std::string& searchText,
                     size_t requestId);
     void reloadDatabase() { database.reloadDatabase(); };
+
 signals:
-    void searchComplete(const std::vector<PicInfo>& resultPics,
-                        std::vector<std::tuple<std::string, int, bool>> availableTags,
-                        std::vector<std::pair<std::string, int>> availablePixivTags,
-                        std::vector<std::pair<std::string, int>> availableTwitterHashtags,
+    void searchComplete(const std::vector<PicInfo>& pics,
+                        std::vector<TagCount> availableTags,
+                        std::vector<PlatformTagCount> availablePlatformTags,
                         size_t requestId);
 
 private:
     PicDatabase database;
 
+    std::unordered_set<uint32_t> lastIncludedTags;
+    std::unordered_set<uint32_t> lastExcludedTags;
+    std::unordered_set<uint32_t> lastIncludedPlatformTags;
+    std::unordered_set<uint32_t> lastExcludedPlatformTags;
+    PlatformType lastPlatformType = PlatformType::Unknown;
+    SearchField lastSearchField = SearchField::None;
+    std::string lastSearchText;
+
     std::vector<uint64_t> lastTagSearchResult;
-    std::vector<uint64_t> lastPixivTagSearchResult;
-    std::vector<uint64_t> lastTweetTagSearchResult;
-    std::vector<uint64_t> lastTextSearchResult;
+    std::vector<PlatformID> lastPlatformTagSearchResult;
+    std::vector<PlatformID> lastTextSearchResult;
 };

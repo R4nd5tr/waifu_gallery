@@ -39,8 +39,9 @@ target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 
 # test
 if(BUILD_TEST_TARGET STREQUAL "ON")
-    file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-    list(REMOVE_ITEM TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp) # exclude main.cpp
+    # file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+    # list(REMOVE_ITEM TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp) # exclude main.cpp
+    set(TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/service/database.cpp ${PROJECT_SOURCE_DIR}/src/service/parser.cpp ${PROJECT_SOURCE_DIR}/src/utils/logger.cpp)
     file(GLOB TEST_FILES ${PROJECT_SOURCE_DIR}/tests/*.cpp) # include test files
     add_executable(TEST_waifu_gallery
         ${TEST_SRC_FILES}

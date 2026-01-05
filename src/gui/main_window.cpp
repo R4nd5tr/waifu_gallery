@@ -19,6 +19,7 @@
 #include "main_window.h"
 #include "service/database.h"
 #include "ui_main_window.h"
+#include "utils.h"
 #include "utils/settings.h"
 #include <QFileDialog>
 #include <QScrollBar>
@@ -156,10 +157,8 @@ void MainWindow::connectSignalSlots() {
     connect(ui->generalTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
     connect(ui->characterTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->characterTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(ui->pixivTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
-    connect(ui->pixivTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(ui->twitterHashtagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
-    connect(ui->twitterHashtagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
+    connect(ui->platformTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
+    connect(ui->platformTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
     connect(tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
     connect(tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
@@ -183,82 +182,70 @@ void MainWindow::connectSignalSlots() {
     // cancel progress
     connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::cancelProgress);
 }
-QString getTagString(std::string tag, int count) {
-    return QString("%1 (%2)").arg(QString::fromStdString(tag)).arg(count);
+QString getTagString(const TagCount& tagCount) {
+    return QString("%1 (%2)").arg(QString::fromStdString(tagCount.tag.tag)).arg(tagCount.count);
+}
+QString getTagString(const PlatformTagCount& tagCount) {
+    return QString("[%1] %2 (%3)")
+        .arg(platformTypeToString(tagCount.tag.platform))
+        .arg(QString::fromStdString(tagCount.tag.tag))
+        .arg(tagCount.count);
 }
 void MainWindow::loadTags() {
-    allTags = database.getTags();
-    allPixivTags = database.getPixivTags();
-    allTwitterHashtags = database.getTwitterHashtags();
+    allTags = database.getTagCounts();
+    allPlatformTags = database.getPlatformTagCounts();
     Info() << "Loaded tags from database.";
 }
-void MainWindow::displayTags(const std::vector<std::tuple<std::string, int, bool>>& availableTags,
-                             const std::vector<std::pair<std::string, int>>& availablePixivTags,
-                             const std::vector<std::pair<std::string, int>>& availableTwitterHashtags) {
+void MainWindow::displayTags(const std::vector<TagCount>& availableTags,
+                             const std::vector<PlatformTagCount>& availablePlatformTags) {
     ui->generalTagList->clear();
     ui->characterTagList->clear();
-    ui->pixivTagList->clear();
-    ui->twitterHashtagList->clear();
+    ui->platformTagList->clear();
 
-    std::vector<std::tuple<std::string, int, bool>> tags;
-    std::vector<std::pair<std::string, int>> pixivTags;
-    std::vector<std::pair<std::string, int>> twitterHashtags;
+    std::vector<TagCount> tagCounts;
+    std::vector<PlatformTagCount> platformTagCounts;
 
     if (availableTags.size() > 0) {
-        tags = availableTags;
+        tagCounts = availableTags;
     } else {
-        tags = allTags;
+        tagCounts = allTags;
     }
-    if (availablePixivTags.size() > 0) {
-        pixivTags = availablePixivTags;
+    if (availablePlatformTags.size() > 0) {
+        platformTagCounts = availablePlatformTags;
     } else {
-        pixivTags = allPixivTags;
-    }
-    if (availableTwitterHashtags.size() > 0) {
-        twitterHashtags = availableTwitterHashtags;
-    } else {
-        twitterHashtags = allTwitterHashtags;
+        platformTagCounts = allPlatformTags;
     }
 
     QStringList generalTagNames;
     QStringList characterTagNames;
-    for (const auto& tag : tags) {
-        if (std::get<2>(tag)) { // determine if it's a character tag
-            characterTagNames.append(getTagString(std::get<0>(tag), std::get<1>(tag)));
+    for (const auto& tagCount : tagCounts) {
+        if (tagCount.tag.isCharacter) { // determine if it's a character tag
+            characterTagNames.append(getTagString(tagCount));
         } else {
-            generalTagNames.append(getTagString(std::get<0>(tag), std::get<1>(tag)));
+            generalTagNames.append(getTagString(tagCount));
         }
     }
     ui->generalTagList->addItems(generalTagNames);
     ui->characterTagList->addItems(characterTagNames);
     size_t generalTagIndex = 0;
     size_t characterTagIndex = 0;
-    for (const auto& tag : tags) {
-        if (std::get<2>(tag)) { // determine if it's a character tag
-            ui->characterTagList->item(characterTagIndex)->setData(Qt::UserRole, QString::fromStdString(std::get<0>(tag)));
+    for (const auto& tagCount : tagCounts) {
+        if (tagCount.tag.isCharacter) { // determine if it's a character tag
+            ui->characterTagList->item(characterTagIndex)->setData(Qt::UserRole, tagCount.tagId);
             characterTagIndex++;
         } else {
-            ui->generalTagList->item(generalTagIndex)->setData(Qt::UserRole, QString::fromStdString(std::get<0>(tag)));
+            ui->generalTagList->item(generalTagIndex)->setData(Qt::UserRole, tagCount.tagId);
             generalTagIndex++;
         }
     }
 
-    QStringList pixivTagNames;
-    for (const auto& tag : pixivTags) {
-        pixivTagNames.append(getTagString(tag.first, tag.second));
+    QStringList platformTagNames;
+    for (const auto& tagCount : platformTagCounts) {
+        platformTagNames.append(getTagString(tagCount));
     }
-    ui->pixivTagList->addItems(pixivTagNames);
-    for (size_t i = 0; i < pixivTags.size(); i++) {
-        ui->pixivTagList->item(i)->setData(Qt::UserRole, QString::fromStdString(pixivTags[i].first));
-    }
-
-    QStringList twitterHashtagNames;
-    for (const auto& tag : twitterHashtags) {
-        twitterHashtagNames.append(getTagString(tag.first, tag.second));
-    }
-    ui->twitterHashtagList->addItems(twitterHashtagNames);
-    for (size_t i = 0; i < twitterHashtags.size(); i++) {
-        ui->twitterHashtagList->item(i)->setData(Qt::UserRole, QString::fromStdString(twitterHashtags[i].first));
+    ui->platformTagList->addItems(platformTagNames);
+    for (size_t i = 0; i < platformTagCounts.size(); i++) {
+        ui->platformTagList->item(i)->setData(Qt::UserRole, platformTagCounts[i].tagId);
     }
 }
 
@@ -511,12 +498,10 @@ void MainWindow::updateSearchField(int index) {
 }
 void MainWindow::updateSearchText(const QString& text) {
     searchText = text.toStdString();
-    searchTextChanged = true;
 }
 void MainWindow::clearSearchText() {
     ui->searchLineEdit->clear();
     searchText = "";
-    searchTextChanged = true;
     picSearch();
 }
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
@@ -530,33 +515,24 @@ void MainWindow::addIncludedTags() {
     ui->selectedTagScrollArea->show();
 
     QListWidget* listWidget = item->listWidget();
-    std::string tag = item->data(Qt::UserRole).toString().toStdString();
+    uint32_t tagId = item->data(Qt::UserRole).toUInt();
 
     QPushButton* tagButton = new QPushButton(this);
     QPalette palette = tagButton->palette();
     palette.setColor(QPalette::Button, QColor(100, 200, 100));
     tagButton->setPalette(palette);
-    tagButton->setProperty("tag", QString::fromStdString(tag));
+    tagButton->setProperty("tag", tagId);
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
-        if (includedTags.find(tag) == includedTags.end()) {
-            includedTags.insert(tag);
-            selectedTagChanged = true;
-            tagButton->setText(QString::fromStdString(tag));
+        if (includedTags.find(tagId) == includedTags.end()) {
+            includedTags.insert(tagId);
+            tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedTags(tagButton); });
         }
-    } else if (listWidget == ui->pixivTagList) {
-        if (includedPixivTags.find(tag) == includedPixivTags.end()) {
-            includedPixivTags.insert(tag);
-            selectedPixivTagChanged = true;
-            tagButton->setText(QString("pixiv: ") + QString::fromStdString(tag));
-            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedPixivTags(tagButton); });
-        }
-    } else if (listWidget == ui->twitterHashtagList) {
-        if (includedTweetTags.find(tag) == includedTweetTags.end()) {
-            includedTweetTags.insert(tag);
-            selectedTweetTagChanged = true;
-            tagButton->setText(QString("twitter: ") + QString::fromStdString(tag));
-            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedTweetTags(tagButton); });
+    } else if (listWidget == ui->platformTagList) {
+        if (includedPlatformTags.find(tagId) == includedPlatformTags.end()) {
+            includedPlatformTags.insert(tagId);
+            tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedPlatformTags(tagButton); });
         }
     }
     ui->selectedTagLayout->insertWidget(0, tagButton);
@@ -569,33 +545,24 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
     ui->selectedTagScrollArea->show();
 
     QListWidget* listWidget = item->listWidget();
-    std::string tag = item->data(Qt::UserRole).toString().toStdString();
+    uint32_t tagId = item->data(Qt::UserRole).toUInt();
 
     QPushButton* tagButton = new QPushButton(this);
     QPalette palette = tagButton->palette();
     palette.setColor(QPalette::Button, QColor(200, 100, 100));
     tagButton->setPalette(palette);
-    tagButton->setProperty("tag", QString::fromStdString(tag));
+    tagButton->setProperty("tag", tagId);
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
-        if (excludedTags.find(tag) == excludedTags.end()) {
-            excludedTags.insert(tag);
-            selectedTagChanged = true;
-            tagButton->setText(QString::fromStdString(tag));
+        if (excludedTags.find(tagId) == excludedTags.end()) {
+            excludedTags.insert(tagId);
+            tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedTags(tagButton); });
         }
-    } else if (listWidget == ui->pixivTagList) {
-        if (excludedPixivTags.find(tag) == excludedPixivTags.end()) {
-            excludedPixivTags.insert(tag);
-            selectedPixivTagChanged = true;
-            tagButton->setText(QString("pixiv: ") + QString::fromStdString(tag));
-            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedPixivTags(tagButton); });
-        }
-    } else if (listWidget == ui->twitterHashtagList) {
-        if (excludedTweetTags.find(tag) == excludedTweetTags.end()) {
-            excludedTweetTags.insert(tag);
-            selectedTweetTagChanged = true;
-            tagButton->setText(QString("twitter: ") + QString::fromStdString(tag));
-            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedTweetTags(tagButton); });
+    } else if (listWidget == ui->platformTagList) {
+        if (excludedPlatformTags.find(tagId) == excludedPlatformTags.end()) {
+            excludedPlatformTags.insert(tagId);
+            tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
+            connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedPlatformTags(tagButton); });
         }
     }
     ui->selectedTagLayout->addWidget(tagButton);
@@ -603,9 +570,8 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
     tagDoubleClicked = false;
 }
 void MainWindow::removeIncludedTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
+    uint32_t tag = button->property("tag").toUInt();
     includedTags.erase(tag);
-    selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -614,9 +580,8 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
     tagSearchTimer->start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
+    uint32_t tag = button->property("tag").toUInt();
     excludedTags.erase(tag);
-    selectedTagChanged = true;
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -624,10 +589,9 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
 }
-void MainWindow::removeIncludedPixivTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
-    includedPixivTags.erase(tag);
-    selectedPixivTagChanged = true;
+void MainWindow::removeIncludedPlatformTags(QPushButton* button) {
+    uint32_t tag = button->property("tag").toUInt();
+    includedPlatformTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -635,32 +599,9 @@ void MainWindow::removeIncludedPixivTags(QPushButton* button) {
     }
     tagSearchTimer->start(DEBOUNCE_DELAY);
 }
-void MainWindow::removeExcludedPixivTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
-    excludedPixivTags.erase(tag);
-    selectedPixivTagChanged = true;
-    ui->selectedTagLayout->removeWidget(button);
-    button->deleteLater();
-    if (isSelectedTagsEmpty()) {
-        ui->selectedTagScrollArea->hide();
-    }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
-}
-void MainWindow::removeIncludedTweetTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
-    includedTweetTags.erase(tag);
-    selectedTweetTagChanged = true;
-    ui->selectedTagLayout->removeWidget(button);
-    button->deleteLater();
-    if (isSelectedTagsEmpty()) {
-        ui->selectedTagScrollArea->hide();
-    }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
-}
-void MainWindow::removeExcludedTweetTags(QPushButton* button) {
-    std::string tag = button->property("tag").toString().toStdString();
-    excludedTweetTags.erase(tag);
-    selectedTweetTagChanged = true;
+void MainWindow::removeExcludedPlatformTags(QPushButton* button) {
+    uint32_t tag = button->property("tag").toUInt();
+    includedPlatformTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -695,30 +636,20 @@ void MainWindow::picSearch() {
     searchRequestId++;
     emit searchPics(includedTags,
                     excludedTags,
-                    includedPixivTags,
-                    excludedPixivTags,
-                    includedTweetTags,
-                    excludedTweetTags,
-                    searchText,
+                    includedPlatformTags,
+                    excludedPlatformTags,
+                    searchPlatform,
                     searchField,
-                    selectedTagChanged,
-                    selectedPixivTagChanged,
-                    selectedTweetTagChanged,
-                    searchTextChanged,
+                    searchText,
                     searchRequestId);
 }
 void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
-                                     std::vector<std::tuple<std::string, int, bool>> availableTags,
-                                     std::vector<std::pair<std::string, int>> availablePixivTags,
-                                     std::vector<std::pair<std::string, int>> availableTweetTags,
+                                     std::vector<TagCount> availableTags,
+                                     std::vector<PlatformTagCount> availablePlatformTags,
                                      size_t requestId) {
     if (requestId != searchRequestId) return;
     resultPics = std::move(pics);
-    selectedTagChanged = false;
-    selectedPixivTagChanged = false;
-    selectedTweetTagChanged = false;
-    searchTextChanged = false;
-    displayTags(availableTags, availablePixivTags, availableTweetTags);
+    displayTags(availableTags, availablePlatformTags);
     ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
     sortPics();
     displayMorePics();
@@ -776,12 +707,12 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (!showPNG && pic.fileType == ImageFormat::PNG) return false;
     if (!showGIF && pic.fileType == ImageFormat::GIF) return false;
     if (!showWEBP && pic.fileType == ImageFormat::WebP) return false;
-    if (!showUnknowRestrict && pic.xRestrict == RestrictType::Unknown) return false;
-    if (!showAllAge && pic.xRestrict == RestrictType::AllAges) return false;
-    if (!showSensitive && pic.xRestrict == RestrictType::Sensitive) return false;
-    if (!showQuestionable && pic.xRestrict == RestrictType::Questionable) return false;
-    if (!showR18 && pic.xRestrict == RestrictType::R18) return false;
-    if (!showR18g && pic.xRestrict == RestrictType::R18G) return false;
+    if (!showUnknowRestrict && pic.restrictType == RestrictType::Unknown) return false;
+    if (!showAllAge && pic.restrictType == RestrictType::AllAges) return false;
+    if (!showSensitive && pic.restrictType == RestrictType::Sensitive) return false;
+    if (!showQuestionable && pic.restrictType == RestrictType::Questionable) return false;
+    if (!showR18 && pic.restrictType == RestrictType::R18) return false;
+    if (!showR18g && pic.restrictType == RestrictType::R18G) return false;
     if (!showUnknowAI && pic.aiType == AIType::Unknown) return false;
     if (!showAI && pic.aiType == AIType::AI) return false;
     if (!showNonAI && pic.aiType == AIType::NotAI) return false;
@@ -936,28 +867,10 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
         std::filesystem::path importedPath;
         ParserType parserType;
         std::tie(importedPath, parserType) = importer->getImportingDir();
-        switch (parserType) {
-        case ParserType::None:
-            if (std::find(Settings::picDirectories.begin(), Settings::picDirectories.end(), importedPath) ==
-                Settings::picDirectories.end()) {
-                Settings::picDirectories.push_back(importedPath);
-            }
-            break;
-        case ParserType::Pixiv:
-            if (std::find(Settings::pixivDirectories.begin(), Settings::pixivDirectories.end(), importedPath) ==
-                Settings::pixivDirectories.end()) {
-                Settings::pixivDirectories.push_back(importedPath);
-            }
-            break;
-        case ParserType::Twitter:
-            if (std::find(Settings::tweetDirectories.begin(), Settings::tweetDirectories.end(), importedPath) ==
-                Settings::tweetDirectories.end()) {
-                Settings::tweetDirectories.push_back(importedPath);
-            }
-        default:
-            break;
+        if (std::find(Settings::picDirectories.begin(), Settings::picDirectories.end(), std::pair{importedPath, parserType}) ==
+            Settings::picDirectories.end()) {
+            Settings::picDirectories.emplace_back(importedPath, parserType);
         }
-
         delete importer;
         importer = nullptr;
     } else { // re-importing from multiple directories
@@ -1041,7 +954,8 @@ void MainWindow::handleImportPowerfulPixivDownloaderAction() {
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
-    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Pixiv);
+    importer = new MultiThreadedImporter(
+        std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::PowerfulPixivDownloader);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Pixiv图片...");
@@ -1057,7 +971,8 @@ void MainWindow::handleImportGallery_dlTwitterAction() {
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
-    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::Twitter);
+    importer =
+        new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::GallerydlTwitter);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
@@ -1072,13 +987,7 @@ void MainWindow::handleImportExistingDirectoriesAction() {
     ui->statusbar->showMessage("正在重新扫描已导入的图片文件夹...");
     Info() << "Started re-importing pictures from existing directories.";
     for (const auto& dir : Settings::picDirectories) {
-        importPaths.push_back({dir, ParserType::None});
-    }
-    for (const auto& dir : Settings::pixivDirectories) {
-        importPaths.push_back({dir, ParserType::Pixiv});
-    }
-    for (const auto& dir : Settings::tweetDirectories) {
-        importPaths.push_back({dir, ParserType::Twitter});
+        importPaths.emplace_back(dir);
     }
     importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
     Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();

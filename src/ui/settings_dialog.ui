@@ -39,11 +39,11 @@
        <item>
         <widget class="QGroupBox" name="groupBox">
          <property name="title">
-          <string>非下载器图片目录</string>
+          <string>已导入的图片目录</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
-           <widget class="QListWidget" name="picDirsList"/>
+           <widget class="QTableWidget" name="picDirsTable"/>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
@@ -69,92 +69,6 @@
             </item>
             <item>
              <widget class="QPushButton" name="delPicDirButton">
-              <property name="text">
-               <string>删除</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="groupBox_2">
-         <property name="title">
-          <string>Powerful Pixiv Downloader 下载器目录</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_3">
-          <item>
-           <widget class="QListWidget" name="pixivPicDirsList"/>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
-            <item>
-             <spacer name="horizontalSpacer_2">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="addPixivDirButton">
-              <property name="text">
-               <string>新增</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="delPixivDirButton">
-              <property name="text">
-               <string>删除</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="QGroupBox" name="groupBox_3">
-         <property name="title">
-          <string>gallery-dl Twitter下载器目录</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_4">
-          <item>
-           <widget class="QListWidget" name="twitterPicDirsList"/>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
-            <item>
-             <spacer name="horizontalSpacer_3">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="addTwitterDirButton">
-              <property name="text">
-               <string>新增</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="delTwitterDirButton">
               <property name="text">
                <string>删除</string>
               </property>

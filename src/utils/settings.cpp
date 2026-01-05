@@ -26,9 +26,7 @@ bool Settings::settingsLoaded = false;
 
 uint32_t Settings::windowWidth = 1200;
 uint32_t Settings::windowHeight = 800;
-std::vector<std::filesystem::path> Settings::picDirectories;
-std::vector<std::filesystem::path> Settings::pixivDirectories;
-std::vector<std::filesystem::path> Settings::tweetDirectories;
+std::vector<std::pair<std::filesystem::path, ParserType>> Settings::picDirectories;
 bool Settings::autoImportOnStartup = false;
 
 void Settings::loadSettings() {
@@ -43,23 +41,15 @@ void Settings::loadSettings() {
             inFile >> j;
             windowWidth = j.value("windowWidth", 800);
             windowHeight = j.value("windowHeight", 600);
-            {
-                auto tmp = j.value("picDirectories", std::vector<std::string>{});
-                picDirectories.clear();
-                for (const auto& s : tmp)
-                    picDirectories.emplace_back(s);
-            }
-            {
-                auto tmp = j.value("pixivDirectories", std::vector<std::string>{});
-                pixivDirectories.clear();
-                for (const auto& s : tmp)
-                    pixivDirectories.emplace_back(s);
-            }
-            {
-                auto tmp = j.value("tweetDirectories", std::vector<std::string>{});
-                tweetDirectories.clear();
-                for (const auto& s : tmp)
-                    tweetDirectories.emplace_back(s);
+            picDirectories.clear();
+            if (j.contains("picDirectories") && j["picDirectories"].is_array()) {
+                for (const auto& item : j["picDirectories"]) {
+                    if (item.is_array() && item.size() == 2) {
+                        std::filesystem::path dirPath = item[0].get<std::string>();
+                        ParserType parserType = static_cast<ParserType>(item[1].get<int>());
+                        picDirectories.emplace_back(dirPath, parserType);
+                    }
+                }
             }
             autoImportOnStartup = j.value("autoImportOnStartup", false);
         } else {
@@ -81,23 +71,9 @@ void Settings::saveSettings() {
         json j;
         j["windowWidth"] = windowWidth;
         j["windowHeight"] = windowHeight;
-        {
-            std::vector<std::string> tmp;
-            for (const auto& path : picDirectories)
-                tmp.push_back(path.string());
-            j["picDirectories"] = tmp;
-        }
-        {
-            std::vector<std::string> tmp;
-            for (const auto& path : pixivDirectories)
-                tmp.push_back(path.string());
-            j["pixivDirectories"] = tmp;
-        }
-        {
-            std::vector<std::string> tmp;
-            for (const auto& path : tweetDirectories)
-                tmp.push_back(path.string());
-            j["tweetDirectories"] = tmp;
+        j["picDirectories"] = json::array();
+        for (const auto& pair : picDirectories) {
+            j["picDirectories"].push_back({pair.first.string(), static_cast<int>(pair.second)});
         }
         j["autoImportOnStartup"] = autoImportOnStartup;
 

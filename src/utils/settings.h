@@ -17,6 +17,7 @@
  */
 
 #pragma once
+#include "service/parser.h"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -37,8 +38,6 @@ public:
 
     static uint32_t windowWidth;
     static uint32_t windowHeight;
-    static std::vector<std::filesystem::path> picDirectories;
-    static std::vector<std::filesystem::path> pixivDirectories;
-    static std::vector<std::filesystem::path> tweetDirectories;
+    static std::vector<std::pair<std::filesystem::path, ParserType>> picDirectories;
     static bool autoImportOnStartup;
 };

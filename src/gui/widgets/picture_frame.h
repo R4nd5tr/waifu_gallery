@@ -39,7 +39,7 @@ public:
 
 private:
     Ui::PictureFrame* ui;
-    std::unordered_set<std::filesystem::path> imgPaths;
+    std::vector<std::filesystem::path> imgPaths;
     QString illustratorURL;
     QString idURL;
     void openFileWithDefaultApp() {

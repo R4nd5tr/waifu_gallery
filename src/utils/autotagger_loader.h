@@ -17,7 +17,7 @@
  */
 
 #pragma once
-#include "external/autotagger/autotagger.h"
+#include "autotagger/autotagger.h"
 #include <string>
 #include <windows.h>
 

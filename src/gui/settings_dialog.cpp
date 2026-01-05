@@ -18,16 +18,14 @@
 
 #include "settings_dialog.h"
 #include "ui_settings_dialog.h"
+#include "utils.h"
+#include <QComboBox>
 
 SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent), ui(new Ui::SettingsDialog) {
     ui->setupUi(this);
     loadSettings();
     connect(ui->addPicDirButton, &QPushButton::clicked, this, &SettingsDialog::addPicDirectory);
     connect(ui->delPicDirButton, &QPushButton::clicked, this, &SettingsDialog::deletePicDirectory);
-    connect(ui->addPixivDirButton, &QPushButton::clicked, this, &SettingsDialog::addPixivDirectory);
-    connect(ui->delPixivDirButton, &QPushButton::clicked, this, &SettingsDialog::deletePixivDirectory);
-    connect(ui->addTwitterDirButton, &QPushButton::clicked, this, &SettingsDialog::addTwitterDirectory);
-    connect(ui->delTwitterDirButton, &QPushButton::clicked, this, &SettingsDialog::deleteTwitterDirectory);
 
     connect(ui->buttonBox, &QDialogButtonBox::accepted, this, &SettingsDialog::saveSettings);
     connect(ui->buttonBox, &QDialogButtonBox::rejected, this, &SettingsDialog::reject);
@@ -40,27 +38,15 @@ void SettingsDialog::loadSettings() {
     ui->importOnStartCheckBox->setChecked(importOnStartup);
 
     picDirectories = Settings::picDirectories;
-    ui->picDirsList->clear();
-    for (const auto& dir : picDirectories) {
-        auto* item = new QListWidgetItem(QString::fromStdString(dir.string()));
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->picDirsList->addItem(item);
-    }
-
-    pixivDirectories = Settings::pixivDirectories;
-    ui->pixivPicDirsList->clear();
-    for (const auto& dir : pixivDirectories) {
-        auto* item = new QListWidgetItem(QString::fromStdString(dir.string()));
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->pixivPicDirsList->addItem(item);
-    }
-
-    tweetDirectories = Settings::tweetDirectories;
-    ui->twitterPicDirsList->clear();
-    for (const auto& dir : tweetDirectories) {
-        auto* item = new QListWidgetItem(QString::fromStdString(dir.string()));
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->twitterPicDirsList->addItem(item);
+    ui->picDirsTable->clear();
+    for (int i = 0; i < picDirectories.size(); i++) {
+        auto* dirItem = new QTableWidgetItem(QString::fromStdString(picDirectories[i].first.string()));
+        auto* parserComboBox = new QComboBox();
+        parserComboBox->addItems(QStringList(PARSER_TYPE_STRS.begin(), PARSER_TYPE_STRS.end()));
+        parserComboBox->setCurrentIndex(static_cast<int>(picDirectories[i].second));
+        dirItem->setFlags(dirItem->flags() | Qt::ItemIsEditable);
+        ui->picDirsTable->setItem(i, 0, dirItem);
+        ui->picDirsTable->setCellWidget(i, 1, parserComboBox);
     }
 }
 void SettingsDialog::saveSettings() {
@@ -68,68 +54,29 @@ void SettingsDialog::saveSettings() {
     Settings::autoImportOnStartup = importOnStartup;
 
     picDirectories.clear();
-    for (int i = 0; i < ui->picDirsList->count(); ++i) {
-        picDirectories.emplace_back(ui->picDirsList->item(i)->text().toStdString());
+    for (int i = 0; i < ui->picDirsTable->rowCount(); ++i) {
+        picDirectories.emplace_back(
+            ui->picDirsTable->item(i, 0)->text().toStdString(),
+            static_cast<ParserType>(static_cast<QComboBox*>(ui->picDirsTable->cellWidget(i, 1))->currentIndex()));
     }
     Settings::picDirectories = picDirectories;
-
-    pixivDirectories.clear();
-    for (int i = 0; i < ui->pixivPicDirsList->count(); ++i) {
-        pixivDirectories.emplace_back(ui->pixivPicDirsList->item(i)->text().toStdString());
-    }
-    Settings::pixivDirectories = pixivDirectories;
-
-    tweetDirectories.clear();
-    for (int i = 0; i < ui->twitterPicDirsList->count(); ++i) {
-        tweetDirectories.emplace_back(ui->twitterPicDirsList->item(i)->text().toStdString());
-    }
-    Settings::tweetDirectories = tweetDirectories;
 }
 void SettingsDialog::addPicDirectory() {
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片目录");
     if (!dir.isEmpty()) {
-        picDirectories.push_back(dir.toStdString());
-        auto* item = new QListWidgetItem(dir);
+        picDirectories.emplace_back(dir.toStdString(), ParserType::None);
+        auto* item = new QTableWidgetItem(dir);
+        auto* parserComboBox = new QComboBox();
+        parserComboBox->addItems(QStringList(PARSER_TYPE_STRS.begin(), PARSER_TYPE_STRS.end()));
         item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->picDirsList->addItem(item);
+        ui->picDirsTable->setItem(ui->picDirsTable->rowCount(), 0, item);
+        ui->picDirsTable->setCellWidget(ui->picDirsTable->rowCount(), 1, parserComboBox);
     }
 }
 void SettingsDialog::deletePicDirectory() {
-    auto* item = ui->picDirsList->currentItem();
+    auto* item = ui->picDirsTable->currentItem();
     if (item) {
-        picDirectories.erase(picDirectories.begin() + ui->picDirsList->row(item));
-        delete item;
-    }
-}
-void SettingsDialog::addPixivDirectory() {
-    QString dir = QFileDialog::getExistingDirectory(this, "选择Pixiv图片目录");
-    if (!dir.isEmpty()) {
-        pixivDirectories.push_back(dir.toStdString());
-        auto* item = new QListWidgetItem(dir);
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->pixivPicDirsList->addItem(item);
-    }
-}
-void SettingsDialog::deletePixivDirectory() {
-    auto* item = ui->pixivPicDirsList->currentItem();
-    if (item) {
-        pixivDirectories.erase(pixivDirectories.begin() + ui->pixivPicDirsList->row(item));
-        delete item;
-    }
-}
-void SettingsDialog::addTwitterDirectory() {
-    QString dir = QFileDialog::getExistingDirectory(this, "选择Twitter图片目录");
-    if (!dir.isEmpty()) {
-        tweetDirectories.push_back(dir.toStdString());
-        auto* item = new QListWidgetItem(dir);
-        item->setFlags(item->flags() | Qt::ItemIsEditable);
-        ui->twitterPicDirsList->addItem(item);
-    }
-}
-void SettingsDialog::deleteTwitterDirectory() {
-    auto* item = ui->twitterPicDirsList->currentItem();
-    if (item) {
-        tweetDirectories.erase(tweetDirectories.begin() + ui->twitterPicDirsList->row(item));
+        picDirectories.erase(picDirectories.begin() + ui->picDirsTable->row(item));
         delete item;
     }
 }

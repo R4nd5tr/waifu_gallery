@@ -133,25 +133,27 @@ public:
         return getMetadata(platformID.platform, platformID.platformID, loadAssociatedPics);
     }
     std::vector<PicInfo> getNoMetadataPics() const;
-    std::vector<std::pair<StringTag, uint32_t>> getTagCounts() const; // for gui tag selection panel display
-    std::vector<std::pair<PlatformStringTag, uint32_t>> getPlatformTagCounts() const;
+    std::vector<TagCount> getTagCounts() const; // for gui tag selection panel display
+    std::vector<PlatformTagCount> getPlatformTagCounts() const;
     StringTag getStringTag(uint32_t tagId) const {
         if (currentMode == DbMode::Query) {
             Error() << "Cannot get tag by ID in Query mode.";
+            return StringTag{};
         }
         if (tagId < tags.size()) {
             return tags[tagId];
         }
         return StringTag{};
     }
-    PlatformStringTag getPlatformStringTag(uint32_t tagId) const {
+    StringPlatformTag getPlatformStringTag(uint32_t tagId) const {
         if (currentMode == DbMode::Query) {
             Error() << "Cannot get platform tag by ID in Query mode.";
+            return StringPlatformTag{};
         }
         if (tagId < platformTags.size()) {
             return platformTags[tagId];
         }
-        return PlatformStringTag{};
+        return StringPlatformTag{};
     }
 
     // insert functions
@@ -164,8 +166,7 @@ public:
                                     const std::unordered_set<uint32_t>& excludedTagIds) const;
     std::vector<PlatformID> platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
                                               const std::unordered_set<uint32_t>& excludedTagIds) const;
-    std::unordered_set<PlatformID>
-    textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
+    std::vector<PlatformID> textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
 
     // import functions
     void importFilesFromDirectory(const std::filesystem::path& directory,
@@ -190,9 +191,9 @@ private:
 
     // in-memory tag mapping
     std::unordered_map<std::string, uint32_t> tagToId;
-    std::unordered_map<PlatformStringTag, uint32_t> platformTagToId;
+    std::unordered_map<StringPlatformTag, uint32_t> platformTagToId;
     std::vector<StringTag> tags;                 // index is tag ID
-    std::vector<PlatformStringTag> platformTags; // index is platform tag ID
+    std::vector<StringPlatformTag> platformTags; // index is platform tag ID
 
     // feature hash cache for similarity search
     std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>> picFeatureHashes; // (picID, featureHash)
@@ -219,7 +220,7 @@ private:
     SQLiteStatement prepare(const std::string& sql) const { return SQLiteStatement(db, sql); }
 };
 
-class MultiThreadedImporter {
+class MultiThreadedImporter { // TODO: make this accept multiple directories?
 public:
     MultiThreadedImporter(const std::filesystem::path& directory,
                           ImportProgressCallback progressCallback = nullptr,

@@ -42,8 +42,6 @@ enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Hei
 
 enum class SortOrder { Ascending, Descending };
 
-enum class DisplayingItem { PicInfo, PixivInfo, TweetInfo };
-
 const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
 const size_t LOAD_PIC_BATCH = 50;     // number of pictures to load each time
 const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
@@ -69,18 +67,13 @@ public:
     };
 
 signals:
-    void searchPics(const std::unordered_set<std::string>& includedTags,
-                    const std::unordered_set<std::string>& excludedTags,
-                    const std::unordered_set<std::string>& includedPixivTags,
-                    const std::unordered_set<std::string>& excludedPixivTags,
-                    const std::unordered_set<std::string>& includedTweetTags,
-                    const std::unordered_set<std::string>& excludedTweetTags,
-                    const std::string& searchText,
+    void searchPics(const std::unordered_set<uint32_t>& includedTags,
+                    const std::unordered_set<uint32_t>& excludedTags,
+                    const std::unordered_set<uint32_t>& includedPlatformTags,
+                    const std::unordered_set<uint32_t>& excludedPlatformTags,
+                    PlatformType platform,
                     SearchField searchField,
-                    bool selectedTagChanged,
-                    bool selectedPixivTagChanged,
-                    bool selectedTweetTagChanged,
-                    bool searchTextChanged,
+                    const std::string& searchText,
                     size_t requestId);
     void reloadWorkerDatabase();
 
@@ -101,9 +94,8 @@ private:
     void fillComboBox();
     void initWorkerThreads();
     void connectSignalSlots();
-    std::vector<std::tuple<std::string, int, bool>> allTags; // (tag, count, isCharacter)
-    std::vector<std::pair<std::string, int>> allPixivTags;
-    std::vector<std::pair<std::string, int>> allTwitterHashtags;
+    std::vector<TagCount> allTags;
+    std::vector<PlatformTagCount> allPlatformTags;
     void loadTags();
 
     // context
@@ -136,14 +128,13 @@ private:
     bool ratioSortEnabled = false;
     bool ratioSliderEditing = false;
     bool ratioSpinBoxEditing = false;
+    PlatformType searchPlatform;
     SearchField searchField;
     std::string searchText;
-    std::unordered_set<std::string> includedTags;
-    std::unordered_set<std::string> excludedTags;
-    std::unordered_set<std::string> includedPixivTags;
-    std::unordered_set<std::string> excludedPixivTags;
-    std::unordered_set<std::string> includedTweetTags;
-    std::unordered_set<std::string> excludedTweetTags;
+    std::unordered_set<uint32_t> includedTags;
+    std::unordered_set<uint32_t> excludedTags;
+    std::unordered_set<uint32_t> includedPlatformTags;
+    std::unordered_set<uint32_t> excludedPlatformTags;
     void updateShowPNG(bool checked);
     void updateShowJPG(bool checked);
     void updateShowGIF(bool checked);
@@ -184,16 +175,13 @@ private:
     void addExcludedTags(QListWidgetItem* item);
     void removeIncludedTags(QPushButton* button); // is there a better way to pass which tag to remove?
     void removeExcludedTags(QPushButton* button);
-    void removeIncludedPixivTags(QPushButton* button);
-    void removeExcludedPixivTags(QPushButton* button);
-    void removeIncludedTweetTags(QPushButton* button);
-    void removeExcludedTweetTags(QPushButton* button);
+    void removeIncludedPlatformTags(QPushButton* button);
+    void removeExcludedPlatformTags(QPushButton* button);
     QTimer* tagClickTimer;  // use for double click detection
     QTimer* tagSearchTimer; // use for debouncing removing selected tags
     bool tagDoubleClicked = false;
     bool isSelectedTagsEmpty() {
-        return includedTags.empty() && excludedTags.empty() && includedPixivTags.empty() && excludedPixivTags.empty() &&
-               includedTweetTags.empty() && excludedTweetTags.empty();
+        return includedTags.empty() && excludedTags.empty() && includedPlatformTags.empty() && excludedPlatformTags.empty();
     };
 
     void handleWindowSizeChange();
@@ -221,20 +209,13 @@ private:
     void cancelProgress();
 
     // searching
-    bool selectedTagChanged = false;
-    bool selectedPixivTagChanged = false;
-    bool selectedTweetTagChanged = false;
-    bool searchTextChanged = false;
     size_t searchRequestId = 0; // to identify latest search request
     void picSearch();
-    void handleSearchResults(const std::vector<PicInfo>& resultPics,
-                             std::vector<std::tuple<std::string, int, bool>> availableTags,
-                             std::vector<std::pair<std::string, int>> availablePixivTags,
-                             std::vector<std::pair<std::string, int>> availableTwitterHashtags,
+    void handleSearchResults(const std::vector<PicInfo>& pics,
+                             std::vector<TagCount> availableTags,
+                             std::vector<PlatformTagCount> availablePlatformTags,
                              size_t requestId);
-    void displayTags(const std::vector<std::tuple<std::string, int, bool>>& tags = {},
-                     const std::vector<std::pair<std::string, int>>& pixivTags = {},
-                     const std::vector<std::pair<std::string, int>>& twitterHashtags = {});
+    void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
     bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
 
     // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo

@@ -23,8 +23,8 @@
 
 const QString aboutInfo =
     QStringLiteral("<p style=\"white-space: pre-wrap;\">"
-                   "一个基于Qt的二次元插画管理系统，让图片管理变得轻松简单。\n\n"
-                   "版权所有 © 2025 R4nd5tr\n\n" // 版权/版本
+                   "一个二次元插画管理系统，让图片管理变得轻松简单。\n\n"
+                   "版权所有 © 2025 R4nd5tr\n\n"
                    "<table>"
                    "<tr><td>作者：</td><td><a href=\"https://github.com/R4nd5tr\">R4nd5tr</a></td></tr>"
                    "<tr><td>邮箱：</td><td><a href=\"mailto:r4nd5tr@outlook.com\">r4nd5tr@outlook.com</a></td></tr>"

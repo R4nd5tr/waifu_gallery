@@ -26,14 +26,13 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <unordered_set>
 #include <vector>
 
 class MainWindow;
 
 struct ImageLoadTask {
     uint64_t id;
-    std::unordered_set<std::filesystem::path> filePaths;
+    std::vector<std::filesystem::path> filePaths;
 };
 
 class ImageLoadCompleteEvent : public QEvent {
