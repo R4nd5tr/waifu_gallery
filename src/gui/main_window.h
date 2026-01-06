@@ -165,6 +165,7 @@ private:
     QTimer* ratioSortTimer;
     void handleRatioTimerTimeout();
 
+    void updateSearchPlatform(int index);
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
     void clearSearchText();

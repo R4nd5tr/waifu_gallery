@@ -87,12 +87,12 @@ public:
     // transaction and mode management
     void enableForeignKeyRestriction() const {
         if (!execute("PRAGMA foreign_keys = ON;")) {
-            Warn() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
+            Error() << "Failed to enable foreign key restriction:" << sqlite3_errmsg(db);
         }
     }
     void disableForeignKeyRestriction() const {
         if (!execute("PRAGMA foreign_keys = OFF;")) {
-            Warn() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
+            Error() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
         }
     }
     bool beginTransaction() { return execute("BEGIN TRANSACTION;"); }
@@ -136,20 +136,12 @@ public:
     std::vector<TagCount> getTagCounts() const; // for gui tag selection panel display
     std::vector<PlatformTagCount> getPlatformTagCounts() const;
     StringTag getStringTag(uint32_t tagId) const {
-        if (currentMode == DbMode::Query) {
-            Error() << "Cannot get tag by ID in Query mode.";
-            return StringTag{};
-        }
         if (tagId < tags.size()) {
             return tags[tagId];
         }
         return StringTag{};
     }
     StringPlatformTag getPlatformStringTag(uint32_t tagId) const {
-        if (currentMode == DbMode::Query) {
-            Error() << "Cannot get platform tag by ID in Query mode.";
-            return StringPlatformTag{};
-        }
         if (tagId < platformTags.size()) {
             return platformTags[tagId];
         }

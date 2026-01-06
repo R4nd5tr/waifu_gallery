@@ -128,6 +128,10 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
     std::vector<TagCount> availableTags;
     std::vector<PlatformTagCount> availablePlatformTags;
     for (const auto& [tagId, count] : tagCount) {
+        if (std::find(includedTags.begin(), includedTags.end(), tagId) != includedTags.end() ||
+            std::find(excludedTags.begin(), excludedTags.end(), tagId) != excludedTags.end()) {
+            continue; // skip tags already in filter
+        }
         TagCount tagCountEntry;
         tagCountEntry.tag = database.getStringTag(tagId);
         tagCountEntry.tagId = tagId;
@@ -135,6 +139,10 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         availableTags.push_back(tagCountEntry);
     }
     for (const auto& [tagId, count] : platformTagCount) {
+        if (std::find(includedPlatformTags.begin(), includedPlatformTags.end(), tagId) != includedPlatformTags.end() ||
+            std::find(excludedPlatformTags.begin(), excludedPlatformTags.end(), tagId) != excludedPlatformTags.end()) {
+            continue; // skip tags already in filter
+        }
         PlatformTagCount tagCountEntry;
         tagCountEntry.tag = database.getPlatformStringTag(tagId);
         tagCountEntry.tagId = tagId;

@@ -101,6 +101,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         illustratorURL = "";
         idURL = "";
     }
+
     switch (searchField) { // highlight search result
     case SearchField::Title: {
         QFont font = ui->titleLabel->font();
@@ -111,15 +112,15 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
     case SearchField::AuthorID:
     case SearchField::AuthorName:
     case SearchField::AuthorNick: {
-        QFont font = ui->titleLabel->font();
+        QFont font = ui->illustratorLabel->font();
         font.setBold(true);
-        ui->titleLabel->setFont(font);
+        ui->illustratorLabel->setFont(font);
         break;
     }
     case SearchField::PlatformID: {
-        QFont font = ui->titleLabel->font();
+        QFont font = ui->idLabel->font();
         font.setBold(true);
-        ui->titleLabel->setFont(font);
+        ui->idLabel->setFont(font);
         break;
     }
     default:

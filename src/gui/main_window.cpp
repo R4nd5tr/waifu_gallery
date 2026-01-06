@@ -58,16 +58,17 @@ void MainWindow::initInterface() {
     fillComboBox();
 }
 void MainWindow::fillComboBox() {
+    ui->searchPlatformComboBox->addItem("选择平台");
+    ui->searchPlatformComboBox->addItem("Pixiv");
+    ui->searchPlatformComboBox->addItem("Twitter");
+    ui->searchPlatformComboBox->setCurrentIndex(0);
+
     ui->searchComboBox->addItem("选择搜索字段");
-    ui->searchComboBox->addItem("图片ID");
-    ui->searchComboBox->addItem("pixiv作品ID");
-    ui->searchComboBox->addItem("pixiv作者ID");
-    ui->searchComboBox->addItem("pixiv作者名");
-    ui->searchComboBox->addItem("pixiv标题");
-    ui->searchComboBox->addItem("推文ID");
-    ui->searchComboBox->addItem("推特作者ID");
-    ui->searchComboBox->addItem("推特作者名");
-    ui->searchComboBox->addItem("推特作者别名");
+    ui->searchComboBox->addItem("平台ID");
+    ui->searchComboBox->addItem("作者ID");
+    ui->searchComboBox->addItem("作者名");
+    ui->searchComboBox->addItem("作者别名");
+    ui->searchComboBox->addItem("标题");
     ui->searchComboBox->setCurrentIndex(0);
 
     ui->sortComboBox->addItem("无");
@@ -147,6 +148,7 @@ void MainWindow::connectSignalSlots() {
     connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
     // text search controls
+    connect(ui->searchPlatformComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchPlatform);
     connect(ui->searchComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchField);
     connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::updateSearchText);
     connect(ui->searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::picSearch);
@@ -493,6 +495,9 @@ void MainWindow::sortPics() {
 
 // Functions for text and tag search
 
+void MainWindow::updateSearchPlatform(int index) {
+    searchPlatform = static_cast<PlatformType>(index);
+}
 void MainWindow::updateSearchField(int index) {
     searchField = static_cast<SearchField>(index);
 }
@@ -988,6 +993,11 @@ void MainWindow::handleImportExistingDirectoriesAction() {
     Info() << "Started re-importing pictures from existing directories.";
     for (const auto& dir : Settings::picDirectories) {
         importPaths.emplace_back(dir);
+    }
+    if (importPaths.empty()) {
+        ui->statusbar->showMessage("没有已导入的图片文件夹可供重新扫描。");
+        Info() << "No existing directories to re-import.";
+        return;
     }
     importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
     Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();

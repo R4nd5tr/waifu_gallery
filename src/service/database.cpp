@@ -53,7 +53,7 @@ std::vector<std::filesystem::path> collectFiles(const std::filesystem::path& dir
 PicDatabase::PicDatabase(const std::string& databaseFile, DbMode mode) {
     initDatabase(databaseFile);
     setMode(mode);
-    if (mode != DbMode::Query) initTagMapping();     // query mode does not need tag mapping
+    initTagMapping();
     if (mode == DbMode::Import) initImportedFiles(); // only needed in import mode, to avoid parsing duplicate files
 }
 PicDatabase::~PicDatabase() {
@@ -715,7 +715,7 @@ Metadata PicDatabase::getMetadata(PlatformType platform, int64_t platformID, boo
 
     // query tags
     stmt = prepare(R"(
-        SELECT tag_id WHERE platform = ? AND platform_id = ?
+        SELECT tag_id FROM picture_metadata_tags WHERE platform = ? AND platform_id = ?
         )");
     sqlite3_bind_int(stmt.get(), 1, static_cast<int>(platform));
     sqlite3_bind_int64(stmt.get(), 2, platformID);
