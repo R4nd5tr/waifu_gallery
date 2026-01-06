@@ -45,9 +45,9 @@ struct PicTag {
     float probability; // confidence score for the tag
 };
 struct ImageSource {
-    PlatformType platform;
-    int64_t platformID;
-    uint32_t imageIndex;
+    PlatformType platform = PlatformType::Unknown;
+    int64_t platformID = 0;
+    uint32_t imageIndex = 0;
 };
 struct PlatformID {
     PlatformType platform;

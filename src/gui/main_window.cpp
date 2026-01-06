@@ -906,8 +906,8 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
     database.reloadDatabase();
     emit reloadWorkerDatabase();
     loadTags(); // load new tags from database
+    noMetadataPics = database.getNoMetadataPics();
     if (isSearchCriteriaEmpty()) {
-        noMetadataPics = database.getNoMetadataPics();
         picSearch();
     }
     Info() << "Import completed. Total files imported: " << totalImported;

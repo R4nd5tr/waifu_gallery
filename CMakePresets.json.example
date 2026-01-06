@@ -12,7 +12,7 @@
             "cacheVariables": {
                 "CMAKE_PREFIX_PATH": "<path-to-Qt>/Qt/6.8.2/msvc2022_64",
                 "CMAKE_TOOLCHAIN_FILE": "<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
                 "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
                 "BUILD_TEST_TARGET": "ON"
             }
@@ -24,7 +24,7 @@
             "cacheVariables": {
                 "CMAKE_PREFIX_PATH": "<path-to-Qt>/Qt/6.8.2/msvc2022_64",
                 "CMAKE_TOOLCHAIN_FILE": "<path-to-vcpkg>/vcpkg/scripts/buildsystems/vcpkg.cmake",
-                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_TARGET_TRIPLET": "x64-windows-static",
                 "CMAKE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/bin/msvc",
                 "BUILD_TEST_TARGET": "OFF",
                 "CMAKE_CXX_FLAGS": "/DQT_NO_DEBUG_OUTPUT"

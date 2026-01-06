@@ -128,8 +128,8 @@ private:
     bool ratioSortEnabled = false;
     bool ratioSliderEditing = false;
     bool ratioSpinBoxEditing = false;
-    PlatformType searchPlatform;
-    SearchField searchField;
+    PlatformType searchPlatform = PlatformType::Unknown;
+    SearchField searchField = SearchField::None;
     std::string searchText;
     std::unordered_set<uint32_t> includedTags;
     std::unordered_set<uint32_t> excludedTags;

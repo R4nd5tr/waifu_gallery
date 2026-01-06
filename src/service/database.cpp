@@ -358,6 +358,7 @@ bool PicDatabase::insertPicture(const ParsedPicture& picInfo) {
         return false;
     }
     // insert into picture_source table
+    if (picInfo.identifier.platform == PlatformType::Unknown) return true; // no source info to insert
     stmt = prepare(R"(
             INSERT OR IGNORE INTO picture_source(
                 id, platform, platform_id, image_index
@@ -397,6 +398,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
         Warn() << "insertMetadata called with updateIfExists=true, redirecting to updateMetadata.";
         return updateMetadata(metadataInfo);
     }
+    if (metadataInfo.id == 0) return false; // invalid metadata ID
     SQLiteStatement stmt;
     // insert into picture_metadata table
     stmt = prepare(R"(
@@ -478,6 +480,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     return true;
 }
 bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
+    if (metadataInfo.id == 0) return false; // invalid metadata ID
     SQLiteStatement stmt;
     // update picture_metadata table
     stmt = prepare(R"(
@@ -485,7 +488,7 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
             platform, platform_id, date, author_id, author_name, author_nick, 
             author_description, title, description, view_count, like_count, bookmark_count,
             reply_count, forward_count, quote_count, restrict_type, ai_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(platform, platform_id) DO UPDATE SET
             date=excluded.date,
             author_id=excluded.author_id,
@@ -1089,7 +1092,7 @@ PicDatabase::textSearch(const std::string& searchText, PlatformType platformType
         if (platformType != PlatformType::Unknown) {
             searchFieldStr = "platform = " + std::to_string(static_cast<int>(platformType)) + " AND " + searchFieldStr;
         }
-        stmt = prepare(" SELECT platform, platform_id FROM picture_metadata WHERE " + searchFieldStr + " LIKE ?");
+        stmt = prepare(" SELECT platform, platform_id FROM picture_metadata WHERE " + searchFieldStr + " LIKE ? COLLATE NOCASE");
         likePattern = searchText + "%";
         sqlite3_bind_text(stmt.get(), 1, likePattern.c_str(), -1, SQLITE_TRANSIENT);
         break;

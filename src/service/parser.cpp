@@ -109,6 +109,7 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
         break;
     }
     case ParserType::GallerydlTwitter: {
+        // extract tweet ID and index from filename
         size_t firstUnderscore = fileName.find('_');
         size_t dot = fileName.find('.', firstUnderscore + 1);
         if (firstUnderscore != std::string::npos && dot != std::string::npos) {
@@ -210,7 +211,7 @@ std::vector<ParsedMetadata> parsePixivCsv(const std::filesystem::path& pixivCsvF
             info.likeCount = doc.GetCell<uint32_t>("likeCount", i);
         if (std::find(colNames.begin(), colNames.end(), "viewCount") != colNames.end())
             info.viewCount = doc.GetCell<uint32_t>("viewCount", i);
-        info.restrictType = toXRestrictTypeEnum(doc.GetCell<std::string>("restrictType", i));
+        info.restrictType = toXRestrictTypeEnum(doc.GetCell<std::string>("xRestrict", i));
         if (hasAI) info.aiType = toAITypeEnum(doc.GetCell<std::string>("AI", i));
         info.date = replacePlusZeroWithZ(doc.GetCell<std::string>("date", i));
         result.push_back(info);
@@ -236,7 +237,7 @@ std::vector<ParsedMetadata> parsePixivJson(const std::filesystem::path& pixivJso
         info.authorID = std::stoul(obj.value("userId", ""));
         info.likeCount = obj.value("likeCount", 0);
         info.viewCount = obj.value("viewCount", 0);
-        info.restrictType = static_cast<RestrictType>(obj.value("restrictType", 0) + 1);
+        info.restrictType = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
         info.aiType = static_cast<AIType>(obj.value("aiType", 0));
         info.date = replacePlusZeroWithZ(obj.value("date", ""));
 
@@ -273,6 +274,8 @@ std::vector<ParsedMetadata> powerfulPixivDownloaderMetadataParser(const std::fil
 }
 
 ParsedMetadata gallerydlTwitterMetadataParser(const std::filesystem::path& metadataFilePath) {
+    if (metadataFilePath.extension() != ".json") return ParsedMetadata{}; // invalid file type
+
     ParsedMetadata info;
     std::vector<uint8_t> data = readFileToBuffer(metadataFilePath);
     auto json = nlohmann::json::parse(data.begin(), data.end());
