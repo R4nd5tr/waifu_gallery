@@ -20,16 +20,11 @@
 #include "model.h"
 #include "parser.h"
 #include "utils/logger.h"
-#include <atomic>
-#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <iostream>
-#include <mutex>
-#include <queue>
 #include <sqlite3.h>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -161,21 +156,23 @@ public:
     std::vector<PlatformID> textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
 
     // import functions
-    void importFilesFromDirectory(const std::filesystem::path& directory,
-                                  ParserType parserType = ParserType::None,
-                                  ImportProgressCallback progressCallback = nullptr);
+    void importFilesFromDirectory(
+        const std::filesystem::path& directory,   // single-threaded import function, only for debug use
+        ParserType parserType = ParserType::None, // use as a base line comparison to multi-threaded Importer class
+        ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    // call this after scanDirectory, sync x_restrict and ai_type from pixiv to pictures, count tags
-    void syncTables(std::unordered_set<PlatformID> newMetadataIds = {});
+    void syncTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
     bool isFileImported(const std::filesystem::path& filePath) const;
     void addImportedFile(const std::filesystem::path& filePath);
 
     // tagger functions
-    void getModelName() const;
+    std::string getModelName() const;
     void importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter)
-    std::vector<std::pair<uint64_t, std::filesystem::path>> getUntaggedPics();                              // (picID, filePath)
-    void updatePicTags(uint64_t picID, const std::vector<int>& tagIds, const std::vector<float>& probabilities);
-    bool insertPictureTags(uint64_t id, int tagId, float probability);
+    std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> getUntaggedPics();                 // (picID, filePath)
+    void updatePicTags(uint64_t picID,
+                       const std::vector<PicTag>& picTags,
+                       RestrictType restrictType,
+                       std::vector<uint8_t> featureHash);
 
 private:
     DbMode currentMode = DbMode::None;
@@ -210,47 +207,4 @@ private:
         return true;
     }
     SQLiteStatement prepare(const std::string& sql) const { return SQLiteStatement(db, sql); }
-};
-
-class MultiThreadedImporter { // TODO: make this accept multiple directories?
-public:
-    MultiThreadedImporter(const std::filesystem::path& directory,
-                          ImportProgressCallback progressCallback = nullptr,
-                          ParserType prserType = ParserType::None,
-                          std::string dbFile = DEFAULT_DATABASE_FILE,
-                          size_t threadCount = std::thread::hardware_concurrency());
-    ~MultiThreadedImporter();
-
-    bool finish();
-    void forceStop();
-    std::pair<std::filesystem::path, ParserType> getImportingDir() const { return {importDirectory, parserType}; }
-
-private:
-    bool finished = false;
-
-    ImportProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
-    ParserType parserType;
-    std::string dbFile;
-    std::filesystem::path importDirectory;
-
-    std::vector<std::thread> workers;
-    std::vector<std::filesystem::path> files;
-    std::atomic<bool> readyFlag = false;
-    std::condition_variable cvReady;
-    std::atomic<size_t> nextFileIndex = 0;
-    size_t importedCount = 0;
-    std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping
-                                                // when some unsupported files are in the directory
-    // single insert thread
-    std::thread insertThread;
-    std::queue<ParsedPicture> parsedPictureQueue; // one ParsedPicture represents one image file
-    std::mutex parsedPicQueueMutex;
-    std::queue<std::vector<ParsedMetadata>> metadataVecQueue; // one vector represents one metadata file
-    std::mutex parsedMetadataQueueMutex;
-
-    std::atomic<bool> stopFlag = false;
-    std::condition_variable cv;
-
-    void workerThreadFunc();
-    void insertThreadFunc(); // TODO:use only one transaction and commit at the end for cancel operation?
 };

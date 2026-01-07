@@ -377,22 +377,6 @@ bool PicDatabase::insertPicture(const ParsedPicture& picInfo) {
 
     return true;
 }
-bool PicDatabase::insertPictureTags(uint64_t id, int tagId, float probability) {
-    SQLiteStatement stmt;
-    stmt = prepare(R"(
-        INSERT OR IGNORE INTO picture_tags(
-            id, tag_id, probability
-        ) VALUES (?, ?, ?)
-    )");
-    sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(id));
-    sqlite3_bind_int(stmt.get(), 2, tagId);
-    sqlite3_bind_double(stmt.get(), 3, probability);
-    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
-        Error() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
-        return false;
-    }
-    return true;
-}
 bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     if (metadataInfo.updateIfExists) {
         Warn() << "insertMetadata called with updateIfExists=true, redirecting to updateMetadata.";
@@ -1140,219 +1124,99 @@ std::vector<PlatformTagCount> PicDatabase::getPlatformTagCounts() const {
     return tagCounts;
 }
 
-// Multi-threaded importer implementation
+// tagger functions
 
-MultiThreadedImporter::MultiThreadedImporter(const std::filesystem::path& directory,
-                                             ImportProgressCallback progressCallback,
-                                             ParserType parserType,
-                                             std::string dbFile,
-                                             size_t threadCount)
-    : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
-    importDirectory = directory;
-    insertThread = std::thread(&MultiThreadedImporter::insertThreadFunc, this);
-    for (size_t i = 0; i < threadCount; ++i) {
-        workers.emplace_back(&MultiThreadedImporter::workerThreadFunc, this);
+std::string PicDatabase::getModelName() const {
+    SQLiteStatement stmt = prepare(R"(
+        SELECT value FROM metadata WHERE key = 'model_name'
+    )");
+    if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        return std::string(reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0)));
     }
+    return "";
 }
-MultiThreadedImporter::~MultiThreadedImporter() {
-    forceStop();
-    finish();
-}
-void MultiThreadedImporter::forceStop() {
-    if (finished) return;
-    stopFlag.store(true);
-    finish();
-}
-bool MultiThreadedImporter::finish() {
-    if (finished) return true;
-    if (importedCount < supportedFileCount.load(std::memory_order_relaxed) && !stopFlag.load()) {
-        return false; // 还有文件未处理完
+void PicDatabase::importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags) {
+    SQLiteStatement stmt;
+    beginTransaction();
+    // update model name
+    stmt = prepare(R"(
+        INSERT OR REPLACE INTO metadata(key, value) VALUES ('model_name', ?)
+    )");
+    sqlite3_bind_text(stmt.get(), 1, modelName.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        Error() << "Failed to insert/update model_name: " << sqlite3_errmsg(db);
     }
-    for (auto& worker : workers) {
-        if (worker.joinable()) {
-            worker.join();
-        }
-    }
-    workers.clear();
-    cv.notify_all();
-    if (insertThread.joinable()) {
-        insertThread.join();
-    }
-    finished = true;
-    return true;
-}
-bool processSingleFile(const std::filesystem::path& filePath,
-                       ParserType parserType,
-                       std::vector<ParsedPicture>& parsedPictures,
-                       std::vector<std::vector<ParsedMetadata>>& parsedMetadataVecs) {
-    std::string ext = filePath.extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    try {
-        if (ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".gif" || ext == ".webp") {
-            parsedPictures.emplace_back(parsePicture(filePath, parserType));
-            return true;
-        } else {
-            switch (parserType) {
-            case ParserType::PowerfulPixivDownloader: {
-                std::vector<ParsedMetadata> parsedMetadata = powerfulPixivDownloaderMetadataParser(filePath);
-                if (!parsedMetadata.empty()) {
-                    parsedMetadataVecs.push_back(std::move(parsedMetadata));
-                    return true;
-                }
-                break;
-            }
-            case ParserType::GallerydlTwitter: {
-                ParsedMetadata parsedMetadata = gallerydlTwitterMetadataParser(filePath);
-                if (parsedMetadata.platformType != PlatformType::Unknown) {
-                    parsedMetadataVecs.push_back({std::move(parsedMetadata)});
-                    return true;
-                }
-                break;
-            }
-            default:
-                break;
-            }
-        }
-    } catch (const std::exception& e) {
-        Error() << "Error processing file:" << filePath << "Error:" << e.what();
-        return false;
-    }
-    return false;
-}
-void MultiThreadedImporter::workerThreadFunc() {
-    std::vector<ParsedPicture> parsedPictures;
-    parsedPictures.reserve(500);
-    std::vector<std::vector<ParsedMetadata>> ParsedMetadataVecs;
-    ParsedMetadataVecs.reserve(500);
-    size_t index = 0;
 
-    // Wait until files are collected
-    while (!readyFlag.load(std::memory_order_acquire) && !stopFlag.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    if (stopFlag.load()) return;
-
-    while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
-        if (parsedPictures.size() >= 100) {
-            if (parsedPicQueueMutex.try_lock()) {
-                while (!parsedPictures.empty()) {
-                    parsedPictureQueue.push(std::move(parsedPictures.back()));
-                    parsedPictures.pop_back();
-                }
-                parsedPicQueueMutex.unlock();
-                parsedPictures.clear();
-                cv.notify_one();
-            }
+    // insert/update tags
+    for (int tagId = 0; tagId < tags.size(); tagId++) {
+        stmt = prepare(R"(
+            INSERT INTO tags(tag_id, tag, is_character) VALUES (?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET tag=excluded.tag, is_character=excluded.is_character
+        )");
+        const auto& [tag, isCharacter] = tags[tagId];
+        sqlite3_bind_int(stmt.get(), 1, tagId);
+        sqlite3_bind_text(stmt.get(), 2, tag.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt.get(), 3, isCharacter ? 1 : 0);
+        if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+            Error() << "Failed to insert/update tag: " << sqlite3_errmsg(db);
         }
-        if (ParsedMetadataVecs.size() >= 100) {
-            if (parsedMetadataQueueMutex.try_lock()) {
-                while (!ParsedMetadataVecs.empty()) {
-                    metadataVecQueue.push(std::move(ParsedMetadataVecs.back()));
-                    ParsedMetadataVecs.pop_back();
-                }
-                parsedMetadataQueueMutex.unlock();
-                ParsedMetadataVecs.clear();
-                cv.notify_one();
-            }
-        }
-        if (stopFlag.load()) return;
-        const auto& filePath = files[index];
-        if (!processSingleFile(filePath, parserType, parsedPictures, ParsedMetadataVecs))
-            supportedFileCount.fetch_sub(1, std::memory_order_relaxed);
     }
-    if (!parsedPictures.empty()) {
-        std::lock_guard<std::mutex> lock(parsedPicQueueMutex);
-        while (!parsedPictures.empty()) {
-            parsedPictureQueue.push(std::move(parsedPictures.back()));
-            parsedPictures.pop_back();
-        }
-        parsedPictures.clear();
-        cv.notify_one();
-    }
-    if (!ParsedMetadataVecs.empty()) {
-        std::lock_guard<std::mutex> lock(parsedPicQueueMutex);
-        while (!ParsedMetadataVecs.empty()) {
-            metadataVecQueue.push(std::move(ParsedMetadataVecs.back()));
-            ParsedMetadataVecs.pop_back();
-        }
-        ParsedMetadataVecs.clear();
-        cv.notify_one();
-    }
+    commitTransaction();
+    reloadDatabase();
 }
-void MultiThreadedImporter::insertThreadFunc() {
-    PicDatabase threadDb(dbFile, DbMode::Import);
-    std::mutex conditionMutex;
-    std::vector<ParsedPicture> picsToInsert;
-    picsToInsert.reserve(1000);
-    std::vector<std::vector<ParsedMetadata>> metadataVecsToInsert;
-    metadataVecsToInsert.reserve(1000);
-
-    // Collect files to import
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(importDirectory)) {
-        if (!entry.is_regular_file() || threadDb.isFileImported(entry.path())) {
-            continue;
-        }
-        files.push_back(entry.path());
+std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase::getUntaggedPics() {
+    std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> untaggedPics;
+    SQLiteStatement stmt = prepare(R"(
+        SELECT p.id, pfp.file_path
+        FROM pictures p
+        LEFT JOIN picture_tags pt ON p.id = pt.id
+        LEFT JOIN picture_file_paths pfp ON p.id = pfp.id
+        WHERE pt.id IS NULL
+    )");
+    std::unordered_map<uint64_t, std::vector<std::filesystem::path>> picMap;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        uint64_t picID = int64_to_uint64(sqlite3_column_int64(stmt.get(), 0));
+        std::filesystem::path filePath = std::filesystem::path(reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 1)));
+        picMap[picID].push_back(filePath);
     }
-    supportedFileCount = files.size();
-    Info() << "Total files to import: " << supportedFileCount.load();
-    readyFlag.store(true, std::memory_order_release);
-
-    threadDb.beginTransaction();
-    while (!stopFlag.load() && importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
-        if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
-        std::unique_lock<std::mutex> lock(conditionMutex);
-        cv.wait(lock, [this]() { return !parsedPictureQueue.empty() || !metadataVecQueue.empty() || stopFlag.load(); });
-        if (stopFlag.load()) break;
-        if (!parsedPictureQueue.empty()) {
-            if (parsedPicQueueMutex.try_lock()) {
-                while (!parsedPictureQueue.empty()) {
-                    picsToInsert.push_back(std::move(parsedPictureQueue.front()));
-                    parsedPictureQueue.pop();
-                }
-                parsedPicQueueMutex.unlock();
-                for (const auto& picInfo : picsToInsert) {
-                    threadDb.insertPicture(picInfo);
-                    importedCount++;
-                }
-                picsToInsert.clear();
-            }
-        }
-        if (!metadataVecQueue.empty()) {
-            if (parsedMetadataQueueMutex.try_lock()) {
-                while (!metadataVecQueue.empty()) {
-                    metadataVecsToInsert.push_back(std::move(metadataVecQueue.front()));
-                    metadataVecQueue.pop();
-                }
-                parsedMetadataQueueMutex.unlock();
-                for (const auto& metadataVec : metadataVecsToInsert) {
-                    for (const auto& metadataInfo : metadataVec) {
-                        if (metadataInfo.updateIfExists) {
-                            threadDb.updateMetadata(metadataInfo);
-                        } else {
-                            threadDb.insertMetadata(metadataInfo);
-                        }
-                    }
-                    importedCount++;
-                }
-                metadataVecsToInsert.clear();
-            }
+    for (const auto& [picID, filePaths] : picMap) {
+        untaggedPics.emplace_back(picID, filePaths);
+    }
+    return untaggedPics;
+}
+void PicDatabase::updatePicTags(uint64_t picID,
+                                const std::vector<PicTag>& picTags,
+                                RestrictType restrictType,
+                                std::vector<uint8_t> featureHash) {
+    SQLiteStatement stmt;
+    // delete existing tags
+    stmt = prepare(R"(
+        DELETE FROM picture_tags WHERE id = ?
+    )");
+    sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(picID));
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        Error() << "Failed to delete existing picture_tags: " << sqlite3_errmsg(db);
+    }
+    // insert new tags
+    for (const auto& picTag : picTags) {
+        stmt = prepare(R"(
+            INSERT INTO picture_tags(id, tag_id, probability) VALUES (?, ?, ?)
+        )");
+        sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(picID));
+        sqlite3_bind_int(stmt.get(), 2, picTag.tagId);
+        sqlite3_bind_double(stmt.get(), 3, static_cast<double>(picTag.probability));
+        if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+            Error() << "Failed to insert picture_tag: " << sqlite3_errmsg(db);
         }
     }
-    Info() << "Finalizing import";
-    if (stopFlag.load()) {
-        Info() << "Import stopped by user, rolling back. " << "Directory: " << importDirectory;
-        threadDb.rollbackTransaction();
-        return;
+    // update restrict_type and feature_hash in pictures table
+    stmt = prepare(R"(
+        UPDATE pictures SET restrict_type = ?, feature_hash = ? WHERE id = ?
+    )");
+    sqlite3_bind_int(stmt.get(), 1, static_cast<int>(restrictType));
+    sqlite3_bind_blob(stmt.get(), 2, featureHash.data(), static_cast<int>(featureHash.size()), SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt.get(), 3, uint64_to_int64(picID));
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        Error() << "Failed to update pictures restrict_type and feature_hash: " << sqlite3_errmsg(db);
     }
-    threadDb.syncTables();
-    for (const auto& filePath : files) {
-        threadDb.addImportedFile(filePath);
-    }
-    if (!threadDb.commitTransaction()) {
-        Error() << "Import commit failed, rolling back. " << "Directory: " << importDirectory;
-        threadDb.rollbackTransaction();
-    }
-    Info() << "Import completed. Directory: " << importDirectory;
-    if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_seq_cst));
 }

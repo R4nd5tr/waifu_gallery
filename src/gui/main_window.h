@@ -19,6 +19,7 @@
 #pragma once
 #include "about_dialog.h"
 #include "service/database.h"
+#include "service/importer.h"
 #include "service/model.h"
 #include "settings_dialog.h"
 #include "thread_pool.h"
@@ -89,7 +90,7 @@ private:
     PicDatabase database;                          // Normal mode by default, for tag loading and user changes
     ImageLoadThreadPool imageLoadThreadPool{this}; // Blazing fast!!!
     QThread* searchWorkerThread = nullptr;
-    MultiThreadedImporter* importer = nullptr; // only one importer at a time, Blazing fast!!!
+    Importer* importer = nullptr; // only one importer at a time, Blazing fast!!!
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -219,7 +220,7 @@ private:
     void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
     bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
 
-    // displaying   TODO: refactor display logic, make it accept picinfo, pixivinfo and tweetinfo
+    // displaying   TODO: refactor display logic, make it accept picinfo and metadata directly
     uint displayIndex;
     std::vector<PicInfo> noMetadataPics; // pics without metadata, displayed when no filters are set
     std::vector<PicInfo> resultPics;

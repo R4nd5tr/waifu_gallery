@@ -727,7 +727,7 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (minHeight != 0 && pic.height < minHeight) return false;
     return true;
 }
-void MainWindow::displayMorePics() {
+void MainWindow::displayMorePics() { // TODO: load pictures relative to scroll position?
     int picsLoaded = 0;
     while (displayIndex < resultPics.size() && picsLoaded < LOAD_PIC_BATCH) {
         const PicInfo& pic = resultPics[displayIndex];
@@ -886,7 +886,7 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
             ui->progressBar->setValue(0);
             ImportStartTime = std::chrono::steady_clock::now();
             ui->progressStatusLabel->setText(QString("- / - | 速度：- 文件每秒 | 剩余时间：- 秒"));
-            importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
+            importer = new Importer(importPaths.back().first, reportImportProgress, importPaths.back().second);
             Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
             return;
         }
@@ -943,7 +943,7 @@ void MainWindow::handleImportNewPicsAction() {
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描文件夹...");
-    importer = new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress);
+    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入图片...");
@@ -959,8 +959,7 @@ void MainWindow::handleImportPowerfulPixivDownloaderAction() {
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
-    importer = new MultiThreadedImporter(
-        std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::PowerfulPixivDownloader);
+    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::PowerfulPixivDownloader);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Pixiv图片...");
@@ -976,8 +975,7 @@ void MainWindow::handleImportGallery_dlTwitterAction() {
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
-    importer =
-        new MultiThreadedImporter(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::GallerydlTwitter);
+    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::GallerydlTwitter);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
@@ -999,7 +997,7 @@ void MainWindow::handleImportExistingDirectoriesAction() {
         Info() << "No existing directories to re-import.";
         return;
     }
-    importer = new MultiThreadedImporter(importPaths.back().first, reportImportProgress, importPaths.back().second);
+    importer = new Importer(importPaths.back().first, reportImportProgress, importPaths.back().second);
     Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
