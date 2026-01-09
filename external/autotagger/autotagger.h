@@ -13,6 +13,8 @@
 #define AUTOTAGGER
 #endif
 
+typedef void (*LogCallback)(const std::string& message);
+
 enum class ModelRestrictType { Unknown, General, Sensitive, Questionable, Explicit };
 
 struct ImageTagResult {
@@ -46,7 +48,7 @@ public:
 
     // system info functions
     virtual bool gpuAvailable() = 0;
-    virtual std::string getLog() = 0;
+    virtual void setLogCallback(LogCallback callback) = 0;
 };
 
 extern "C" {

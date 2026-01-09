@@ -1109,9 +1109,15 @@
     <property name="title">
      <string>文件</string>
     </property>
+    <widget class="QMenu" name="importDownloaderPicsMenu">
+     <property name="title">
+      <string>导入下载器图片</string>
+     </property>
+     <addaction name="importPowerfulPixivDownloaderAction"/>
+     <addaction name="importGallery_dlTwitterAction"/>
+    </widget>
     <addaction name="importNewPicsAction"/>
-    <addaction name="importPowerfulPixivDownloaderAction"/>
-    <addaction name="importGallery_dlTwitterAction"/>
+    <addaction name="importDownloaderPicsMenu"/>
     <addaction name="separator"/>
     <addaction name="importExistingDirectoriesAction"/>
    </widget>
@@ -1147,7 +1153,7 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>导入非下载器图片...</string>
+    <string>导入图片文件夹...</string>
    </property>
   </action>
   <action name="importPowerfulPixivDownloaderAction">

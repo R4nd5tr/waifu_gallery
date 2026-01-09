@@ -100,6 +100,14 @@ bool PicDatabase::createTables() {
             ai_type INTEGER DEFAULT 0
         )
     )";
+    const std::string tagsTable = R"(
+        CREATE TABLE IF NOT EXISTS tags (
+            tag_id INTEGER PRIMARY KEY,
+            tag TEXT NOT NULL,
+            is_character BOOLEAN,
+            count INTEGER DEFAULT 0
+        )
+    )";
     const std::string pictureTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_tags (
             id INTEGER NOT NULL,
@@ -109,7 +117,7 @@ bool PicDatabase::createTables() {
             PRIMARY KEY (id, tag_id),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE,
-            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            FOREIGN KEY (tag_id) REFERENCES tags(tag_id) ON DELETE CASCADE
         )
     )";
     const std::string pictureFilesTable = R"(
@@ -132,14 +140,6 @@ bool PicDatabase::createTables() {
             PRIMARY KEY (platform, platform_id, image_index),
 
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
-        )
-    )";
-    const std::string tagsTable = R"(
-        CREATE TABLE IF NOT EXISTS tags (
-            tag_id INTEGER PRIMARY KEY,
-            tag TEXT NOT NULL UNIQUE,
-            is_character BOOLEAN,
-            count INTEGER DEFAULT 0
         )
     )";
     const std::string picMetadataTable = R"(
@@ -169,6 +169,17 @@ bool PicDatabase::createTables() {
             PRIMARY KEY (platform, platform_id)
         )
     )";
+    const std::string platformTagsTable = R"(
+        CREATE TABLE IF NOT EXISTS platform_tags (
+            tag_id INTEGER NOT NULL PRIMARY KEY,
+            platform INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            translated_tag TEXT,
+            count INTEGER DEFAULT 0,
+
+            UNIQUE (platform, tag)
+        )
+    )";
     const std::string picMetadataTagsTable = R"(
         CREATE TABLE IF NOT EXISTS picture_metadata_tags (
             platform INTEGER NOT NULL,
@@ -179,17 +190,6 @@ bool PicDatabase::createTables() {
 
             FOREIGN KEY (platform, platform_id) REFERENCES picture_metadata(platform, platform_id) ON DELETE CASCADE,
             FOREIGN KEY (tag_id) REFERENCES platform_tags(tag_id) ON DELETE CASCADE
-        )
-    )";
-    const std::string platformTagsTable = R"(
-        CREATE TABLE IF NOT EXISTS platform_tags (
-            tag_id INTEGER NOT NULL PRIMARY KEY,
-            platform INTEGER NOT NULL,
-            tag TEXT NOT NULL,
-            translated_tag TEXT,
-            count INTEGER DEFAULT 0,
-
-            UNIQUE (platform, tag)
         )
     )";
     const std::string importedDirectoriesTable = R"(
@@ -211,14 +211,14 @@ bool PicDatabase::createTables() {
     const std::vector<std::string> tables = {metadataTable,
                                              // pictures
                                              picturesTable,
+                                             tagsTable,
                                              pictureTagsTable,
                                              pictureFilesTable,
                                              pictureSourceTable,
-                                             tagsTable,
                                              // picture metadata
                                              picMetadataTable,
-                                             picMetadataTagsTable,
                                              platformTagsTable,
+                                             picMetadataTagsTable,
                                              // imported files tracking
                                              importedDirectoriesTable,
                                              importedFilesTable};
@@ -862,29 +862,6 @@ void PicDatabase::syncTables(std::unordered_set<PlatformID> newMetadataIds) { //
     }
     enableForeignKeyRestriction();
 }
-void PicDatabase::importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tagSet) {
-    SQLiteStatement stmt;
-    stmt = prepare(R"(
-        INSERT OR UPDATE INTO metadata(key, value) VALUES ('tagset_model', ?)
-    )");
-    sqlite3_bind_text(stmt.get(), 1, modelName.c_str(), -1, SQLITE_TRANSIENT);
-    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
-        Error() << "Failed to insert/update tagset_model: " << sqlite3_errmsg(db);
-    }
-
-    for (int tagId = 0; tagId < tagSet.size(); tagId++) {
-        stmt = prepare(R"(
-            INSERT INTO tags(id, tag, is_character) VALUES (?, ?, ?)
-        )");
-        const auto& [tag, isCharacter] = tagSet[tagId];
-        sqlite3_bind_int(stmt.get(), 1, tagId);
-        sqlite3_bind_text(stmt.get(), 2, tag.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt.get(), 3, isCharacter ? 1 : 0);
-        if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
-            Error() << "Failed to insert tag: " << sqlite3_errmsg(db);
-        }
-    }
-}
 bool PicDatabase::isFileImported(const std::filesystem::path& filePath) const {
     std::string dir = filePath.parent_path().string();
     std::string filename = filePath.filename().string();
@@ -1150,8 +1127,7 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
     // insert/update tags
     for (int tagId = 0; tagId < tags.size(); tagId++) {
         stmt = prepare(R"(
-            INSERT INTO tags(tag_id, tag, is_character) VALUES (?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET tag=excluded.tag, is_character=excluded.is_character
+            INSERT OR REPLACE INTO tags(tag_id, tag, is_character) VALUES (?, ?, ?)
         )");
         const auto& [tag, isCharacter] = tags[tagId];
         sqlite3_bind_int(stmt.get(), 1, tagId);
@@ -1161,7 +1137,10 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
             Error() << "Failed to insert/update tag: " << sqlite3_errmsg(db);
         }
     }
-    commitTransaction();
+    if (!commitTransaction()) {
+        Error() << "Import tag set failed, rolling back";
+        rollbackTransaction();
+    }
     reloadDatabase();
 }
 std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase::getUntaggedPics() {
