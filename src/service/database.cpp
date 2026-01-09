@@ -799,27 +799,13 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
         // Info() << "Processed files: " << processed << " | Speed: " << speed << " files/sec | ETA: " << eta_minutes << "m "
         //        << eta_seconds << "s";
     }
-    syncTables();
+    syncMetadataAndPicTables();
+    updatePlatformTagCounts();
     enableForeignKeyRestriction();
     // Info() << "Import completed. Total files processed:" << processed;
 }
-void PicDatabase::syncTables(std::unordered_set<PlatformID> newMetadataIds) { // post-import operations
+void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds) { // post-import operations
     SQLiteStatement stmt;
-    // count tags
-    if (!execute(R"(
-        UPDATE tags SET count = (
-            SELECT COUNT(*) FROM picture_tags WHERE tag_id = tags.tag_id
-        )
-    )")) {
-        Warn() << "Failed to count tags:" << sqlite3_errmsg(db);
-    }
-    if (!execute(R"(
-        UPDATE platform_tags SET count = (
-            SELECT COUNT(*) FROM picture_metadata_tags WHERE tag_id = platform_tags.tag_id
-        )
-    )")) {
-        Warn() << "Failed to count platform tags:" << sqlite3_errmsg(db);
-    }
     // sync restrict_type and ai_type in pictures table
     if (newMetadataIds.empty()) {
         newMetadataIds = this->newMetadataIds;
@@ -919,6 +905,26 @@ void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
     sqlite3_bind_text(stmt.get(), 2, filename.c_str(), -1, SQLITE_TRANSIENT);
     if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
         Error() << "Failed to insert imported file: " << sqlite3_errmsg(db);
+    }
+}
+void PicDatabase::updatePlatformTagCounts() {
+    SQLiteStatement stmt;
+    if (!execute(R"(
+        UPDATE platform_tags SET count = (
+            SELECT COUNT(*) FROM picture_metadata_tags WHERE tag_id = platform_tags.tag_id
+        )
+    )")) {
+        Warn() << "Failed to count platform tags:" << sqlite3_errmsg(db);
+    }
+}
+void PicDatabase::updateTagCounts() {
+    SQLiteStatement stmt;
+    if (!execute(R"(
+        UPDATE tags SET count = (
+            SELECT COUNT(*) FROM picture_tags WHERE tag_id = tags.tag_id
+        )
+    )")) {
+        Warn() << "Failed to count tags:" << sqlite3_errmsg(db);
     }
 }
 

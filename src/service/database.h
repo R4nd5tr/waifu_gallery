@@ -161,9 +161,11 @@ public:
         ParserType parserType = ParserType::None, // use as a base line comparison to multi-threaded Importer class
         ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    void syncTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
+    void syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
     bool isFileImported(const std::filesystem::path& filePath) const;
     void addImportedFile(const std::filesystem::path& filePath);
+    void updatePlatformTagCounts(); // update platform tag counts after bulk import
+    void updateTagCounts();         // update tag counts after bulk import
 
     // tagger functions
     std::string getModelName() const;
@@ -188,7 +190,7 @@ private:
     std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>> picFeatureHashes; // (picID, featureHash)
 
     // import related
-    std::unordered_set<PlatformID> newMetadataIds;                                  // for syncTables use
+    std::unordered_set<PlatformID> newMetadataIds;                                  // for syncMetadataAndPicTables use
     std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles; // directory -> set of imported file names
 
     void initDatabase(const std::string& databaseFile);

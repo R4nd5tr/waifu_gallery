@@ -158,15 +158,22 @@ void PicTagger::analyzeThreadFunc() {
             Info() << "Tagged pictures:" << analyzed << "/" << totalSupported.load();
         }
     }
+
     Info() << "Finalizing tagging, total analyzed:" << analyzed;
     if (stopFlag.load()) {
         Info() << "Tagging process was stopped by user.";
         threadDb.rollbackTransaction();
+        finished.store(true);
+        return;
     }
+
+    threadDb.updateTagCounts();
+
     if (!threadDb.commitTransaction()) {
         Error() << "Failed to commit tagging transaction, rolling back.";
         threadDb.rollbackTransaction();
     }
+
     finished.store(true);
     Info() << "Tagging process completed.";
 }

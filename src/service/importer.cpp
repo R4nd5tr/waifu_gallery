@@ -221,7 +221,8 @@ void Importer::insertThreadFunc() {
         threadDb.rollbackTransaction();
         return;
     }
-    threadDb.syncTables();
+    threadDb.syncMetadataAndPicTables();
+    threadDb.updatePlatformTagCounts();
     for (const auto& filePath : files) {
         threadDb.addImportedFile(filePath);
     }
