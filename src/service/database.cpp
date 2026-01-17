@@ -83,6 +83,8 @@ bool PicDatabase::createTables() {
             value TEXT
         )
     )";
+
+    // pictures related tables
     const std::string picturesTable = R"(
         CREATE TABLE IF NOT EXISTS pictures (
             id INTEGER PRIMARY KEY NOT NULL,
@@ -142,6 +144,8 @@ bool PicDatabase::createTables() {
             FOREIGN KEY (id) REFERENCES pictures(id) ON DELETE CASCADE
         )
     )";
+
+    // picture metadata related tables
     const std::string picMetadataTable = R"(
         CREATE TABLE IF NOT EXISTS picture_metadata (
             platform INTEGER NOT NULL,
@@ -192,6 +196,8 @@ bool PicDatabase::createTables() {
             FOREIGN KEY (tag_id) REFERENCES platform_tags(tag_id) ON DELETE CASCADE
         )
     )";
+
+    // imported files tracking tables
     const std::string importedDirectoriesTable = R"(
         CREATE TABLE IF NOT EXISTS imported_directories (
             dir_id INTEGER PRIMARY KEY AUTOINCREMENT,

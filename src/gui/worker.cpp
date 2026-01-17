@@ -88,7 +88,7 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
             } else if (inTextSearch) {
                 resultPics.push_back(textSearchResultPics[id]);
             } else {
-                resultPics.push_back(database.getPicInfo(id));
+                resultPics.push_back(database.getPicInfo(id, true));
             }
         }
     } else if (!platformTagSearchResultPics.empty()) {

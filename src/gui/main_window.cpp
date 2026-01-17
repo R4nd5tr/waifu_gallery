@@ -207,15 +207,12 @@ void MainWindow::displayTags(const std::vector<TagCount>& availableTags,
     std::vector<TagCount> tagCounts;
     std::vector<PlatformTagCount> platformTagCounts;
 
-    if (availableTags.size() > 0) {
-        tagCounts = availableTags;
-    } else {
+    if (availableTags.empty() && availablePlatformTags.empty()) { // only display all tags if no available tags are provided
         tagCounts = allTags;
-    }
-    if (availablePlatformTags.size() > 0) {
-        platformTagCounts = availablePlatformTags;
-    } else {
         platformTagCounts = allPlatformTags;
+    } else { // display available tags when either availableTags or availablePlatformTags is provided
+        tagCounts = availableTags;
+        platformTagCounts = availablePlatformTags;
     }
 
     QStringList generalTagNames;
@@ -664,8 +661,8 @@ void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
 
 void MainWindow::handleWindowSizeChange() {
     int width = ui->picBrowseWidget->width();
-    widgetsPerRow = width / 270;
-    if (widgetsPerRow < 1) widgetsPerRow = 1;
+    picsPerRow = width / 270;
+    if (picsPerRow < 1) picsPerRow = 1;
     while (ui->picDisplayLayout->count() > 0) {
         QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
         if (item) {
@@ -677,13 +674,12 @@ void MainWindow::handleWindowSizeChange() {
     currentRow = 0;
     for (const auto& picId : displayingPicIds) {
         auto frameIt = idToFrameMap.find(picId);
-        if (frameIt != idToFrameMap.end()) {
-            ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
-            currentColumn++;
-            if (currentColumn >= widgetsPerRow) {
-                currentColumn = 0;
-                currentRow++;
-            }
+        if (frameIt == idToFrameMap.end()) continue;
+        ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
+        currentColumn++;
+        if (currentColumn >= picsPerRow) {
+            currentColumn = 0;
+            currentRow++;
         }
     }
 }
@@ -727,9 +723,17 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (minHeight != 0 && pic.height < minHeight) return false;
     return true;
 }
-void MainWindow::displayMorePics() { // TODO: load pictures relative to scroll position?
-    int picsLoaded = 0;
-    while (displayIndex < resultPics.size() && picsLoaded < LOAD_PIC_BATCH) {
+void MainWindow::displayMorePics(uint rows) { // TODO: load pictures relative to scroll position?
+    uint picsLoaded = 0;
+    uint picsToLoad = 0;
+    // calculate how many pics to load to fill the specified number of rows
+    if (displayingPicIds.size() % picsPerRow != 0) { // fill current row first
+        picsToLoad = picsPerRow - (displayingPicIds.size() % picsPerRow);
+    }
+    picsToLoad += rows * picsPerRow;
+
+    // load pics
+    while (displayIndex < resultPics.size() && picsLoaded < picsToLoad) {
         const PicInfo& pic = resultPics[displayIndex];
         displayIndex++;
 
@@ -739,20 +743,20 @@ void MainWindow::displayMorePics() { // TODO: load pictures relative to scroll p
 
         PictureFrame* picFrame = nullptr;
         auto frameIt = idToFrameMap.find(pic.id);
-        if (frameIt != idToFrameMap.end()) {
+        if (frameIt != idToFrameMap.end()) { // reuse existing PictureFrame
             picFrame = frameIt->second;
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
-        } else {
-            if (searchText.empty() || searchField == SearchField::None) { // create PictureFrame
+        } else { // create new PictureFrame
+            if (searchText.empty() || searchField == SearchField::None) {
                 picFrame = new PictureFrame(this, pic);
-            } else {
+            } else { // create PictureFrame with highlighted search text
                 picFrame = new PictureFrame(this, pic, searchField);
             }
             idToFrameMap[pic.id] = picFrame;
 
             if (imageThumbCache.find(pic.id) == imageThumbCache.end()) { // load image thumbnail
                 imageLoadThreadPool.loadImage(pic);
-            } else {
+            } else { // use cached thumbnail
                 picFrame->setPixmap(imageThumbCache[pic.id]);
             }
 
@@ -761,15 +765,19 @@ void MainWindow::displayMorePics() { // TODO: load pictures relative to scroll p
 
         picsLoaded++;
         currentColumn++;
-        if (currentColumn >= widgetsPerRow) {
+        if (currentColumn >= picsPerRow) {
             currentColumn = 0;
             currentRow++;
         }
     }
 }
 void MainWindow::displayMorePicOnScroll(int value) {
-    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 200) {
-        displayMorePics();
+    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 100) {
+        displayMorePics(5);
+    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 200) {
+        displayMorePics(2);
+    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 500) {
+        displayMorePics(1);
     }
 }
 void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory

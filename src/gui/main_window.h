@@ -44,7 +44,6 @@ enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Hei
 enum class SortOrder { Ascending, Descending };
 
 const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
-const size_t LOAD_PIC_BATCH = 50;     // number of pictures to load each time
 const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
 const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
 const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
@@ -100,9 +99,6 @@ private:
     void loadTags();
 
     // context
-    uint widgetsPerRow;
-    uint currentColumn;
-    uint currentRow;
     bool showPNG = true;
     bool showJPG = true;
     bool showGIF = true;
@@ -136,6 +132,7 @@ private:
     std::unordered_set<uint32_t> excludedTags;
     std::unordered_set<uint32_t> includedPlatformTags;
     std::unordered_set<uint32_t> excludedPlatformTags;
+    // filter update handlers
     void updateShowPNG(bool checked);
     void updateShowJPG(bool checked);
     void updateShowGIF(bool checked);
@@ -149,7 +146,7 @@ private:
     void updateShowUnknowAI(bool checked);
     void updateShowAI(bool checked);
     void updateShowNonAI(bool checked);
-
+    // resolution filter handlers
     void updateMaxWidth(const QString& text);
     void updateMaxHeight(const QString& text);
     void updateMinWidth(const QString& text);
@@ -157,7 +154,7 @@ private:
     void clearResolutionFilters();
     QTimer* resolutionTimer;
     void handleResolutionTimerTimeout();
-
+    // sort handlers
     void updateSortBy(int index);
     void updateSortOrder(int index);
     void updateEnableRatioSort(bool checked);
@@ -165,12 +162,12 @@ private:
     void updateRatioSpinBox(double value);
     QTimer* ratioSortTimer;
     void handleRatioTimerTimeout();
-
+    // pic text search handlers
     void updateSearchPlatform(int index);
     void updateSearchField(int index);
     void updateSearchText(const QString& text);
     void clearSearchText();
-
+    // pic tag search handlers
     void handleListWidgetItemSingleClick(QListWidgetItem* item);
     QListWidgetItem* lastClickedTagItem = nullptr;
     void addIncludedTags();
@@ -185,11 +182,7 @@ private:
     bool isSelectedTagsEmpty() {
         return includedTags.empty() && excludedTags.empty() && includedPlatformTags.empty() && excludedPlatformTags.empty();
     };
-
-    void handleWindowSizeChange();
-
-    void displayMorePicOnScroll(int value);
-
+    // tag search handler
     void tagSearch(const QString& text);
 
     // Action handlers
@@ -221,6 +214,12 @@ private:
     bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
 
     // displaying   TODO: refactor display logic, make it accept picinfo and metadata directly
+    uint picsPerRow;
+    uint currentColumn;
+    uint currentRow;
+    void handleWindowSizeChange();
+    void displayMorePicOnScroll(int value);
+
     uint displayIndex;
     std::vector<PicInfo> noMetadataPics; // pics without metadata, displayed when no filters are set
     std::vector<PicInfo> resultPics;
@@ -229,8 +228,8 @@ private:
     std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage? implement LRU cache?
     void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call displayMorePics()
     bool isMatchFilter(const PicInfo& pic);
-    void displayMorePics();
-    void sortPics(); // sort resultPics vector
+    void displayMorePics(uint rows = 5); // display more pics in the scroll area
+    void sortPics();                     // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();
     void displayImage(uint64_t picId, QImage&& img);
