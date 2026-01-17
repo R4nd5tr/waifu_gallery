@@ -29,7 +29,7 @@
 
 enum class LogLevel { Debug, Info, Warning, Error };
 
-class Logger { // TODO: implement log file rotation
+class Logger {
 public:
     Logger(LogLevel level);
     ~Logger();

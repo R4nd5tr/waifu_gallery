@@ -723,7 +723,7 @@ bool MainWindow::isMatchFilter(const PicInfo& pic) {
     if (minHeight != 0 && pic.height < minHeight) return false;
     return true;
 }
-void MainWindow::displayMorePics(uint rows) { // TODO: load pictures relative to scroll position?
+void MainWindow::displayMorePics(uint rows) {
     uint picsLoaded = 0;
     uint picsToLoad = 0;
     // calculate how many pics to load to fill the specified number of rows
