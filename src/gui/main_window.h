@@ -75,7 +75,6 @@ signals:
                     SearchField searchField,
                     const std::string& searchText,
                     size_t requestId);
-    void reloadWorkerDatabase();
 
 protected:
     bool firstShow_ = true;

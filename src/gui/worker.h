@@ -38,7 +38,6 @@ public:
                     SearchField searchField,
                     const std::string& searchText,
                     size_t requestId);
-    void reloadDatabase() { database.reloadDatabase(); };
 
 signals:
     void searchComplete(const std::vector<PicInfo>& pics,

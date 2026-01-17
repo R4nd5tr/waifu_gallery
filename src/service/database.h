@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <sqlite3.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -71,13 +72,120 @@ private:
     sqlite3_stmt* stmt_;
 };
 
-class PicDatabase {
+class DbCache { // singleton class for caching database mappings
+public:
+    static DbCache& getInstance() {
+        static DbCache instance;
+        return instance;
+    }
+    bool tagMappingLoaded() const {
+        return !tagToId.empty() && !platformTagToId.empty() && !tags.empty() && !platformTags.empty();
+    }
+    bool featureHashCacheLoaded() const { return !picFeatureHashes.empty(); }
+    bool importedFileLoaded() const { return !importedFiles.empty(); }
+
+    void loadTagMapping(std::unordered_map<std::string, uint32_t>&& tagToIdMap,
+                        std::unordered_map<PlatformTagStr, uint32_t>&& platformTagToIdMap,
+                        std::vector<TagStr>&& tagList,
+                        std::vector<PlatformTagStr>&& platformTagList) {
+        std::lock_guard<std::mutex> lock(writeMutex);
+        tagToId = tagToIdMap;
+        platformTagToId = platformTagToIdMap;
+        tags = tagList;
+        platformTags = platformTagList;
+    }
+    void loadPicFeatureHashes(std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>>&& featureHashes) {
+        std::lock_guard<std::mutex> lock(writeMutex);
+        picFeatureHashes = featureHashes;
+    }
+    void loadImportedFiles(std::unordered_map<std::string, std::unordered_set<std::string>>&& files) {
+        std::lock_guard<std::mutex> lock(writeMutex);
+        importedFiles = files;
+    }
+
+    TagStr getStringTag(uint32_t tagId) const {
+        if (tagId < tags.size()) {
+            return tags[tagId];
+        }
+        return TagStr{};
+    }
+    PlatformTagStr getPlatformStringTag(uint32_t tagId) const {
+        if (tagId < platformTags.size()) {
+            return platformTags[tagId];
+        }
+        return PlatformTagStr{};
+    }
+    bool isFileImported(const std::filesystem::path& filePath) const {
+        std::string dir = filePath.parent_path().string();
+        std::string filename = filePath.filename().string();
+        if (importedFiles.find(dir) != importedFiles.end()) {
+            if (importedFiles.at(dir).find(filename) != importedFiles.at(dir).end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    void addImportedFile(const std::filesystem::path& filePath) {
+        if (isFileImported(filePath)) return;
+        std::lock_guard<std::mutex> lock(writeMutex);
+
+        std::string dir = filePath.parent_path().string();
+        std::string filename = filePath.filename().string();
+        if (importedFiles.find(dir) == importedFiles.end()) {
+            importedFiles[dir] = std::unordered_set<std::string>();
+        }
+        importedFiles[dir].insert(filename);
+    }
+
+    bool platformTagExists(const PlatformTagStr& tag) const { return platformTagToId.find(tag) != platformTagToId.end(); }
+    uint32_t addPlatformTag(const PlatformTagStr& tag) {
+        if (platformTagToId.find(tag) != platformTagToId.end()) {
+            return platformTagToId.at(tag);
+        }
+        std::lock_guard<std::mutex> lock(writeMutex);
+        platformTags.emplace_back(tag);
+        uint32_t newId = static_cast<uint32_t>(platformTags.size());
+        platformTagToId[tag] = newId;
+        return newId;
+    }
+    uint32_t getPlatformTagId(const PlatformTagStr& tag) const { return platformTagToId.at(tag); }
+
+    void clearTagMapping() {
+        std::lock_guard<std::mutex> lock(writeMutex);
+        tagToId.clear();
+        platformTagToId.clear();
+        tags.clear();
+        platformTags.clear();
+    }
+
+private:
+    DbCache() = default;
+    ~DbCache() = default;
+    DbCache(const DbCache&) = delete;
+    DbCache& operator=(const DbCache&) = delete;
+    DbCache(DbCache&&) = delete;
+    DbCache& operator=(DbCache&&) = delete;
+
+    std::mutex writeMutex;
+
+    // in-memory tag mapping
+    std::unordered_map<std::string, uint32_t> tagToId;
+    std::unordered_map<PlatformTagStr, uint32_t> platformTagToId;
+    std::vector<TagStr> tags;                 // index is tag ID
+    std::vector<PlatformTagStr> platformTags; // index is platform tag ID
+
+    // feature hash cache for similarity search
+    std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>> picFeatureHashes; // (picID, featureHash)
+
+    // imported files cache
+    std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles; // directory -> set of imported file names
+};
+
+class PicDatabase { // sqlite database wrapper
 public:
     PicDatabase(const std::string& databaseFile = DEFAULT_DATABASE_FILE, DbMode mode = DbMode::Normal);
     explicit PicDatabase(DbMode mode) : PicDatabase(DEFAULT_DATABASE_FILE, mode) {}
     ~PicDatabase();
-
-    void reloadDatabase() { initTagMapping(); };
 
     // transaction and mode management
     void enableForeignKeyRestriction() const {
@@ -130,18 +238,8 @@ public:
     std::vector<PicInfo> getNoMetadataPics() const;
     std::vector<TagCount> getTagCounts() const; // for gui tag selection panel display
     std::vector<PlatformTagCount> getPlatformTagCounts() const;
-    StringTag getStringTag(uint32_t tagId) const {
-        if (tagId < tags.size()) {
-            return tags[tagId];
-        }
-        return StringTag{};
-    }
-    StringPlatformTag getPlatformStringTag(uint32_t tagId) const {
-        if (tagId < platformTags.size()) {
-            return platformTags[tagId];
-        }
-        return StringPlatformTag{};
-    }
+    TagStr getStringTag(uint32_t tagId) const { return cache.getStringTag(tagId); }
+    PlatformTagStr getPlatformStringTag(uint32_t tagId) const { return cache.getPlatformStringTag(tagId); }
 
     // insert functions
     bool insertPicture(const ParsedPicture& picInfo);
@@ -162,7 +260,7 @@ public:
         ImportProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
     void syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
-    bool isFileImported(const std::filesystem::path& filePath) const;
+    bool isFileImported(const std::filesystem::path& filePath) const { return cache.isFileImported(filePath); }
     void addImportedFile(const std::filesystem::path& filePath);
     void updatePlatformTagCounts(); // update platform tag counts after bulk import
     void updateTagCounts();         // update tag counts after bulk import
@@ -177,21 +275,11 @@ public:
                        std::vector<uint8_t> featureHash);
 
 private:
-    DbMode currentMode = DbMode::None;
     sqlite3* db = nullptr;
+    DbMode currentMode = DbMode::None;
+    DbCache& cache = DbCache::getInstance();
 
-    // in-memory tag mapping
-    std::unordered_map<std::string, uint32_t> tagToId;
-    std::unordered_map<StringPlatformTag, uint32_t> platformTagToId;
-    std::vector<StringTag> tags;                 // index is tag ID
-    std::vector<StringPlatformTag> platformTags; // index is platform tag ID
-
-    // feature hash cache for similarity search
-    std::vector<std::pair<uint64_t, std::array<uint8_t, 64>>> picFeatureHashes; // (picID, featureHash)
-
-    // import related
-    std::unordered_set<PlatformID> newMetadataIds;                                  // for syncMetadataAndPicTables use
-    std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles; // directory -> set of imported file names
+    std::unordered_set<PlatformID> newMetadataIds; // for syncMetadataAndPicTables use
 
     void initDatabase(const std::string& databaseFile);
     bool createTables();

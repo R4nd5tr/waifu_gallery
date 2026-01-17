@@ -268,12 +268,13 @@ bool PicDatabase::createTables() {
     return true;
 }
 void PicDatabase::initTagMapping() {
-    tagToId.clear();
-    platformTagToId.clear();
-    tags.clear();
-    platformTags.clear();
+    if (cache.tagMappingLoaded()) return;
 
     SQLiteStatement stmt;
+    std::vector<TagStr> tags;
+    std::vector<PlatformTagStr> platformTags;
+    std::unordered_map<std::string, uint32_t> tagToId;
+    std::unordered_map<PlatformTagStr, uint32_t> platformTagToId;
 
     stmt = prepare("SELECT tag, is_character FROM tags ORDER BY tag_id ASC");
     if (!stmt.get()) {
@@ -283,7 +284,7 @@ void PicDatabase::initTagMapping() {
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         const char* tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0));
         bool isCharacterTag = sqlite3_column_int(stmt.get(), 1) != 0;
-        tags.emplace_back(StringTag{tag, isCharacterTag});
+        tags.emplace_back(TagStr{tag, isCharacterTag});
         // only need tagToId mapping in import mode, for inserting new tags
         if (currentMode == DbMode::Import) tagToId[tag] = static_cast<uint32_t>(tags.size() - 1);
     }
@@ -296,16 +297,19 @@ void PicDatabase::initTagMapping() {
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         const char* tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0));
         PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
-        platformTags.emplace_back(StringPlatformTag{platform, tag});
+        platformTags.emplace_back(PlatformTagStr{platform, tag});
         if (currentMode == DbMode::Import)
-            platformTagToId[StringPlatformTag{platform, tag}] = static_cast<uint32_t>(platformTags.size() - 1); // same as above
+            platformTagToId[PlatformTagStr{platform, tag}] = static_cast<uint32_t>(platformTags.size() - 1); // same as above
     }
+
+    cache.loadTagMapping(std::move(tagToId), std::move(platformTagToId), std::move(tags), std::move(platformTags));
 
     Info() << "Tag mappings loaded. Tags:" << tags.size() << "Platform Tags:" << platformTags.size();
 }
 void PicDatabase::initImportedFiles() {
-    importedFiles.clear();
+    if (cache.importedFileLoaded()) return;
     SQLiteStatement stmt;
+    std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles;
     stmt = prepare(R"(
         SELECT id.dir_path, f.filename
         FROM imported_files f
@@ -324,6 +328,7 @@ void PicDatabase::initImportedFiles() {
             importedFiles[dirPath].insert(fileName);
         }
     }
+    cache.loadImportedFiles(std::move(importedFiles));
     Info() << "Imported files tracking initialized. Directories:" << importedFiles.size();
 }
 
@@ -421,12 +426,10 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     }
     // insert into picture_metadata_tags table
     for (const auto& tag : metadataInfo.tags) {
-        StringPlatformTag stringTag{metadataInfo.platformType, tag};
-        if (platformTagToId.find(stringTag) == platformTagToId.end()) {
+        PlatformTagStr stringTag{metadataInfo.platformType, tag};
+        if (!cache.platformTagExists(stringTag)) {
             // insert new platform tag
-            platformTags.emplace_back(stringTag);
-            int newId = static_cast<int>(platformTags.size() - 1);
-            platformTagToId[stringTag] = newId;
+            uint32_t newId = cache.addPlatformTag(stringTag);
             stmt = prepare(R"(
                 INSERT OR IGNORE INTO platform_tags(tag_id, platform, tag) VALUES (?, ?, ?)
             )");
@@ -445,7 +448,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
         )");
         sqlite3_bind_int(stmt.get(), 1, static_cast<int>(metadataInfo.platformType));
         sqlite3_bind_int64(stmt.get(), 2, metadataInfo.id);
-        sqlite3_bind_int(stmt.get(), 3, platformTagToId.at(stringTag));
+        sqlite3_bind_int(stmt.get(), 3, cache.getPlatformTagId(stringTag));
         if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
             Error() << "Failed to insert picture_metadata_tag: " << sqlite3_errmsg(db);
             return false;
@@ -453,13 +456,12 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     }
     if (metadataInfo.tags.size() == metadataInfo.tagsTransl.size()) {
         for (size_t i = 0; i < metadataInfo.tags.size(); ++i) {
-            StringPlatformTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
-            int tagId = platformTagToId.at(stringTag);
+            PlatformTagStr stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
             stmt = prepare(R"(
                 UPDATE platform_tags SET translated_tag = ? WHERE tag_id = ?
             )");
             sqlite3_bind_text(stmt.get(), 1, metadataInfo.tagsTransl[i].c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(stmt.get(), 2, tagId);
+            sqlite3_bind_int(stmt.get(), 2, cache.getPlatformTagId(stringTag));
             if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
                 Error() << "Failed to update platform_tag translated_tag: " << sqlite3_errmsg(db);
                 return false;
@@ -531,12 +533,10 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
     }
     // update picture_metadata_tags table
     for (const auto& tag : metadataInfo.tags) {
-        StringPlatformTag stringTag{metadataInfo.platformType, tag};
-        if (platformTagToId.find(stringTag) == platformTagToId.end()) {
+        PlatformTagStr stringTag{metadataInfo.platformType, tag};
+        if (!cache.platformTagExists(stringTag)) {
             // insert new platform tag
-            platformTags.emplace_back(stringTag);
-            int newId = static_cast<int>(platformTags.size() - 1);
-            platformTagToId[stringTag] = newId;
+            uint32_t newId = cache.addPlatformTag(stringTag);
             stmt = prepare(R"(
                 INSERT OR IGNORE INTO platform_tags(tag_id, platform, tag) VALUES (?, ?, ?)
             )");
@@ -555,7 +555,7 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
         )");
         sqlite3_bind_int(stmt.get(), 1, static_cast<int>(metadataInfo.platformType));
         sqlite3_bind_int64(stmt.get(), 2, metadataInfo.id);
-        sqlite3_bind_int(stmt.get(), 3, platformTagToId.at(stringTag));
+        sqlite3_bind_int(stmt.get(), 3, cache.getPlatformTagId(stringTag));
         if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
             Error() << "Failed to insert picture_metadata_tag: " << sqlite3_errmsg(db);
             return false;
@@ -563,13 +563,12 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
     }
     if (metadataInfo.tags.size() == metadataInfo.tagsTransl.size()) {
         for (size_t i = 0; i < metadataInfo.tags.size(); ++i) {
-            StringPlatformTag stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
-            int tagId = platformTagToId.at(stringTag);
+            PlatformTagStr stringTag{metadataInfo.platformType, metadataInfo.tags[i]};
             stmt = prepare(R"(
                 UPDATE platform_tags SET translated_tag = ? WHERE tag_id = ?
             )");
             sqlite3_bind_text(stmt.get(), 1, metadataInfo.tagsTransl[i].c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(stmt.get(), 2, tagId);
+            sqlite3_bind_int(stmt.get(), 2, cache.getPlatformTagId(stringTag));
             if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
                 Error() << "Failed to update platform_tag translated_tag: " << sqlite3_errmsg(db);
                 return false;
@@ -854,26 +853,14 @@ void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMet
     }
     enableForeignKeyRestriction();
 }
-bool PicDatabase::isFileImported(const std::filesystem::path& filePath) const {
-    std::string dir = filePath.parent_path().string();
-    std::string filename = filePath.filename().string();
-    if (importedFiles.find(dir) != importedFiles.end()) {
-        if (importedFiles.at(dir).find(filename) != importedFiles.at(dir).end()) {
-            return true;
-        }
-    }
-    return false;
-}
 void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
     if (isFileImported(filePath)) return;
-    SQLiteStatement stmt;
 
+    cache.addImportedFile(filePath);
+
+    SQLiteStatement stmt;
     std::string dir = filePath.parent_path().string();
     std::string filename = filePath.filename().string();
-    if (importedFiles.find(dir) == importedFiles.end()) {
-        importedFiles[dir] = std::unordered_set<std::string>();
-    }
-    importedFiles[dir].insert(filename);
 
     // Step 1: Insert or ignore the directory
     stmt = prepare(R"(
@@ -1096,7 +1083,7 @@ std::vector<TagCount> PicDatabase::getTagCounts() const {
         std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 1));
         uint32_t count = sqlite3_column_int(stmt.get(), 2);
         bool isCharacter = sqlite3_column_int(stmt.get(), 3) != 0;
-        tagCounts.emplace_back(TagCount{StringTag{tag, isCharacter}, tagId, count});
+        tagCounts.emplace_back(TagCount{TagStr{tag, isCharacter}, tagId, count});
     }
     return tagCounts;
 }
@@ -1108,7 +1095,7 @@ std::vector<PlatformTagCount> PicDatabase::getPlatformTagCounts() const {
         PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
         std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 2));
         uint32_t count = sqlite3_column_int(stmt.get(), 3);
-        tagCounts.emplace_back(PlatformTagCount{StringPlatformTag{platform, tag}, tagId, count});
+        tagCounts.emplace_back(PlatformTagCount{PlatformTagStr{platform, tag}, tagId, count});
     }
     return tagCounts;
 }
@@ -1153,7 +1140,8 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
         Error() << "Import tag set failed, rolling back";
         rollbackTransaction();
     }
-    reloadDatabase();
+    cache.clearTagMapping();
+    initTagMapping();
 }
 std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase::getUntaggedPics() {
     std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> untaggedPics;

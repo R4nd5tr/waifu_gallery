@@ -92,7 +92,6 @@ void MainWindow::initWorkerThreads() {
     connect(this, &MainWindow::searchPics, searchWorker, &DatabaseWorker::searchPics);
     connect(searchWorker, &DatabaseWorker::searchComplete, this, &MainWindow::handleSearchResults);
     connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
-    connect(this, &MainWindow::reloadWorkerDatabase, searchWorker, &DatabaseWorker::reloadDatabase);
     searchWorkerThread->start();
 }
 void MainWindow::connectSignalSlots() {
@@ -910,9 +909,6 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - ImportStartTime).count()) +
         " 秒");
 
-    // reload database and update UI
-    database.reloadDatabase();
-    emit reloadWorkerDatabase();
     loadTags(); // load new tags from database
     noMetadataPics = database.getNoMetadataPics();
     if (isSearchCriteriaEmpty()) {
