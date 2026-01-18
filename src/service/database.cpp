@@ -767,7 +767,7 @@ void PicDatabase::processAndImportSingleFile(const std::filesystem::path& filePa
 }
 void PicDatabase::importFilesFromDirectory(const std::filesystem::path& directory,
                                            ParserType parserType,
-                                           ImportProgressCallback progressCallback) {
+                                           ProgressCallback progressCallback) {
     auto collectedFiles = collectFiles(directory);
     std::vector<std::filesystem::path> files;
     for (const auto& filePath : collectedFiles) {

@@ -878,22 +878,20 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
         // record imported directory
         std::filesystem::path importedPath;
         ParserType parserType;
-        std::tie(importedPath, parserType) = importer->getImportingDir();
+        std::tie(importedPath, parserType) = importer.getImportingDir();
         if (std::find(Settings::picDirectories.begin(), Settings::picDirectories.end(), std::pair{importedPath, parserType}) ==
             Settings::picDirectories.end()) {
             Settings::picDirectories.emplace_back(importedPath, parserType);
         }
-        delete importer;
-        importer = nullptr;
+        importer.finish();
     } else { // re-importing from multiple directories
         importPaths.pop_back();
-        delete importer;
-        importer = nullptr;
+        importer.finish();
         if (!importPaths.empty()) {
             ui->progressBar->setValue(0);
             ImportStartTime = std::chrono::steady_clock::now();
             ui->progressStatusLabel->setText(QString("- / - | 速度：- 文件每秒 | 剩余时间：- 秒"));
-            importer = new Importer(importPaths.back().first, reportImportProgress, importPaths.back().second);
+            importer.startImportFromDirectory(importPaths.back().first, importPaths.back().second);
             Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
             return;
         }
@@ -918,36 +916,34 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
     return;
 }
 void MainWindow::cancelProgress() {
-    if (importer) {
-        ui->statusbar->showMessage("正在取消导入任务，请稍候...");
-        Info() << "Cancelling import task...";
+    if (importer.finish()) return; // no import task to cancel
 
-        importer->forceStop();
-        delete importer;
-        importer = nullptr;
+    ui->statusbar->showMessage("正在取消导入任务，请稍候...");
+    Info() << "Cancelling import task...";
 
-        importPaths.clear();
+    importer.forceStop();
 
-        ui->progressWidget->hide();
-        ui->progressLabel->setText("");
-        ui->progressStatusLabel->setText("");
+    importPaths.clear();
 
-        ui->statusbar->showMessage("导入任务已取消。");
-        Info() << "Import task cancelled.";
-    }
+    ui->progressWidget->hide();
+    ui->progressLabel->setText("");
+    ui->progressStatusLabel->setText("");
+
+    ui->statusbar->showMessage("导入任务已取消。");
+    Info() << "Import task cancelled.";
 }
 
 // Handlers for menu actions
 
 void MainWindow::handleImportNewPicsAction() {
-    if (importer) {
+    if (!importer.finish()) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
     }
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描文件夹...");
-    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress);
+    importer.startImportFromDirectory(std::filesystem::path(dir.toStdString()));
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入图片...");
@@ -955,7 +951,7 @@ void MainWindow::handleImportNewPicsAction() {
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportPowerfulPixivDownloaderAction() {
-    if (importer) {
+    if (!importer.finish()) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
     }
@@ -963,7 +959,7 @@ void MainWindow::handleImportPowerfulPixivDownloaderAction() {
         this, "选择 Powerful Pixiv Downloader 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 Powerful Pixiv Downloader 下载文件夹...");
-    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::PowerfulPixivDownloader);
+    importer.startImportFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::PowerfulPixivDownloader);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Pixiv图片...");
@@ -971,7 +967,7 @@ void MainWindow::handleImportPowerfulPixivDownloaderAction() {
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportGallery_dlTwitterAction() {
-    if (importer) {
+    if (!importer.finish()) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
     }
@@ -979,7 +975,7 @@ void MainWindow::handleImportGallery_dlTwitterAction() {
         QFileDialog::getExistingDirectory(this, "选择 gallery-dl Twitter 下载文件夹", QString(), QFileDialog::ShowDirsOnly);
     if (dir.isEmpty()) return;
     ui->statusbar->showMessage("正在扫描 gallery-dl Twitter 下载文件夹...");
-    importer = new Importer(std::filesystem::path(dir.toStdString()), reportImportProgress, ParserType::GallerydlTwitter);
+    importer.startImportFromDirectory(std::filesystem::path(dir.toStdString()), ParserType::GallerydlTwitter);
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
@@ -987,7 +983,7 @@ void MainWindow::handleImportGallery_dlTwitterAction() {
     ImportStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportExistingDirectoriesAction() {
-    if (importer) {
+    if (!importer.finish()) {
         ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
         return;
     }
@@ -1001,7 +997,7 @@ void MainWindow::handleImportExistingDirectoriesAction() {
         Info() << "No existing directories to re-import.";
         return;
     }
-    importer = new Importer(importPaths.back().first, reportImportProgress, importPaths.back().second);
+    importer.startImportFromDirectory(importPaths.back().first, importPaths.back().second);
     Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
     ui->progressWidget->show();
     ui->progressBar->setValue(0);

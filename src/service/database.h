@@ -30,7 +30,7 @@
 #include <unordered_set>
 #include <vector>
 
-using ImportProgressCallback = std::function<void(size_t processed, size_t total)>;
+using ProgressCallback = std::function<void(size_t processed, size_t total)>;
 
 enum class SearchField { None, PlatformID, AuthorID, AuthorName, AuthorNick, Title };
 
@@ -257,7 +257,7 @@ public:
     void importFilesFromDirectory(
         const std::filesystem::path& directory,   // single-threaded import function, only for debug use
         ParserType parserType = ParserType::None, // use as a base line comparison to multi-threaded Importer class
-        ImportProgressCallback progressCallback = nullptr);
+        ProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
     void syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
     bool isFileImported(const std::filesystem::path& filePath) const { return cache.isFileImported(filePath); }

@@ -18,11 +18,12 @@
 
 #pragma once
 #include "about_dialog.h"
+#include "image_loader.h"
 #include "service/database.h"
 #include "service/importer.h"
 #include "service/model.h"
+#include "service/tagger.h"
 #include "settings_dialog.h"
-#include "thread_pool.h"
 #include "widgets/picture_frame.h"
 #include "worker.h"
 #include <QCoreApplication>
@@ -62,7 +63,7 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
-    ImportProgressCallback reportImportProgress = [this](size_t progress, size_t total) {
+    ProgressCallback reportImportProgress = [this](size_t progress, size_t total) {
         QCoreApplication::postEvent(this, new ImportProgressReportEvent(progress, total));
     };
 
@@ -85,10 +86,11 @@ protected:
 private:
     // initialize
     Ui::MainWindow* ui;
-    PicDatabase database;                          // Normal mode by default, for tag loading and user changes
-    ImageLoadThreadPool imageLoadThreadPool{this}; // Blazing fast!!!
+    PicDatabase database; // Normal mode by default, for tag loading and user changes
     QThread* searchWorkerThread = nullptr;
-    Importer* importer = nullptr; // only one importer at a time, Blazing fast!!!
+    ImageLoader imageLoadThreadPool{this};   // Blazing fast!!!
+    Importer importer{reportImportProgress}; // Blazing fast!!!
+    Tagger tagger;
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -120,7 +122,7 @@ private:
     int ratioSliderValue;
     double widthRatioSpinBoxValue;
     double heightRatioSpinBoxValue;
-    double ratio;
+    double ratio = 1.0f;
     bool ratioSortEnabled = false;
     bool ratioSliderEditing = false;
     bool ratioSpinBoxEditing = false;

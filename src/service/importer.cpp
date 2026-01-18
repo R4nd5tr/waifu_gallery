@@ -18,21 +18,22 @@
 
 #include "importer.h"
 
-Importer::Importer(const std::filesystem::path& directory,
-                   ImportProgressCallback progressCallback,
-                   ParserType parserType,
-                   std::string dbFile,
-                   size_t threadCount)
-    : parserType(parserType), progressCallback(progressCallback), dbFile(dbFile) {
+void Importer::startImportFromDirectory(const std::filesystem::path& directory, ParserType parserType) {
+    if (!finished || !finish()) {
+        Warn() << "Importer is running.";
+        return;
+    }
+    finished = false;
     importDirectory = directory;
+    this->parserType = parserType;
+
+    // start insert thread
     insertThread = std::thread(&Importer::insertThreadFunc, this);
+
+    // start worker threads
     for (size_t i = 0; i < threadCount; ++i) {
         workers.emplace_back(&Importer::workerThreadFunc, this);
     }
-}
-Importer::~Importer() {
-    forceStop();
-    finish();
 }
 void Importer::forceStop() {
     if (finished) return;
@@ -40,20 +41,42 @@ void Importer::forceStop() {
     finish();
 }
 bool Importer::finish() {
-    if (finished) return true;
+    if (finished) return true; // already finished
     if (importedCount < supportedFileCount.load(std::memory_order_relaxed) && !stopFlag.load()) {
-        return false; // 还有文件未处理完
+        return false; // not finished yet
     }
+
+    // import finished, join all threads and clean up, reset state
     for (auto& worker : workers) {
         if (worker.joinable()) {
             worker.join();
         }
     }
     workers.clear();
+    files.clear();
+    nextFileIndex.store(0, std::memory_order_relaxed);
+
     cv.notify_all();
     if (insertThread.joinable()) {
         insertThread.join();
     }
+    readyFlag.store(false, std::memory_order_relaxed);
+    importedCount = 0;
+    supportedFileCount.store(0, std::memory_order_relaxed);
+
+    parsedPicQueueMutex.lock();
+    while (!parsedPictureQueue.empty()) {
+        parsedPictureQueue.pop();
+    }
+    parsedPicQueueMutex.unlock();
+    parsedMetadataQueueMutex.lock();
+    while (!metadataVecQueue.empty()) {
+        metadataVecQueue.pop();
+    }
+    parsedMetadataQueueMutex.unlock();
+
+    stopFlag.store(false, std::memory_order_relaxed);
+
     finished = true;
     return true;
 }
@@ -231,5 +254,6 @@ void Importer::insertThreadFunc() {
         threadDb.rollbackTransaction();
     }
     Info() << "Import completed. Directory: " << importDirectory;
+    // progress equals to total is the signal of completion
     if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_seq_cst));
 }

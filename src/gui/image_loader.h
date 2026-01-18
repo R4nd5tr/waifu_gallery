@@ -43,10 +43,10 @@ public:
     QImage img;
 };
 
-class ImageLoadThreadPool { // TODO: load full image functionality?
+class ImageLoader { // TODO: load full image functionality?
 public:
-    ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
-    ~ImageLoadThreadPool();
+    ImageLoader(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
+    ~ImageLoader();
 
     void loadImage(const PicInfo& picInfo);
     void clearTasks();

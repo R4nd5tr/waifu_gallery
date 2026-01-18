@@ -26,15 +26,15 @@ const size_t IMAGE_RESOLUTION_LIMIT = 256;
 
 const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 
-ImageLoadThreadPool::ImageLoadThreadPool(MainWindow* mainWindow, size_t numThreads) : mainWindow(mainWindow) {
+ImageLoader::ImageLoader(MainWindow* mainWindow, size_t numThreads) : mainWindow(mainWindow) {
     for (size_t i = 0; i < numThreads; ++i) {
-        workers.emplace_back(&ImageLoadThreadPool::workerFunction, this);
+        workers.emplace_back(&ImageLoader::workerFunction, this);
     }
 }
-ImageLoadThreadPool::~ImageLoadThreadPool() {
+ImageLoader::~ImageLoader() {
     stop();
 }
-void ImageLoadThreadPool::loadImage(const PicInfo& picInfo) {
+void ImageLoader::loadImage(const PicInfo& picInfo) {
     if (picInfo.filePaths.empty()) {
         Warn() << "No file paths available for PicInfo ID:" << picInfo.id;
         return;
@@ -44,13 +44,13 @@ void ImageLoadThreadPool::loadImage(const PicInfo& picInfo) {
     taskQueue.push(task);
     condVar.notify_one();
 }
-void ImageLoadThreadPool::clearTasks() {
+void ImageLoader::clearTasks() {
     std::lock_guard<std::mutex> lock(mutex);
     while (!taskQueue.empty()) {
         taskQueue.pop();
     }
 }
-void ImageLoadThreadPool::stop() {
+void ImageLoader::stop() {
     stopFlag.store(true, std::memory_order_release);
     clearTasks();
     condVar.notify_all();
@@ -61,7 +61,7 @@ void ImageLoadThreadPool::stop() {
     }
     workers.clear();
 }
-void ImageLoadThreadPool::workerFunction() {
+void ImageLoader::workerFunction() {
     while (true) {
         ImageLoadTask task;
         {

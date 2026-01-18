@@ -26,37 +26,44 @@
 #include <queue>
 #include <thread>
 
-class Importer { // TODO: make this accept multiple directories?
+class Importer {
 public:
-    Importer(const std::filesystem::path& directory,
-             ImportProgressCallback progressCallback = nullptr,
-             ParserType prserType = ParserType::None,
+    Importer(ProgressCallback progressCallback = nullptr,
              std::string dbFile = DEFAULT_DATABASE_FILE,
-             size_t threadCount = std::thread::hardware_concurrency());
-    ~Importer();
+             size_t threadCount = std::thread::hardware_concurrency())
+        : progressCallback(progressCallback), dbFile(dbFile), threadCount(threadCount) {};
+    ~Importer() {
+        forceStop();
+        finish();
+    };
 
-    bool finish();
+    void startImportFromDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None);
+    bool finish(); // finished means ready to start a new import task
     void forceStop();
     std::pair<std::filesystem::path, ParserType> getImportingDir() const { return {importDirectory, parserType}; }
 
 private:
-    bool finished = false;
+    bool finished = true;
 
-    ImportProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
-    ParserType parserType;
+    ProgressCallback progressCallback; // this will be called in insert thread, make sure it's thread safe
     std::string dbFile;
-    std::filesystem::path importDirectory;
+    size_t threadCount = 1;
 
+    ParserType parserType = ParserType::None;
+    std::filesystem::path importDirectory = "";
+
+    // worker threads
     std::vector<std::thread> workers;
     std::vector<std::filesystem::path> files;
-    std::atomic<bool> readyFlag = false;
-    std::condition_variable cvReady;
     std::atomic<size_t> nextFileIndex = 0;
-    size_t importedCount = 0;
-    std::atomic<size_t> supportedFileCount = 0; // to prevent importer from never stopping
-                                                // when some unsupported files are in the directory
+
     // single insert thread
     std::thread insertThread;
+    std::condition_variable cvReady;
+    std::atomic<bool> readyFlag = false;
+    size_t importedCount = 0;
+    std::atomic<size_t> supportedFileCount = 0;
+
     std::queue<ParsedPicture> parsedPictureQueue; // one ParsedPicture represents one image file
     std::mutex parsedPicQueueMutex;
     std::queue<std::vector<ParsedMetadata>> metadataVecQueue; // one vector represents one metadata file
