@@ -40,4 +40,6 @@ public:
     static uint32_t windowHeight;
     static std::vector<std::pair<std::filesystem::path, ParserType>> picDirectories;
     static bool autoImportOnStartup;
+    static bool autoTagAfterImport;
+    static std::filesystem::path autoTaggerDLLPath;
 };

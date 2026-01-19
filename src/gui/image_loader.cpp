@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "thread_pool.h"
+#include "image_loader.h"
 #include "main_window.h"
 #include "utils/logger.h"
 #include <QCoreApplication>

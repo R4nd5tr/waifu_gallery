@@ -51,8 +51,15 @@ const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
 
 class ImportProgressReportEvent : public QEvent {
 public:
-    static const QEvent::Type EventType;
     ImportProgressReportEvent(size_t progress, size_t total) : QEvent(EventType), progress(progress), total(total) {}
+    static const QEvent::Type EventType;
+    size_t progress;
+    size_t total;
+};
+class TaggingProgressReportEvent : public QEvent {
+public:
+    TaggingProgressReportEvent(size_t progress, size_t total) : QEvent(EventType), progress(progress), total(total) {}
+    static const QEvent::Type EventType;
     size_t progress;
     size_t total;
 };
@@ -65,6 +72,9 @@ public:
 
     ProgressCallback reportImportProgress = [this](size_t progress, size_t total) {
         QCoreApplication::postEvent(this, new ImportProgressReportEvent(progress, total));
+    };
+    ProgressCallback reportTaggingProgress = [this](size_t progress, size_t total) {
+        QCoreApplication::postEvent(this, new TaggingProgressReportEvent(progress, total));
     };
 
 signals:
@@ -86,11 +96,11 @@ protected:
 private:
     // initialize
     Ui::MainWindow* ui;
-    PicDatabase database; // Normal mode by default, for tag loading and user changes
+    PicDatabase database;
     QThread* searchWorkerThread = nullptr;
     ImageLoader imageLoadThreadPool{this};   // Blazing fast!!!
     Importer importer{reportImportProgress}; // Blazing fast!!!
-    Tagger tagger;
+    Tagger tagger{reportTaggingProgress};
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -98,6 +108,7 @@ private:
     std::vector<TagCount> allTags;
     std::vector<PlatformTagCount> allPlatformTags;
     void loadTags();
+    void initTagger();
 
     // context
     bool showPNG = true;
@@ -187,12 +198,13 @@ private:
     void tagSearch(const QString& text);
 
     // Action handlers
-    std::chrono::steady_clock::time_point ImportStartTime;
-    std::vector<std::pair<std::filesystem::path, ParserType>> importPaths; // paths to import with specified parser types
+    std::chrono::steady_clock::time_point taskStartTime;
+    std::vector<std::pair<std::filesystem::path, ParserType>> dirsToImport; // paths to import with specified parser types
     void handleImportNewPicsAction();
     void handleImportPowerfulPixivDownloaderAction(); // specify parser type pixiv
     void handleImportGallery_dlTwitterAction();       // specify parser type twitter
     void handleImportExistingDirectoriesAction();
+    void handleStartTaggingAction();
 
     AboutDialog* aboutDialog = nullptr;
     void handleShowAboutAction();
@@ -201,8 +213,12 @@ private:
 
     // task progress
     void displayImportProgress(size_t progress, size_t total);
-    void finalizeImportProgress(size_t totalImported);
-    void cancelProgress();
+    void finalizeImport(size_t totalImported);
+    void displayTaggingProgress(size_t progress, size_t total);
+    void finalizeTagging(size_t totalTagged);
+    void cancelTask();
+
+    bool haveOngoingTask() { return !(importer.finish() && tagger.finish()); };
 
     // searching
     size_t searchRequestId = 0; // to identify latest search request

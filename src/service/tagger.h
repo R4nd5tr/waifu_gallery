@@ -28,28 +28,33 @@
 
 const int MAX_PREPROCESS_QUEUE_SIZE = 32;
 
-class PicTagger {
+class Tagger {
 public:
-    PicTagger(const std::string& databaseFile = DEFAULT_DATABASE_FILE);
-    ~PicTagger();
+    Tagger(ProgressCallback progressCallBack = nullptr, const std::string& databaseFile = DEFAULT_DATABASE_FILE)
+        : progressCallBack(progressCallBack), databaseFileStr(databaseFile) {};
+    ~Tagger();
 
     std::vector<std::filesystem::path> getExistingTaggerDLLs() { return taggerLoader.discoverAutoTaggers(); }
     bool loadTaggerDLL(const std::filesystem::path& dllPath);
     bool taggerLoaded() const { return tagger != nullptr; }
     bool gpuAvailable() const { return tagger ? tagger->gpuAvailable() : false; }
     void loadTagSetToDatabase();
+    std::string getModelName() const { return tagger ? tagger->getModelName() : ""; }
+
     void startTagging();
     void forceStop();
-    bool isFinished() const { return finished.load(); }
+    bool finish();
 
 private:
     std::string databaseFileStr;
     AutoTaggerLoader taggerLoader;
+    ProgressCallback progressCallBack;
     AutoTagger* tagger = nullptr;
 
     std::thread analyzeThread;
     std::atomic<bool> readyFlag = false;
     std::condition_variable readyCv;
+    size_t analyzed = 0;
 
     std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> picFilesForTagging; // (picID, filePath)
     std::atomic<size_t> nextIndex = 0;
@@ -62,7 +67,7 @@ private:
     std::condition_variable preprocessedCv;
 
     std::atomic<bool> stopFlag = false;
-    std::atomic<bool> finished = false;
+    bool finished = true;
 
     void preprocessWorkerFunc();
     void analyzeThreadFunc();

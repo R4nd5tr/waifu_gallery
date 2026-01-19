@@ -19,10 +19,7 @@
 #include "tagger.h"
 #include "utils/logger.h"
 
-PicTagger::PicTagger(const std::string& databaseFile) {
-    databaseFileStr = databaseFile;
-}
-PicTagger::~PicTagger() {
+Tagger::~Tagger() {
     stopFlag.store(true);
     readyCv.notify_all();
     preprocessedCv.notify_all();
@@ -36,7 +33,7 @@ PicTagger::~PicTagger() {
         }
     }
 }
-bool PicTagger::loadTaggerDLL(const std::filesystem::path& dllPath) {
+bool Tagger::loadTaggerDLL(const std::filesystem::path& dllPath) {
     if (!taggerLoader.load(dllPath)) {
         Error() << "Failed to load AutoTagger DLL from path:" << dllPath.string();
         return false;
@@ -50,7 +47,7 @@ bool PicTagger::loadTaggerDLL(const std::filesystem::path& dllPath) {
     tagger->setLogCallback(logCallback);
     return true;
 }
-void PicTagger::loadTagSetToDatabase() {
+void Tagger::loadTagSetToDatabase() {
     if (!tagger) {
         Error() << "No tagger loaded.";
         return;
@@ -60,29 +57,73 @@ void PicTagger::loadTagSetToDatabase() {
     auto tagSet = tagger->getTagSet();
     auto name = tagger->getModelName();
     Info() << "Loading tag set for model:" << name;
+    if (db.getModelName() == name) {
+        Info() << "Tag set already loaded in database.";
+        return;
+    }
     db.importTagSet(name, tagSet);
     Info() << "Loaded" << tagSet.size() << "tags to database.";
 }
-void PicTagger::startTagging() {
+void Tagger::startTagging() {
     if (!tagger) {
         Error() << "No tagger loaded, cannot start tagging.";
         return;
     }
+    if (!finished && !finish()) {
+        Warn() << "Tagger is already running.";
+        return;
+    }
 
     // start analyze thread
-    analyzeThread = std::thread(&PicTagger::analyzeThreadFunc, this);
+    analyzeThread = std::thread(&Tagger::analyzeThreadFunc, this);
 
     // start preprocess workers
     for (size_t i = 0; i < std::thread::hardware_concurrency(); ++i) {
-        preprocessWorkers.emplace_back(&PicTagger::preprocessWorkerFunc, this);
+        preprocessWorkers.emplace_back(&Tagger::preprocessWorkerFunc, this);
     }
 }
-void PicTagger::forceStop() {
+void Tagger::forceStop() {
+    if (finished) return;
     stopFlag.store(true);
     readyCv.notify_all();
     preprocessedCv.notify_all();
+    finish();
 }
-void PicTagger::preprocessWorkerFunc() {
+bool Tagger::finish() {
+    if (finished) return true; // already finished
+
+    if (analyzed < totalSupported.load(std::memory_order_relaxed) && !stopFlag.load()) {
+        return false; // not finished yet
+    }
+
+    // join all threads and clean up, reset state
+    for (auto& worker : preprocessWorkers) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+    preprocessWorkers.clear();
+    if (analyzeThread.joinable()) {
+        analyzeThread.join();
+    }
+    analyzed = 0;
+    picFileMutex.lock();
+    picFilesForTagging.clear();
+    picFileMutex.unlock();
+    nextIndex.store(0, std::memory_order_relaxed);
+    totalSupported.store(0, std::memory_order_relaxed);
+    preprocessedMutex.lock();
+    while (!preprocessedPic.empty()) {
+        preprocessedPic.pop();
+    }
+    preprocessedMutex.unlock();
+    stopFlag.store(false, std::memory_order_relaxed);
+    finished = true;
+
+    Info() << "Tagging process finalized.";
+    return true;
+}
+void Tagger::preprocessWorkerFunc() {
     size_t index;
 
     {
@@ -90,7 +131,7 @@ void PicTagger::preprocessWorkerFunc() {
         readyCv.wait(lock, [this]() { return readyFlag.load(std::memory_order_acquire) || stopFlag.load(); });
     }
 
-    while (index = nextIndex.fetch_add(1), index < picFilesForTagging.size() && !stopFlag.load()) {
+    while ((index = nextIndex.fetch_add(1)) < picFilesForTagging.size() && !stopFlag.load()) {
         const auto& [picID, filePaths] = picFilesForTagging[index];
         bool preprocessed = false;
         for (const auto& filePath : filePaths) {
@@ -105,6 +146,7 @@ void PicTagger::preprocessWorkerFunc() {
                 std::unique_lock<std::mutex> lock(preprocessedMutex);
                 preprocessedCv.wait(lock,
                                     [this]() { return preprocessedPic.size() < MAX_PREPROCESS_QUEUE_SIZE || stopFlag.load(); });
+                if (stopFlag.load()) return;
                 preprocessedPic.emplace(picID, std::move(preprocessedData));
             }
             preprocessedCv.notify_one();
@@ -117,14 +159,14 @@ void PicTagger::preprocessWorkerFunc() {
         }
     }
 }
-void PicTagger::analyzeThreadFunc() {
+void Tagger::analyzeThreadFunc() {
     PicDatabase threadDb(databaseFileStr, DbMode::Import);
     picFilesForTagging = threadDb.getUntaggedPics();
     totalSupported = picFilesForTagging.size();
     Info() << "Total pictures to tag:" << totalSupported.load();
     readyFlag.store(true, std::memory_order_release);
     readyCv.notify_all();
-    size_t analyzed = 0;
+    analyzed = 0;
 
     threadDb.beginTransaction();
     while (analyzed < totalSupported.load(std::memory_order_relaxed) && !stopFlag.load()) {
@@ -153,9 +195,15 @@ void PicTagger::analyzeThreadFunc() {
         }
         RestrictType restrictType = static_cast<RestrictType>(static_cast<int>(tagResult.restrictType));
         threadDb.updatePicTags(picID, picTags, restrictType, predictResult.featureHash);
+
         analyzed++;
-        if (analyzed % 1000 == 0) {
-            Info() << "Tagged pictures:" << analyzed << "/" << totalSupported.load();
+        if (analyzed % 100 == 0) {
+            if (progressCallBack) progressCallBack(analyzed, totalSupported.load(std::memory_order_relaxed));
+            if (!threadDb.commitTransaction()) {
+                Error() << "Failed to commit tagging transaction, rolling back.";
+                threadDb.rollbackTransaction();
+            }
+            threadDb.beginTransaction();
         }
     }
 
@@ -163,7 +211,6 @@ void PicTagger::analyzeThreadFunc() {
     if (stopFlag.load()) {
         Info() << "Tagging process was stopped by user.";
         threadDb.rollbackTransaction();
-        finished.store(true);
         return;
     }
 
@@ -174,6 +221,5 @@ void PicTagger::analyzeThreadFunc() {
         threadDb.rollbackTransaction();
     }
 
-    finished.store(true);
     Info() << "Tagging process completed.";
 }

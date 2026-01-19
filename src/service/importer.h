@@ -38,7 +38,7 @@ public:
     };
 
     void startImportFromDirectory(const std::filesystem::path& directory, ParserType parserType = ParserType::None);
-    bool finish(); // finished means ready to start a new import task
+    bool finish(); // return true means ready to start a new import task
     void forceStop();
     std::pair<std::filesystem::path, ParserType> getImportingDir() const { return {importDirectory, parserType}; }
 

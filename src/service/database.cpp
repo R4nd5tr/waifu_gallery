@@ -150,7 +150,7 @@ bool PicDatabase::createTables() {
         CREATE TABLE IF NOT EXISTS picture_metadata (
             platform INTEGER NOT NULL,
             platform_id INTEGER NOT NULL,
-            date DATE NOT NULL,
+            date TEXT NOT NULL,
 
             author_id INTEGER NOT NULL,
             author_name TEXT NOT NULL,
@@ -831,7 +831,8 @@ void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMet
                 )
                 THEN (SELECT ai_type FROM picture_metadata WHERE platform = ? AND platform_id = ?)
                 ELSE ai_type
-            END
+            END,
+            edit_time = (SELECT date FROM picture_metadata WHERE platform = ? AND platform_id = ?)
             WHERE id IN (
                 SELECT id FROM picture_source WHERE platform = ? AND platform_id = ?
             )
@@ -846,6 +847,8 @@ void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMet
         sqlite3_bind_int64(stmt.get(), 8, metadataId.platformID);
         sqlite3_bind_int(stmt.get(), 9, static_cast<int>(metadataId.platform));
         sqlite3_bind_int64(stmt.get(), 10, metadataId.platformID);
+        sqlite3_bind_int(stmt.get(), 11, static_cast<int>(metadataId.platform));
+        sqlite3_bind_int64(stmt.get(), 12, metadataId.platformID);
         if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
             Warn() << "Failed to sync restrict_type and ai_type for platform:" << static_cast<int>(metadataId.platform)
                    << "platform_id:" << metadataId.platformID << "Error:" << sqlite3_errmsg(db);
@@ -1123,6 +1126,20 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
         Error() << "Failed to insert/update model_name: " << sqlite3_errmsg(db);
     }
 
+    // clear existing tags
+    stmt = prepare(R"(
+        DELETE FROM tags
+    )");
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        Error() << "Failed to clear existing tags: " << sqlite3_errmsg(db);
+    }
+    stmt = prepare(R"(
+        DELETE FROM picture_tags
+    )");
+    if (sqlite3_step(stmt.get()) != SQLITE_DONE) {
+        Error() << "Failed to clear existing picture_tags: " << sqlite3_errmsg(db);
+    }
+
     // insert/update tags
     for (int tagId = 0; tagId < tags.size(); tagId++) {
         stmt = prepare(R"(
@@ -1140,6 +1157,7 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
         Error() << "Import tag set failed, rolling back";
         rollbackTransaction();
     }
+    // update in-memory tag mapping
     cache.clearTagMapping();
     initTagMapping();
 }

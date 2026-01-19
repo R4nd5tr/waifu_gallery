@@ -19,7 +19,7 @@
 #include "importer.h"
 
 void Importer::startImportFromDirectory(const std::filesystem::path& directory, ParserType parserType) {
-    if (!finished || !finish()) {
+    if (!finished && !finish()) {
         Warn() << "Importer is running.";
         return;
     }

@@ -26,6 +26,7 @@
 #include <QString>
 
 const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
+const QEvent::Type TaggingProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 
 // MainWindow implementation
 
@@ -179,9 +180,10 @@ void MainWindow::connectSignalSlots() {
     connect(ui->importExistingDirectoriesAction, &QAction::triggered, this, &MainWindow::handleImportExistingDirectoriesAction);
     connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
     connect(ui->showSettingsAction, &QAction::triggered, this, &MainWindow::handleShowSettingsAction);
+    connect(ui->startTaggingAction, &QAction::triggered, this, &MainWindow::handleStartTaggingAction);
 
     // cancel progress
-    connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::cancelProgress);
+    connect(ui->cancelProgressButton, &QPushButton::clicked, this, &MainWindow::cancelTask);
 }
 QString getTagString(const TagCount& tagCount) {
     return QString("%1 (%2)").arg(QString::fromStdString(tagCount.tag.tag)).arg(tagCount.count);
@@ -244,6 +246,19 @@ void MainWindow::displayTags(const std::vector<TagCount>& availableTags,
     ui->platformTagList->addItems(platformTagNames);
     for (size_t i = 0; i < platformTagCounts.size(); i++) {
         ui->platformTagList->item(i)->setData(Qt::UserRole, platformTagCounts[i].tagId);
+    }
+}
+void MainWindow::initTagger() {
+    std::vector<std::filesystem::path> taggerPaths = tagger.getExistingTaggerDLLs();
+    if (taggerPaths.empty()) {
+        Warn() << "No tagger DLLs found. Tagger not initialized.";
+        return;
+    }
+    tagger.loadTaggerDLL(taggerPaths[0]); // TODO: load the first available tagger DLL for now, implement selection later
+    Info() << "Tagger initialized with DLL:" << taggerPaths[0];
+    if (database.getModelName() != tagger.getModelName()) {
+        Info() << "Tagger model name differs from database record. Updating database tag set.";
+        tagger.loadTagSetToDatabase();
     }
 }
 
@@ -772,10 +787,10 @@ void MainWindow::displayMorePics(uint rows) {
 }
 void MainWindow::displayMorePicOnScroll(int value) {
     if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 100) {
-        displayMorePics(5);
+        displayMorePics(4);
     } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 200) {
         displayMorePics(2);
-    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 500) {
+    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 400) {
         displayMorePics(1);
     }
 }
@@ -821,10 +836,13 @@ bool MainWindow::event(QEvent* event) {
         auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
         displayImage(imageEvent->id, std::move(imageEvent->img));
         return true;
-    }
-    if (event->type() == ImportProgressReportEvent::EventType) {
+    } else if (event->type() == ImportProgressReportEvent::EventType) {
         auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
         displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
+        return true;
+    } else if (event->type() == TaggingProgressReportEvent::EventType) {
+        auto* taggingProgressEvent = static_cast<TaggingProgressReportEvent*>(event);
+        displayTaggingProgress(taggingProgressEvent->progress, taggingProgressEvent->total);
         return true;
     }
     return QMainWindow::event(event);
@@ -852,7 +870,7 @@ void MainWindow::displayImage(uint64_t picId, QImage&& img) {
 }
 void MainWindow::displayImportProgress(size_t progress, size_t total) {
     if (progress >= total) { // import complete
-        finalizeImportProgress(total);
+        finalizeImport(total);
         return;
     }
     // update progress bar and status
@@ -860,7 +878,7 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
     ui->progressBar->setValue(static_cast<int>(progress));
 
     auto currentTime = std::chrono::steady_clock::now();
-    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - ImportStartTime).count();
+    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - taskStartTime).count();
 
     if (timeDiff > 0 && progress > 0) {
         double timeDiffSeconds = static_cast<double>(timeDiff) / 1000.0;
@@ -873,8 +891,8 @@ void MainWindow::displayImportProgress(size_t progress, size_t total) {
                                              .arg(etaSeconds));
     }
 }
-void MainWindow::finalizeImportProgress(size_t totalImported) {
-    if (importPaths.empty()) { // single import task
+void MainWindow::finalizeImport(size_t totalImported) {
+    if (dirsToImport.empty()) { // single import task
         // record imported directory
         std::filesystem::path importedPath;
         ParserType parserType;
@@ -885,14 +903,14 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
         }
         importer.finish();
     } else { // re-importing from multiple directories
-        importPaths.pop_back();
+        dirsToImport.pop_back();
         importer.finish();
-        if (!importPaths.empty()) {
+        if (!dirsToImport.empty()) {
             ui->progressBar->setValue(0);
-            ImportStartTime = std::chrono::steady_clock::now();
+            taskStartTime = std::chrono::steady_clock::now();
             ui->progressStatusLabel->setText(QString("- / - | 速度：- 文件每秒 | 剩余时间：- 秒"));
-            importer.startImportFromDirectory(importPaths.back().first, importPaths.back().second);
-            Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
+            importer.startImportFromDirectory(dirsToImport.back().first, dirsToImport.back().second);
+            Info() << "Re-importing pictures from directory: " << dirsToImport.back().first.string();
             return;
         }
     }
@@ -904,7 +922,7 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
     ui->statusbar->showMessage(
         "图片导入完成，共扫描 " + QString::number(totalImported) + " 文件，用时 " +
         QString::number(
-            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - ImportStartTime).count()) +
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - taskStartTime).count()) +
         " 秒");
 
     loadTags(); // load new tags from database
@@ -913,31 +931,84 @@ void MainWindow::finalizeImportProgress(size_t totalImported) {
         picSearch();
     }
     Info() << "Import completed. Total files imported: " << totalImported;
+
+    if (Settings::autoTagAfterImport) {
+        Info() << "Starting auto tagging after import...";
+        handleStartTaggingAction();
+    }
     return;
 }
-void MainWindow::cancelProgress() {
-    if (importer.finish()) return; // no import task to cancel
+void MainWindow::displayTaggingProgress(size_t progress, size_t total) {
+    if (progress >= total) { // tagging complete
+        finalizeTagging(total);
+        return;
+    }
+    // update progress bar and status
+    ui->progressBar->setMaximum(static_cast<int>(total));
+    ui->progressBar->setValue(static_cast<int>(progress));
 
-    ui->statusbar->showMessage("正在取消导入任务，请稍候...");
-    Info() << "Cancelling import task...";
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - taskStartTime).count();
 
-    importer.forceStop();
+    if (timeDiff > 0 && progress > 0) {
+        double timeDiffSeconds = static_cast<double>(timeDiff) / 1000.0;
+        double speed = static_cast<double>(progress) / timeDiffSeconds; // items per second
+        size_t etaSeconds = static_cast<size_t>((total - progress) / speed);
+        ui->progressStatusLabel->setText(QString("%1 / %2 | 速度：%3 文件每秒 | 剩余时间：%4 秒")
+                                             .arg(progress)
+                                             .arg(total)
+                                             .arg(QString::number(speed, 'f', 2))
+                                             .arg(etaSeconds));
+    }
+}
+void MainWindow::finalizeTagging(size_t totalTagged) {
+    tagger.finish();
 
-    importPaths.clear();
-
+    // hide progress
     ui->progressWidget->hide();
     ui->progressLabel->setText("");
     ui->progressStatusLabel->setText("");
+    ui->statusbar->showMessage(
+        "标签分类完成，共处理 " + QString::number(totalTagged) + " 文件，用时 " +
+        QString::number(
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - taskStartTime).count()) +
+        " 秒");
 
-    ui->statusbar->showMessage("导入任务已取消。");
-    Info() << "Import task cancelled.";
+    Info() << "Tagging completed. Total pics tagged: " << totalTagged;
+    return;
+}
+void MainWindow::cancelTask() {
+    if (!haveOngoingTask()) return; // no import task to cancel
+
+    if (!tagger.finish()) {
+        ui->statusbar->showMessage("正在取消标签分类任务，请稍候...");
+        Info() << "Cancelling tagging task...";
+
+        tagger.forceStop();
+
+        ui->statusbar->showMessage("标签分类任务已取消。");
+        Info() << "Tagging task cancelled.";
+
+    } else if (!importer.finish()) {
+        ui->statusbar->showMessage("正在取消导入任务，请稍候...");
+        Info() << "Cancelling import task...";
+
+        importer.forceStop();
+        dirsToImport.clear();
+
+        ui->statusbar->showMessage("导入任务已取消。");
+        Info() << "Import task cancelled.";
+    }
+    ui->progressWidget->hide();
+    ui->progressLabel->setText("");
+    ui->progressStatusLabel->setText("");
 }
 
 // Handlers for menu actions
 
 void MainWindow::handleImportNewPicsAction() {
-    if (!importer.finish()) {
-        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+    if (haveOngoingTask()) {
+        ui->statusbar->showMessage("已有任务正在进行中，请稍后再试。");
         return;
     }
     QString dir = QFileDialog::getExistingDirectory(this, "选择图片文件夹", QString(), QFileDialog::ShowDirsOnly);
@@ -948,11 +1019,11 @@ void MainWindow::handleImportNewPicsAction() {
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入图片...");
     Info() << "Started importing pictures from directory: " << dir.toStdString();
-    ImportStartTime = std::chrono::steady_clock::now();
+    taskStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportPowerfulPixivDownloaderAction() {
-    if (!importer.finish()) {
-        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+    if (haveOngoingTask()) {
+        ui->statusbar->showMessage("已有任务正在进行中，请稍后再试。");
         return;
     }
     QString dir = QFileDialog::getExistingDirectory(
@@ -964,11 +1035,11 @@ void MainWindow::handleImportPowerfulPixivDownloaderAction() {
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Pixiv图片...");
     Info() << "Started importing pixiv pictures from directory: " << dir.toStdString();
-    ImportStartTime = std::chrono::steady_clock::now();
+    taskStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportGallery_dlTwitterAction() {
-    if (!importer.finish()) {
-        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+    if (haveOngoingTask()) {
+        ui->statusbar->showMessage("已有任务正在进行中，请稍后再试。");
         return;
     }
     QString dir =
@@ -980,29 +1051,29 @@ void MainWindow::handleImportGallery_dlTwitterAction() {
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在导入Twitter图片...");
     Info() << "Started importing twitter pictures from directory: " << dir.toStdString();
-    ImportStartTime = std::chrono::steady_clock::now();
+    taskStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleImportExistingDirectoriesAction() {
-    if (!importer.finish()) {
-        ui->statusbar->showMessage("已有导入任务正在进行中，请稍后再试。");
+    if (haveOngoingTask()) {
+        ui->statusbar->showMessage("已有任务正在进行中，请稍后再试。");
         return;
     }
     ui->statusbar->showMessage("正在重新扫描已导入的图片文件夹...");
     Info() << "Started re-importing pictures from existing directories.";
     for (const auto& dir : Settings::picDirectories) {
-        importPaths.emplace_back(dir);
+        dirsToImport.emplace_back(dir);
     }
-    if (importPaths.empty()) {
+    if (dirsToImport.empty()) {
         ui->statusbar->showMessage("没有已导入的图片文件夹可供重新扫描。");
         Info() << "No existing directories to re-import.";
         return;
     }
-    importer.startImportFromDirectory(importPaths.back().first, importPaths.back().second);
-    Info() << "Re-importing pictures from directory: " << importPaths.back().first.string();
+    importer.startImportFromDirectory(dirsToImport.back().first, dirsToImport.back().second);
+    Info() << "Re-importing pictures from directory: " << dirsToImport.back().first.string();
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
     ui->progressLabel->setText("正在重新扫描已导入文件夹...");
-    ImportStartTime = std::chrono::steady_clock::now();
+    taskStartTime = std::chrono::steady_clock::now();
 }
 void MainWindow::handleShowAboutAction() {
     if (!aboutDialog) {
@@ -1023,4 +1094,28 @@ void MainWindow::handleShowSettingsAction() {
     settingsDialog->show();
     settingsDialog->raise();
     settingsDialog->activateWindow();
+}
+void MainWindow::handleStartTaggingAction() {
+    if (haveOngoingTask()) {
+        ui->statusbar->showMessage("已有任务正在进行中，请稍后再试。");
+        return;
+    }
+    if (!tagger.taggerLoaded()) {
+        Error() << "No tagger loaded. Cannot start tagging.";
+        ui->statusbar->showMessage("未找到可用的标签分类器，无法开始标签分类。");
+        return;
+    }
+    ui->statusbar->showMessage("正在对图片进行标签分类...");
+    tagger.startTagging();
+    ui->progressWidget->show();
+    ui->progressBar->setValue(0);
+    QString progressLabelText = "正在为图片添加标签...";
+    if (tagger.gpuAvailable()) {
+        progressLabelText += "（GPU 加速）";
+    } else {
+        progressLabelText += "（CPU）";
+    }
+    ui->progressLabel->setText(progressLabelText);
+    Info() << "Started tagging pictures with tagger.";
+    taskStartTime = std::chrono::steady_clock::now();
 }

@@ -28,6 +28,8 @@ uint32_t Settings::windowWidth = 1200;
 uint32_t Settings::windowHeight = 800;
 std::vector<std::pair<std::filesystem::path, ParserType>> Settings::picDirectories;
 bool Settings::autoImportOnStartup = false;
+bool Settings::autoTagAfterImport = false;
+std::filesystem::path Settings::autoTaggerDLLPath = "";
 
 void Settings::loadSettings() {
     if (settingsLoaded) {
@@ -52,6 +54,8 @@ void Settings::loadSettings() {
                 }
             }
             autoImportOnStartup = j.value("autoImportOnStartup", false);
+            autoTagAfterImport = j.value("autoTagAfterImport", false);
+            autoTaggerDLLPath = j.value("autoTaggerDLLPath", "");
         } else {
             Info() << "Settings file not found. Using default settings.";
         }
@@ -76,6 +80,8 @@ void Settings::saveSettings() {
             j["picDirectories"].push_back({pair.first.string(), static_cast<int>(pair.second)});
         }
         j["autoImportOnStartup"] = autoImportOnStartup;
+        j["autoTagAfterImport"] = autoTagAfterImport;
+        j["autoTaggerDLLPath"] = autoTaggerDLLPath.string();
 
         std::ofstream outFile(SETTINGS_FILE_PATH);
         outFile << j.dump(4);

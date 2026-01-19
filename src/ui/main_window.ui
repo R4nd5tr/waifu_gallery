@@ -162,8 +162,8 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>280</width>
-         <height>640</height>
+         <width>254</width>
+         <height>593</height>
         </rect>
        </property>
        <attribute name="label">
@@ -1120,6 +1120,8 @@
     <addaction name="importDownloaderPicsMenu"/>
     <addaction name="separator"/>
     <addaction name="importExistingDirectoriesAction"/>
+    <addaction name="separator"/>
+    <addaction name="startTaggingAction"/>
    </widget>
    <widget class="QMenu" name="helpMenu">
     <property name="title">
@@ -1179,6 +1181,11 @@
   <action name="importExistingDirectoriesAction">
    <property name="text">
     <string>重新扫描已导入的文件夹</string>
+   </property>
+  </action>
+  <action name="startTaggingAction">
+   <property name="text">
+    <string>开始自动标签分类</string>
    </property>
   </action>
  </widget>
