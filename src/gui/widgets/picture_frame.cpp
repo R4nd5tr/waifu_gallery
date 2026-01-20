@@ -63,7 +63,7 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
             ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.associatedMetadata[0].id)));
 
             illustratorURL = QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(picinfo.associatedMetadata[0].authorID));
-            idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.associatedMetadata[0].authorID));
+            idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.associatedMetadata[0].id));
             break;
         case PlatformType::Twitter: {
             QString description = QString::fromStdString(picinfo.associatedMetadata[0].description).split('\n').first();

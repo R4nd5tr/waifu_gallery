@@ -46,12 +46,19 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
                                 size_t requestId) { // TODO: support display metadata instead of pics directly in the future
 
     if (includedTags != lastIncludedTags || excludedTags != lastExcludedTags) {
+        lastIncludedTags = includedTags;
+        lastExcludedTags = excludedTags;
         lastTagSearchResult = database.tagSearch(includedTags, excludedTags);
     }
     if (includedPlatformTags != lastIncludedPlatformTags || excludedPlatformTags != lastExcludedPlatformTags) {
+        lastIncludedPlatformTags = includedPlatformTags;
+        lastExcludedPlatformTags = excludedPlatformTags;
         lastPlatformTagSearchResult = database.platformTagSearch(includedPlatformTags, excludedPlatformTags);
     }
     if (platform != lastPlatformType || searchField != lastSearchField || searchText != lastSearchText) {
+        lastPlatformType = platform;
+        lastSearchField = searchField;
+        lastSearchText = searchText;
         lastTextSearchResult = database.textSearch(searchText, platform, searchField);
     }
     std::unordered_map<uint64_t, PicInfo> platformTagSearchResultPics;

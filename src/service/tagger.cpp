@@ -222,4 +222,6 @@ void Tagger::analyzeThreadFunc() {
     }
 
     Info() << "Tagging process completed.";
+    // progress equals total means finished
+    if (progressCallBack) progressCallBack(analyzed, totalSupported.load(std::memory_order_relaxed));
 }

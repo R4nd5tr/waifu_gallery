@@ -43,6 +43,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     loadTags();
     displayTags();
     noMetadataPics = database.getNoMetadataPics();
+
+    initTagger();
 }
 MainWindow::~MainWindow() {
     delete ui;
@@ -974,6 +976,7 @@ void MainWindow::finalizeTagging(size_t totalTagged) {
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - taskStartTime).count()) +
         " 秒");
 
+    loadTags(); // load new tags from database
     Info() << "Tagging completed. Total pics tagged: " << totalTagged;
     return;
 }
@@ -1109,7 +1112,7 @@ void MainWindow::handleStartTaggingAction() {
     tagger.startTagging();
     ui->progressWidget->show();
     ui->progressBar->setValue(0);
-    QString progressLabelText = "正在为图片添加标签...";
+    QString progressLabelText = "正在对图片进行标签分类...";
     if (tagger.gpuAvailable()) {
         progressLabelText += "（GPU 加速）";
     } else {
