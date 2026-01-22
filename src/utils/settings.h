@@ -22,11 +22,11 @@
 #include <string>
 #include <vector>
 
-const std::string SETTINGS_FILE_PATH = "settings.json";
+const std::string DEFALT_SETTINGS_FILE_PATH = "settings.json";
 
 class Settings {
 public:
-    static void loadSettings();
+    static void loadSettings(const std::filesystem::path& path = DEFALT_SETTINGS_FILE_PATH);
     static void saveSettings();
 
     static void setWidthHeight(uint32_t width, uint32_t height) {
@@ -42,4 +42,7 @@ public:
     static bool autoImportOnStartup;
     static bool autoTagAfterImport;
     static std::filesystem::path autoTaggerDLLPath;
+
+private:
+    static std::filesystem::path settingsFilePath;
 };

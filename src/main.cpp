@@ -94,6 +94,7 @@ int main(int argc, char* argv[]) {
                                      "qt.qpa.fonts=false");
     qInstallMessageHandler(customMessageHandler);
     Info() << "Application started.";
+    Settings::loadSettings();
     QApplication app(argc, argv);
     app.setWindowIcon(QIcon(":/icons/app.ico"));
     MainWindow window;

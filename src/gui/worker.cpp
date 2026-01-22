@@ -44,7 +44,13 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
                                 SearchField searchField,
                                 const std::string& searchText,
                                 size_t requestId) { // TODO: support display metadata instead of pics directly in the future
+    bool tagSearchApplied = !includedTags.empty() || !excludedTags.empty();
+    bool platformTagSearchApplied = !includedPlatformTags.empty() || !excludedPlatformTags.empty();
+    bool textSearchApplied = !searchText.empty() && searchField != SearchField::None;
 
+    // skip search if criteria unchanged
+    // the search feature includes three parts: tag search, platform tag search, text search
+    // each part can be cached separately, no need to redo the part if criteria unchanged
     if (includedTags != lastIncludedTags || excludedTags != lastExcludedTags) {
         lastIncludedTags = includedTags;
         lastExcludedTags = excludedTags;
@@ -61,6 +67,8 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         lastSearchText = searchText;
         lastTextSearchResult = database.textSearch(searchText, platform, searchField);
     }
+    // gather PicInfo from platform tag and text search results
+    // this needs to be changed to implement metadata display in the future
     std::unordered_map<uint64_t, PicInfo> platformTagSearchResultPics;
     for (const auto& platformID : lastPlatformTagSearchResult) {
         Metadata metadata = database.getMetadata(platformID, true);
@@ -85,14 +93,15 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
             bool inTextSearch = textSearchResultPics.find(id) != textSearchResultPics.end();
             bool inPlatformTagSearch = platformTagSearchResultPics.find(id) != platformTagSearchResultPics.end();
 
-            if ((!textSearchResultPics.empty() && !inTextSearch) ||
-                (!platformTagSearchResultPics.empty() && !inPlatformTagSearch)) {
+            // skip if not in other search results when other searches are applied
+            if ((textSearchApplied && !inTextSearch) || (platformTagSearchApplied && !inPlatformTagSearch)) {
                 continue;
             }
 
+            // gather result PicInfo
             if (inPlatformTagSearch) { // use existing PicInfo to avoid duplicate database queries
                 resultPics.push_back(platformTagSearchResultPics[id]);
-            } else if (inTextSearch) {
+            } else if (inTextSearch) { // use existing PicInfo to avoid duplicate database queries
                 resultPics.push_back(textSearchResultPics[id]);
             } else {
                 resultPics.push_back(database.getPicInfo(id, true));
@@ -100,7 +109,7 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         }
     } else if (!platformTagSearchResultPics.empty()) {
         for (const auto& [id, pic] : platformTagSearchResultPics) {
-            if (!textSearchResultPics.empty() && textSearchResultPics.find(id) == textSearchResultPics.end()) {
+            if (textSearchApplied && textSearchResultPics.find(id) == textSearchResultPics.end()) {
                 continue;
             }
             resultPics.push_back(pic);
@@ -132,6 +141,7 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         }
     }
 
+    // prepare available tags
     std::vector<TagCount> availableTags;
     std::vector<PlatformTagCount> availablePlatformTags;
     for (const auto& [tagId, count] : tagCount) {

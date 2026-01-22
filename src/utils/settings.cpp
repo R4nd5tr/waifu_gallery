@@ -30,15 +30,17 @@ std::vector<std::pair<std::filesystem::path, ParserType>> Settings::picDirectori
 bool Settings::autoImportOnStartup = false;
 bool Settings::autoTagAfterImport = false;
 std::filesystem::path Settings::autoTaggerDLLPath = "";
+std::filesystem::path Settings::settingsFilePath = DEFALT_SETTINGS_FILE_PATH;
 
-void Settings::loadSettings() {
+void Settings::loadSettings(const std::filesystem::path& path) {
     if (settingsLoaded) {
         Info() << "Settings already loaded.";
         return;
     }
     try {
-        if (std::filesystem::exists(SETTINGS_FILE_PATH)) {
-            std::ifstream inFile(SETTINGS_FILE_PATH);
+        if (std::filesystem::exists(path)) {
+            settingsFilePath = path;
+            std::ifstream inFile(settingsFilePath);
             json j;
             inFile >> j;
             windowWidth = j.value("windowWidth", 800);
@@ -83,7 +85,7 @@ void Settings::saveSettings() {
         j["autoTagAfterImport"] = autoTagAfterImport;
         j["autoTaggerDLLPath"] = autoTaggerDLLPath.string();
 
-        std::ofstream outFile(SETTINGS_FILE_PATH);
+        std::ofstream outFile(settingsFilePath);
         outFile << j.dump(4);
     } catch (const std::exception& e) {
         Error() << "Error saving settings: " << e.what();

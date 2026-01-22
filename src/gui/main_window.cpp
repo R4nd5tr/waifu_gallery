@@ -258,6 +258,7 @@ void MainWindow::initTagger() {
     }
     tagger.loadTaggerDLL(taggerPaths[0]); // TODO: load the first available tagger DLL for now, implement selection later
     Info() << "Tagger initialized with DLL:" << taggerPaths[0];
+    Settings::autoTaggerDLLPath = taggerPaths[0];
     if (database.getModelName() != tagger.getModelName()) {
         Info() << "Tagger model name differs from database record. Updating database tag set.";
         tagger.loadTagSetToDatabase();

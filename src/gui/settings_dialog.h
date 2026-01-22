@@ -30,6 +30,8 @@ class SettingsDialog : public QDialog {
 public:
     explicit SettingsDialog(QWidget* parent = nullptr);
     ~SettingsDialog();
+    void setupTableWidget();
+
     void loadSettings();
     void saveSettings();
 
@@ -40,4 +42,6 @@ private:
     Ui::SettingsDialog* ui;
     bool importOnStartup;
     std::vector<std::pair<std::filesystem::path, ParserType>> picDirectories;
+    bool autoTagAfterImport;
+    std::filesystem::path autoTaggerDLLPath;
 };

@@ -43,7 +43,13 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
-           <widget class="QTableWidget" name="picDirsTable"/>
+           <widget class="QTableWidget" name="picDirsTable">
+            <property name="columnCount">
+             <number>2</number>
+            </property>
+            <column/>
+            <column/>
+           </widget>
           </item>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
@@ -78,6 +84,30 @@
           </item>
          </layout>
         </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="autoTagAfterImportCheckBox">
+         <property name="text">
+          <string>导入后自动进行标签分类</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label">
+         <property name="text">
+          <string>标签分类模型路径：</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="autoTaggerDLLPathLineEdit"/>
        </item>
       </layout>
      </widget>
