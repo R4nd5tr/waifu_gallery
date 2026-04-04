@@ -30,6 +30,9 @@
 #include <stb_image.h>
 #include <vector>
 #include <webp/decode.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <xxhash.h>
 

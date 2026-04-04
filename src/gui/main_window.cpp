@@ -99,14 +99,10 @@ void MainWindow::initWorkerThreads() {
 }
 void MainWindow::connectSignalSlots() {
     // debounce timers
-    resolutionTimer = new QTimer(this);
-    ratioSortTimer = new QTimer(this);
-    tagClickTimer = new QTimer(this);
-    tagSearchTimer = new QTimer(this);
-    resolutionTimer->setSingleShot(true);
-    ratioSortTimer->setSingleShot(true);
-    tagClickTimer->setSingleShot(true);
-    tagSearchTimer->setSingleShot(true);
+    resolutionTimer.setSingleShot(true);
+    ratioSortTimer.setSingleShot(true);
+    tagClickTimer.setSingleShot(true);
+    tagSearchTimer.setSingleShot(true);
 
     // filter checkboxes
     connect(ui->jpgCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowJPG);
@@ -128,26 +124,26 @@ void MainWindow::connectSignalSlots() {
     connect(ui->minHeightEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinHeight);
     connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMaxWidth);
     connect(ui->minWidthEdit, &QLineEdit::textChanged, this, &MainWindow::updateMinWidth);
-    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
-    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
-    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
-    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer->start(DEBOUNCE_DELAY); });
+    connect(ui->maxHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer.start(DEBOUNCE_DELAY); });
+    connect(ui->minHeightEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer.start(DEBOUNCE_DELAY); });
+    connect(ui->maxWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer.start(DEBOUNCE_DELAY); });
+    connect(ui->minWidthEdit, &QLineEdit::textChanged, this, [this]() { resolutionTimer.start(DEBOUNCE_DELAY); });
     connect(ui->clearResolutionFilterButton, &QPushButton::clicked, this, &MainWindow::clearResolutionFilters);
-    connect(resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
+    connect(&resolutionTimer, &QTimer::timeout, this, &MainWindow::handleResolutionTimerTimeout);
 
     // sorting controls
     connect(ui->sortComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortBy);
     connect(ui->orderComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSortOrder);
     connect(ui->enableRatioCheckBox, &QCheckBox::toggled, this, &MainWindow::updateEnableRatioSort);
     connect(ui->ratioSlider, &QSlider::valueChanged, this, &MainWindow::updateRatioSlider);
-    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
+    connect(ui->ratioSlider, &QSlider::valueChanged, this, [this]() { ratioSortTimer.start(SLIDER_DEBOUNCE_DELAY); });
     connect(ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
     connect(
-        ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
+        ui->widthRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer.start(SLIDER_DEBOUNCE_DELAY); });
     connect(ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, &MainWindow::updateRatioSpinBox);
     connect(
-        ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer->start(SLIDER_DEBOUNCE_DELAY); });
-    connect(ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
+        ui->heightRatioSpinBox, &QDoubleSpinBox::valueChanged, this, [this]() { ratioSortTimer.start(SLIDER_DEBOUNCE_DELAY); });
+    connect(&ratioSortTimer, &QTimer::timeout, this, &MainWindow::handleRatioTimerTimeout);
 
     // text search controls
     connect(ui->searchPlatformComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::updateSearchPlatform);
@@ -163,8 +159,8 @@ void MainWindow::connectSignalSlots() {
     connect(ui->characterTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
     connect(ui->platformTagList, &QListWidget::itemClicked, this, &MainWindow::handleListWidgetItemSingleClick);
     connect(ui->platformTagList, &QListWidget::itemDoubleClicked, this, &MainWindow::addExcludedTags);
-    connect(tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
-    connect(tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
+    connect(&tagClickTimer, &QTimer::timeout, this, &MainWindow::addIncludedTags);
+    connect(&tagSearchTimer, &QTimer::timeout, this, &MainWindow::picSearch);
 
     // tag search box
     connect(ui->searchTagTextEdit, &QLineEdit::textChanged, this, &MainWindow::tagSearch);
@@ -524,7 +520,7 @@ void MainWindow::clearSearchText() {
     picSearch();
 }
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
-    tagClickTimer->start(DOUBLE_CLICK_DELAY);
+    tagClickTimer.start(DOUBLE_CLICK_DELAY);
     lastClickedTagItem = item;
 }
 void MainWindow::addIncludedTags() {
@@ -559,7 +555,7 @@ void MainWindow::addIncludedTags() {
 }
 void MainWindow::addExcludedTags(QListWidgetItem* item) {
     tagDoubleClicked = true;
-    tagClickTimer->stop();
+    tagClickTimer.stop();
 
     ui->selectedTagScrollArea->show();
 
@@ -596,7 +592,7 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
     if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
+    tagSearchTimer.start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
@@ -606,7 +602,7 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
     if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
+    tagSearchTimer.start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeIncludedPlatformTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
@@ -616,7 +612,7 @@ void MainWindow::removeIncludedPlatformTags(QPushButton* button) {
     if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
+    tagSearchTimer.start(DEBOUNCE_DELAY);
 }
 void MainWindow::removeExcludedPlatformTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
@@ -626,7 +622,7 @@ void MainWindow::removeExcludedPlatformTags(QPushButton* button) {
     if (isSelectedTagsEmpty()) {
         ui->selectedTagScrollArea->hide();
     }
-    tagSearchTimer->start(DEBOUNCE_DELAY);
+    tagSearchTimer.start(DEBOUNCE_DELAY);
 }
 void MainWindow::tagSearch(const QString& text) {
     QListWidget* currentListWidget = ui->tagListTabWidget->currentWidget()->findChild<QListWidget*>();
@@ -772,7 +768,7 @@ void MainWindow::displayMorePics(uint rows) {
             idToFrameMap[pic.id] = picFrame;
 
             if (imageThumbCache.find(pic.id) == imageThumbCache.end()) { // load image thumbnail
-                imageLoadThreadPool.loadImage(pic);
+                imageLoadThreadPool.loadImage(pic, LoadType::Thumbnail);
             } else { // use cached thumbnail
                 picFrame->setPixmap(imageThumbCache[pic.id]);
             }

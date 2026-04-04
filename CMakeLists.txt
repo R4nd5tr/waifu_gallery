@@ -13,13 +13,13 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS ${PROJECT_SOURCE_DIR}/src/ui)
 set(VCPKG_APPLOCAL_DEPS OFF)
 
 # libs
-find_package(Qt6 COMPONENTS Core Widgets Sql REQUIRED)
+find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Stb REQUIRED)
-set(PROJECT_LIBS Qt6::Core Qt6::Widgets Qt6::Sql xxHash::xxhash WebP::webp WebP::webpdecoder WebP::webpdemux nlohmann_json::nlohmann_json unofficial::sqlite3::sqlite3)
+set(PROJECT_LIBS Qt6::Core Qt6::Gui Qt6::Widgets xxHash::xxhash WebP::webp WebP::webpdecoder WebP::webpdemux nlohmann_json::nlohmann_json unofficial::sqlite3::sqlite3)
 
 # src files
 set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/external)

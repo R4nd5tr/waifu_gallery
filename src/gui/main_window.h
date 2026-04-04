@@ -110,7 +110,7 @@ private:
     void loadTags();
     void initTagger();
 
-    // context
+    // filter context
     bool showPNG = true;
     bool showJPG = true;
     bool showGIF = true;
@@ -128,6 +128,7 @@ private:
     uint minHeight = 0;
     uint maxWidth = std::numeric_limits<uint>::max();
     uint minWidth = 0;
+    // sorting context
     SortBy sortBy = SortBy::None;
     SortOrder sortOrder = SortOrder::Ascending;
     int ratioSliderValue;
@@ -137,6 +138,7 @@ private:
     bool ratioSortEnabled = false;
     bool ratioSliderEditing = false;
     bool ratioSpinBoxEditing = false;
+    // search context
     PlatformType searchPlatform = PlatformType::Unknown;
     SearchField searchField = SearchField::None;
     std::string searchText;
@@ -164,7 +166,7 @@ private:
     void updateMinWidth(const QString& text);
     void updateMinHeight(const QString& text);
     void clearResolutionFilters();
-    QTimer* resolutionTimer;
+    QTimer resolutionTimer;
     void handleResolutionTimerTimeout();
     // sort handlers
     void updateSortBy(int index);
@@ -172,7 +174,7 @@ private:
     void updateEnableRatioSort(bool checked);
     void updateRatioSlider(int value);
     void updateRatioSpinBox(double value);
-    QTimer* ratioSortTimer;
+    QTimer ratioSortTimer;
     void handleRatioTimerTimeout();
     // pic text search handlers
     void updateSearchPlatform(int index);
@@ -188,8 +190,8 @@ private:
     void removeExcludedTags(QPushButton* button);
     void removeIncludedPlatformTags(QPushButton* button);
     void removeExcludedPlatformTags(QPushButton* button);
-    QTimer* tagClickTimer;  // use for double click detection
-    QTimer* tagSearchTimer; // use for debouncing removing selected tags
+    QTimer tagClickTimer;  // use for double click detection
+    QTimer tagSearchTimer; // use for debouncing removing selected tags
     bool tagDoubleClicked = false;
     bool isSelectedTagsEmpty() {
         return includedTags.empty() && excludedTags.empty() && includedPlatformTags.empty() && excludedPlatformTags.empty();

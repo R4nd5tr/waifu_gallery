@@ -19,6 +19,9 @@
 #pragma once
 #include "autotagger/autotagger.h"
 #include <string>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 using CreateFunc = AutoTagger* (*)();

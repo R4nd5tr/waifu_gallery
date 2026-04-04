@@ -37,6 +37,15 @@ public:
             setAttribute(Qt::WA_Hover, false);
         }
     }
+    void setHighlighted(bool highlighted) {
+        if (highlighted) {
+            QFont font = this->font();
+            font.setBold(true);
+            setFont(font);
+        } else {
+            setFont(originalFont_);
+        }
+    }
 signals:
     void clicked();
     void hovered(bool entered);

@@ -6,3 +6,4 @@ CMakeFiles/
 CMakePresets.json
 CMakeCache.txt
 tests/
+.idea/
