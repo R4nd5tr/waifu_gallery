@@ -19,12 +19,19 @@
 #pragma once
 
 #include "clickable_label.h"
+#include "image_label.h"
+#include "image_previewer.h"
 #include "service/database.h"
 #include "service/model.h"
 #include <QDesktopServices>
 #include <QFrame>
 #include <QPixmap>
 #include <QUrl>
+#include <cstdlib>
+
+class ImageLoader;
+enum class SearchField;
+enum class LoadType;
 
 namespace Ui {
 class PictureFrame;
@@ -33,50 +40,54 @@ class PictureFrame;
 class PictureFrame : public QFrame {
     Q_OBJECT
 public:
-    explicit PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField = SearchField::None);
+    explicit PictureFrame(QWidget* parent,
+                          const DisplayItem* displayItem,
+                          ImageLoader& imageLoader,
+                          SearchField searchField = SearchField::None);
     ~PictureFrame();
-    void setPixmap(const QPixmap& pixmap);
+
+    void displayImage(uint64_t picId, LoadType loadType); // asyncronus loaded image will be displayed through this function
+
+    void reset();
+    void updateDisplayItem(const DisplayItem* newDisplayItem, SearchField searchField) {
+        displayItem = newDisplayItem;
+        showInfo(searchField);
+        showThumbnail();
+    }
+
+protected:
+    void leaveEvent(QEvent* event) override {
+        QFrame::leaveEvent(event);
+        hidePreview();
+        showPicInfo();
+    }
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
     Ui::PictureFrame* ui;
-    std::vector<std::filesystem::path> imgPaths;
-    QString illustratorURL;
-    QString idURL;
-    void openFileWithDefaultApp() {
-        for (const auto& path : imgPaths) {
-            try {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
-                break;
-            } catch (...) {
-                continue;
-            }
-        }
-    }
-    void openFileLocation() {
-        for (const auto& path : imgPaths) {
-            try {
-                std::wstring command = L"explorer /select,\"";
-                std::wstring winPath = path.wstring();
-                std::replace(winPath.begin(), winPath.end(), L'/', L'\\');
-                command += winPath;
-                command += L"\"";
-                int result = _wsystem(command.c_str());
-                if (result == -1) {
-                    Info() << "Failed to open file location for path:" << path;
-                    continue;
-                }
-            } catch (...) {
-                continue;
-            }
-            break;
-        }
-    }
-    void openIllustratorUrl() {
-        if (illustratorURL.isEmpty()) return;
-        QDesktopServices::openUrl(QUrl(illustratorURL));
-    }
-    void openIdUrl() {
-        if (idURL.isEmpty()) return;
-        QDesktopServices::openUrl(QUrl(idURL));
-    }
+    const DisplayItem* displayItem = nullptr;
+    ImageLoader& imageLoader;
+    void connectSignals();
+
+    void showInfo(SearchField searchField);
+    void showPicInfo();             // defalt
+    void showPicInfo(size_t index); // show specific pic info
+
+    void showThumbnail();
+
+    // shortcuts
+    void openFileWithDefaultApp();
+    void openFileLocation();
+    void openIllustratorUrl();
+    void openIdUrl();
+
+    // previewer
+    size_t previewingIndex = 0;
+    bool displayingPreview = false;
+    ImagePreviewer previewer;
+    void loadPreviewImage();
+    void displayPreviewImage(size_t index);
+    void displayPreviewImage();
+    void showPreview();
+    void hidePreview();
 };

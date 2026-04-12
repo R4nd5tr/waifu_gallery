@@ -42,7 +42,7 @@ void Importer::forceStop() {
 }
 bool Importer::finish() {
     if (finished) return true; // already finished
-    if (importedCount < supportedFileCount.load(std::memory_order_relaxed) && !stopFlag.load()) {
+    if (importedCount < supportedFileCount.load() && !stopFlag.load()) {
         return false; // not finished yet
     }
 
@@ -54,15 +54,15 @@ bool Importer::finish() {
     }
     workers.clear();
     files.clear();
-    nextFileIndex.store(0, std::memory_order_relaxed);
+    nextFileIndex.store(0);
 
     cv.notify_all();
     if (insertThread.joinable()) {
         insertThread.join();
     }
-    readyFlag.store(false, std::memory_order_relaxed);
+    readyFlag.store(false);
     importedCount = 0;
-    supportedFileCount.store(0, std::memory_order_relaxed);
+    supportedFileCount.store(0);
 
     parsedPicQueueMutex.lock();
     while (!parsedPictureQueue.empty()) {
@@ -75,7 +75,7 @@ bool Importer::finish() {
     }
     parsedMetadataQueueMutex.unlock();
 
-    stopFlag.store(false, std::memory_order_relaxed);
+    stopFlag.store(false);
 
     finished = true;
     return true;
@@ -126,12 +126,12 @@ void Importer::workerThreadFunc() {
     size_t index = 0;
 
     // Wait until files are collected
-    while (!readyFlag.load(std::memory_order_acquire) && !stopFlag.load()) {
+    while (!readyFlag.load() && !stopFlag.load()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     if (stopFlag.load()) return;
 
-    while ((index = nextFileIndex.fetch_add(1, std::memory_order_relaxed)) < files.size()) {
+    while ((index = nextFileIndex.fetch_add(1)) < files.size()) {
         if (parsedPictures.size() >= 100) {
             if (parsedPicQueueMutex.try_lock()) {
                 while (!parsedPictures.empty()) {
@@ -156,8 +156,7 @@ void Importer::workerThreadFunc() {
         }
         if (stopFlag.load()) return;
         const auto& filePath = files[index];
-        if (!processSingleFile(filePath, parserType, parsedPictures, ParsedMetadataVecs))
-            supportedFileCount.fetch_sub(1, std::memory_order_relaxed);
+        if (!processSingleFile(filePath, parserType, parsedPictures, ParsedMetadataVecs)) supportedFileCount.fetch_sub(1);
     }
     if (!parsedPictures.empty()) {
         std::lock_guard<std::mutex> lock(parsedPicQueueMutex);
@@ -169,7 +168,7 @@ void Importer::workerThreadFunc() {
         cv.notify_one();
     }
     if (!ParsedMetadataVecs.empty()) {
-        std::lock_guard<std::mutex> lock(parsedPicQueueMutex);
+        std::lock_guard<std::mutex> lock(parsedMetadataQueueMutex);
         while (!ParsedMetadataVecs.empty()) {
             metadataVecQueue.push(std::move(ParsedMetadataVecs.back()));
             ParsedMetadataVecs.pop_back();
@@ -195,11 +194,11 @@ void Importer::insertThreadFunc() {
     }
     supportedFileCount = files.size();
     Info() << "Total files to import: " << supportedFileCount.load();
-    readyFlag.store(true, std::memory_order_release);
+    readyFlag.store(true);
 
     threadDb.beginTransaction();
-    while (!stopFlag.load() && importedCount < supportedFileCount.load(std::memory_order_relaxed)) {
-        if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_relaxed));
+    while (!stopFlag.load() && importedCount < supportedFileCount.load()) {
+        if (progressCallback) progressCallback(importedCount, supportedFileCount.load());
         std::unique_lock<std::mutex> lock(conditionMutex);
         cv.wait(lock, [this]() { return !parsedPictureQueue.empty() || !metadataVecQueue.empty() || stopFlag.load(); });
         if (stopFlag.load()) break;
@@ -255,5 +254,5 @@ void Importer::insertThreadFunc() {
     }
     Info() << "Import completed. Directory: " << importDirectory;
     // progress equals to total is the signal of completion
-    if (progressCallback) progressCallback(importedCount, supportedFileCount.load(std::memory_order_seq_cst));
+    if (progressCallback) progressCallback(importedCount, supportedFileCount.load());
 }

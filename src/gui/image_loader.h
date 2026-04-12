@@ -17,6 +17,7 @@
  */
 
 #pragma once
+#include "image_cache.h"
 #include "service/model.h"
 #include <QEvent>
 #include <QImage>
@@ -30,25 +31,33 @@
 
 class MainWindow;
 
+enum class LoadType { Thumbnail, Preview };
+
 struct ImageLoadTask {
+    LoadType loadType;
     uint64_t id;
     std::vector<std::filesystem::path> filePaths;
+};
+
+struct ImageLoadResult {
+    LoadType loadType;
+    uint64_t id;
 };
 
 class ImageLoadCompleteEvent : public QEvent {
 public:
     static const QEvent::Type EventType;
-    ImageLoadCompleteEvent(uint64_t id, QImage&& img) : QEvent(EventType), id(id), img(std::move(img)) {}
-    uint64_t id;
-    QImage img;
+    ImageLoadCompleteEvent(ImageLoadResult result) : QEvent(EventType), result(result) {}
+    ImageLoadResult result;
 };
 
-class ImageLoader { // TODO: load full image functionality?
+class ImageLoader {
 public:
     ImageLoader(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
     ~ImageLoader();
 
-    void loadImage(const PicInfo& picInfo);
+    QImage* getImage(const PicInfo& picInfo, LoadType loadType);
+    QImage* getImage(uint64_t picId, LoadType loadType);
     void clearTasks();
 
 private:
@@ -60,4 +69,7 @@ private:
     std::mutex mutex;
     std::condition_variable condVar;
     std::atomic<bool> stopFlag{false};
+
+    ImageCache thumbnailCache{200}; // LRU cache for thumbnails
+    ImageCache previewCache{50};    // LRU cache for previews
 };

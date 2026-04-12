@@ -94,8 +94,6 @@ inline bool operator==(const PlatformID& lhs, const PlatformID& rhs) {
     return lhs.platform == rhs.platform && lhs.platformID == rhs.platformID;
 }
 
-struct PicInfo;
-
 struct Metadata { // represents one social media post(one tweet, one pixiv artwork, etc.)
     PlatformType platformType = PlatformType::Unknown;
     int64_t id = 0;
@@ -120,7 +118,7 @@ struct Metadata { // represents one social media post(one tweet, one pixiv artwo
     RestrictType restrictType = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 
-    std::vector<PicInfo> associatedPics; // optional pictures associated with this metadata
+    PlatformID getPlatformID() const { return PlatformID{platformType, id}; }
 };
 
 struct PicInfo {     // represents one image file
@@ -141,12 +139,17 @@ struct PicInfo {     // represents one image file
     RestrictType restrictType = RestrictType::Unknown;
     AIType aiType = AIType::Unknown;
 
-    std::vector<Metadata> associatedMetadata; // optional metadata associated with this picture
-
     float getRatio() const {
         if (height > 0) {
             return static_cast<float>(width) / static_cast<float>(height);
         }
         return 0.0f;
     };
+};
+
+enum class DisplayItemType { Pic, Metadata };
+struct DisplayItem {
+    DisplayItemType type;
+    std::vector<Metadata> metadata;
+    std::vector<PicInfo> pics;
 };

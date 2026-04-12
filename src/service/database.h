@@ -229,13 +229,14 @@ public:
     }
 
     // getters
-    PicInfo getPicInfo(uint64_t id, bool loadAssociatedMetadata = false) const;
-    Metadata getMetadata(PlatformType platform, int64_t platformID, bool loadAssociatedPics = false) const;
+    PicInfo getPicInfo(uint64_t id) const;
+    std::vector<uint64_t> getMetadataPicIds(const PlatformID& platformID) const;
+    std::vector<PicInfo> getMetadataPicInfos(const PlatformID& platformID) const;
+
+    Metadata getMetadata(PlatformType platform, int64_t PlatformID) const;
     Metadata getMetadata(ImageSource identifier) const { return getMetadata(identifier.platform, identifier.platformID); }
-    Metadata getMetadata(const PlatformID& platformID, bool loadAssociatedPics = false) const {
-        return getMetadata(platformID.platform, platformID.platformID, loadAssociatedPics);
-    }
-    std::vector<PicInfo> getNoMetadataPics() const;
+    Metadata getMetadata(const PlatformID& platformID) const { return getMetadata(platformID.platform, platformID.platformID); }
+
     std::vector<TagCount> getTagCounts() const; // for gui tag selection panel display
     std::vector<PlatformTagCount> getPlatformTagCounts() const;
     TagStr getStringTag(uint32_t tagId) const { return cache.getStringTag(tagId); }
@@ -247,11 +248,12 @@ public:
     bool updateMetadata(const ParsedMetadata& metadataInfo);
 
     // search functions
-    std::vector<uint64_t> tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
-                                    const std::unordered_set<uint32_t>& excludedTagIds) const;
-    std::vector<PlatformID> platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
-                                              const std::unordered_set<uint32_t>& excludedTagIds) const;
-    std::vector<PlatformID> textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
+    std::unordered_set<uint64_t> tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                           const std::unordered_set<uint32_t>& excludedTagIds) const;
+    std::unordered_set<PlatformID> platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                                     const std::unordered_set<uint32_t>& excludedTagIds) const;
+    std::unordered_set<PlatformID>
+    textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const;
 
     // import functions
     void importFilesFromDirectory(

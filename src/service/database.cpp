@@ -580,7 +580,7 @@ bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
 
 // query functions
 
-PicInfo PicDatabase::getPicInfo(uint64_t id, bool loadAssociatedMetadata) const {
+PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     PicInfo info{};
     SQLiteStatement stmt;
 
@@ -637,39 +637,39 @@ PicInfo PicDatabase::getPicInfo(uint64_t id, bool loadAssociatedMetadata) const 
         info.sourceIdentifiers.push_back(identifier);
     }
 
-    // query associated metadata
-    if (!loadAssociatedMetadata) return info;
-    for (const auto& identifier : info.sourceIdentifiers) {
-        info.associatedMetadata.emplace_back(getMetadata(identifier));
-    }
-
     return info;
 }
-// 查询没有任何元数据关联的图片和有元数据关联但对应元数据缺失的图片
-std::vector<PicInfo> PicDatabase::getNoMetadataPics() const {
-    std::vector<PicInfo> pics;
+std::vector<uint64_t> PicDatabase::getMetadataPicIds(const PlatformID& platformId) const {
+    std::vector<uint64_t> picIds;
     SQLiteStatement stmt;
 
     stmt = prepare(R"(
-        SELECT p.id
-        FROM pictures p
-        WHERE NOT EXISTS (
-            SELECT 1
+            SELECT ps.id
             FROM picture_source ps
-            INNER JOIN picture_metadata pm 
-                ON ps.platform = pm.platform 
-                AND ps.platform_id = pm.platform_id
-            WHERE ps.id = p.id
-            )
-    )");
+            WHERE ps.platform = ? AND ps.platform_id = ?
+            ORDER BY ps.image_index ASC
+        )");
+    sqlite3_bind_int(stmt.get(), 1, static_cast<int>(platformId.platform));
+    sqlite3_bind_int64(stmt.get(), 2, platformId.platformID);
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        uint64_t picID = static_cast<uint64_t>(sqlite3_column_int64(stmt.get(), 0));
-        PicInfo picInfo = getPicInfo(picID);
-        pics.push_back(picInfo);
+        uint64_t picID = int64_to_uint64(sqlite3_column_int64(stmt.get(), 0));
+        picIds.push_back(picID);
     }
-    return pics;
+
+    return picIds;
 }
-Metadata PicDatabase::getMetadata(PlatformType platform, int64_t platformID, bool loadAssociatedPics) const {
+std::vector<PicInfo> PicDatabase::getMetadataPicInfos(const PlatformID& platformId) const {
+    std::vector<uint64_t> picIds = getMetadataPicIds(platformId);
+    std::vector<PicInfo> picInfos;
+
+    for (uint64_t picId : picIds) {
+        PicInfo picInfo = getPicInfo(picId);
+        picInfos.push_back(picInfo);
+    }
+
+    return picInfos;
+}
+Metadata PicDatabase::getMetadata(PlatformType platform, int64_t platformID) const {
     Metadata info{};
     SQLiteStatement stmt;
 
@@ -714,23 +714,6 @@ Metadata PicDatabase::getMetadata(PlatformType platform, int64_t platformID, boo
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         uint32_t tagId = static_cast<uint32_t>(sqlite3_column_int(stmt.get(), 0));
         info.tagIds.push_back(tagId);
-    }
-
-    // query associated pictures
-    if (loadAssociatedPics) {
-        stmt = prepare(R"(
-            SELECT ps.id
-            FROM picture_source ps
-            WHERE ps.platform = ? AND ps.platform_id = ?
-            ORDER BY ps.image_index ASC
-        )");
-        sqlite3_bind_int(stmt.get(), 1, static_cast<int>(platform));
-        sqlite3_bind_int64(stmt.get(), 2, platformID);
-        while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-            uint64_t picID = static_cast<uint64_t>(sqlite3_column_int64(stmt.get(), 0));
-            PicInfo picInfo = getPicInfo(picID);
-            info.associatedPics.push_back(picInfo);
-        }
     }
 
     return info;
@@ -926,9 +909,9 @@ void PicDatabase::updateTagCounts() {
 
 // Search functions
 
-std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
-                                             const std::unordered_set<uint32_t>& excludedTagIds) const {
-    std::vector<uint64_t> results;
+std::unordered_set<uint64_t> PicDatabase::tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                                    const std::unordered_set<uint32_t>& excludedTagIds) const {
+    std::unordered_set<uint64_t> results;
     if (includedTagIds.empty()) return results;
 
     std::string includedTagIdStr;
@@ -958,13 +941,13 @@ std::vector<uint64_t> PicDatabase::tagSearch(const std::unordered_set<uint32_t>&
         return results;
     }
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        results.push_back(int64_to_uint64(sqlite3_column_int64(stmt.get(), 0)));
+        results.insert(int64_to_uint64(sqlite3_column_int64(stmt.get(), 0)));
     }
     return results;
 }
-std::vector<PlatformID> PicDatabase::platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
-                                                       const std::unordered_set<uint32_t>& excludedTagIds) const {
-    std::vector<PlatformID> results;
+std::unordered_set<PlatformID> PicDatabase::platformTagSearch(const std::unordered_set<uint32_t>& includedTagIds,
+                                                              const std::unordered_set<uint32_t>& excludedTagIds) const {
+    std::unordered_set<PlatformID> results;
     if (includedTagIds.empty() && excludedTagIds.empty()) return results;
 
     std::string includedTagIdStr;
@@ -1002,13 +985,13 @@ std::vector<PlatformID> PicDatabase::platformTagSearch(const std::unordered_set<
         PlatformID platformID;
         platformID.platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
         platformID.platformID = sqlite3_column_int64(stmt.get(), 1);
-        results.push_back(platformID);
+        results.insert(platformID);
     }
     return results;
 }
-std::vector<PlatformID>
+std::unordered_set<PlatformID>
 PicDatabase::textSearch(const std::string& searchText, PlatformType platformType, SearchField searchField) const {
-    std::vector<PlatformID> results;
+    std::unordered_set<PlatformID> results;
     if (searchText.empty() || searchField == SearchField::None) return results;
     SQLiteStatement stmt;
     bool isNumeric =
@@ -1071,7 +1054,7 @@ PicDatabase::textSearch(const std::string& searchText, PlatformType platformType
         PlatformID platformID;
         platformID.platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
         platformID.platformID = sqlite3_column_int64(stmt.get(), 1);
-        results.emplace_back(platformID);
+        results.insert(platformID);
     }
     return results;
 }

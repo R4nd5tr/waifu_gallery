@@ -42,7 +42,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     connectSignalSlots();
     loadTags();
     displayTags();
-    noMetadataPics = database.getNoMetadataPics();
 
     initTagger();
 }
@@ -500,7 +499,7 @@ void MainWindow::sortPics() {
             return false;
         }
     };
-    std::sort(resultPics.begin(), resultPics.end(), comparator);
+    // std::sort(resultPics.begin(), resultPics.end(), comparator);
 }
 
 // Functions for text and tag search
@@ -637,14 +636,11 @@ void MainWindow::tagSearch(const QString& text) {
 }
 // Main search function
 void MainWindow::picSearch() {
-    imageLoadThreadPool.clearTasks();
+    imageLoader.clearTasks();
     clearAllPicFrames();
     if (isSearchCriteriaEmpty()) {
         displayTags();
-        resultPics = noMetadataPics;
-        sortPics();
-        displayMorePics();
-        ui->statusbar->showMessage("显示无元数据图片，共 " + QString::number(resultPics.size()) + " 张图片");
+        clearAllPicFrames();
         return;
     }
     ui->statusbar->showMessage("正在搜索...");
@@ -658,12 +654,12 @@ void MainWindow::picSearch() {
                     searchText,
                     searchRequestId);
 }
-void MainWindow::handleSearchResults(const std::vector<PicInfo>& pics,
-                                     std::vector<TagCount> availableTags,
-                                     std::vector<PlatformTagCount> availablePlatformTags,
+void MainWindow::handleSearchResults(const std::vector<DisplayItem>& displayItems,
+                                     const std::vector<TagCount> availableTags,
+                                     const std::vector<PlatformTagCount> availablePlatformTags,
                                      size_t requestId) {
     if (requestId != searchRequestId) return;
-    resultPics = std::move(pics);
+    resultPics = std::move(displayItems);
     displayTags(availableTags, availablePlatformTags);
     ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
     sortPics();
@@ -747,31 +743,25 @@ void MainWindow::displayMorePics(uint rows) {
 
     // load pics
     while (displayIndex < resultPics.size() && picsLoaded < picsToLoad) {
-        const PicInfo& pic = resultPics[displayIndex];
+        const DisplayItem& pic = resultPics[displayIndex];
         displayIndex++;
+        if (pic.pics.empty()) continue;
+        if (!isMatchFilter(pic.pics[0])) continue;
 
-        if (!isMatchFilter(pic)) continue;
-
-        displayingPicIds.push_back(pic.id);
+        displayingPicIds.push_back(pic.pics[0].id);
 
         PictureFrame* picFrame = nullptr;
-        auto frameIt = idToFrameMap.find(pic.id);
+        auto frameIt = idToFrameMap.find(pic.pics[0].id);
         if (frameIt != idToFrameMap.end()) { // reuse existing PictureFrame
             picFrame = frameIt->second;
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
         } else { // create new PictureFrame
             if (searchText.empty() || searchField == SearchField::None) {
-                picFrame = new PictureFrame(this, pic);
+                picFrame = new PictureFrame(this, &pic, imageLoader);
             } else { // create PictureFrame with highlighted search text
-                picFrame = new PictureFrame(this, pic, searchField);
+                picFrame = new PictureFrame(this, &pic, imageLoader, searchField);
             }
-            idToFrameMap[pic.id] = picFrame;
-
-            if (imageThumbCache.find(pic.id) == imageThumbCache.end()) { // load image thumbnail
-                imageLoadThreadPool.loadImage(pic, LoadType::Thumbnail);
-            } else { // use cached thumbnail
-                picFrame->setPixmap(imageThumbCache[pic.id]);
-            }
+            idToFrameMap[pic.pics[0].id] = picFrame;
 
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn); // add to layout and display
         }
@@ -833,7 +823,7 @@ void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from 
 bool MainWindow::event(QEvent* event) {
     if (event->type() == ImageLoadCompleteEvent::EventType) {
         auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
-        displayImage(imageEvent->id, std::move(imageEvent->img));
+        displayImage(imageEvent->result.id, imageEvent->result.loadType);
         return true;
     } else if (event->type() == ImportProgressReportEvent::EventType) {
         auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
@@ -846,25 +836,10 @@ bool MainWindow::event(QEvent* event) {
     }
     return QMainWindow::event(event);
 }
-void MainWindow::displayImage(uint64_t picId, QImage&& img) {
-    size_t cacheLimit = MAX_PIC_CACHE;
-    if (resultPics.size() > MAX_PIC_CACHE) {
-        cacheLimit = resultPics.size();
-    }
-    if (imageThumbCache.size() >= cacheLimit) {
-        for (auto iter = imageThumbCache.begin(); iter != imageThumbCache.end();) {
-            if (idToFrameMap.find(iter->first) == idToFrameMap.end()) {
-                iter = imageThumbCache.erase(iter);
-            } else {
-                ++iter;
-            }
-        }
-    }
-    QPixmap pixmap = QPixmap::fromImage(std::move(img));
-    imageThumbCache[picId] = pixmap;
+void MainWindow::displayImage(uint64_t picId, LoadType loadType) {
     auto frameIt = idToFrameMap.find(picId);
     if (frameIt != idToFrameMap.end()) {
-        frameIt->second->setPixmap(pixmap);
+        frameIt->second->displayImage(picId, loadType);
     }
 }
 void MainWindow::displayImportProgress(size_t progress, size_t total) {
@@ -925,7 +900,6 @@ void MainWindow::finalizeImport(size_t totalImported) {
         " 秒");
 
     loadTags(); // load new tags from database
-    noMetadataPics = database.getNoMetadataPics();
     if (isSearchCriteriaEmpty()) {
         picSearch();
     }

@@ -40,9 +40,9 @@ public:
                     size_t requestId);
 
 signals:
-    void searchComplete(const std::vector<PicInfo>& pics,
-                        std::vector<TagCount> availableTags,
-                        std::vector<PlatformTagCount> availablePlatformTags,
+    void searchComplete(const std::vector<DisplayItem>& pics,
+                        const std::vector<TagCount> availableTags,
+                        const std::vector<PlatformTagCount> availablePlatformTags,
                         size_t requestId);
 
 private:
@@ -56,7 +56,7 @@ private:
     SearchField lastSearchField = SearchField::None;
     std::string lastSearchText;
 
-    std::vector<uint64_t> lastTagSearchResult;
-    std::vector<PlatformID> lastPlatformTagSearchResult;
-    std::vector<PlatformID> lastTextSearchResult;
+    std::unordered_set<uint64_t> lastTagSearchResult;
+    std::unordered_set<PlatformID> lastPlatformTagSearchResult;
+    std::unordered_set<PlatformID> lastTextSearchResult;
 };

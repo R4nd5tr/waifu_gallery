@@ -36,7 +36,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_2">
    <item>
-    <widget class="QLabel" name="imageLabel">
+    <widget class="ImageLabel" name="imageLabel">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
        <horstretch>0</horstretch>
@@ -213,6 +213,11 @@
    <class>ClickableLabel</class>
    <extends>QLabel</extends>
    <header>clickable_label.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ImageLabel</class>
+   <extends>QLabel</extends>
+   <header>image_label.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

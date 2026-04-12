@@ -20,19 +20,6 @@
 #include "service/database.h"
 #include <QImageReader>
 
-// utility function to get PicInfo from Metadata
-std::vector<PicInfo> getPicInfoFromMetadata(const Metadata& metadata) {
-    std::vector<PicInfo> pics;
-    Metadata associatedMetadata = metadata;
-    associatedMetadata.associatedPics.clear(); // avoid circular reference
-    for (const auto& associatePic : metadata.associatedPics) {
-        PicInfo pic = associatePic;
-        pic.associatedMetadata.push_back(associatedMetadata);
-        pics.push_back(pic);
-    }
-    return pics;
-}
-
 DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent), database{DbMode::Query} { // search worker
 }
 DatabaseWorker::~DatabaseWorker() {}
@@ -47,6 +34,14 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
     bool tagSearchApplied = !includedTags.empty() || !excludedTags.empty();
     bool platformTagSearchApplied = !includedPlatformTags.empty() || !excludedPlatformTags.empty();
     bool textSearchApplied = !searchText.empty() && searchField != SearchField::None;
+
+    // determine display metadata or pics
+    DisplayItemType displayType;
+    if ((textSearchApplied || platformTagSearchApplied) && !tagSearchApplied) {
+        displayType = DisplayItemType::Metadata;
+    } else {
+        displayType = DisplayItemType::Pic;
+    }
 
     // skip search if criteria unchanged
     // the search feature includes three parts: tag search, platform tag search, text search
@@ -67,74 +62,132 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         lastSearchText = searchText;
         lastTextSearchResult = database.textSearch(searchText, platform, searchField);
     }
-    // gather PicInfo from platform tag and text search results
-    // this needs to be changed to implement metadata display in the future
-    std::unordered_map<uint64_t, PicInfo> platformTagSearchResultPics;
-    for (const auto& platformID : lastPlatformTagSearchResult) {
-        Metadata metadata = database.getMetadata(platformID, true);
-        std::vector<PicInfo> pics = getPicInfoFromMetadata(metadata);
-        for (const auto& pic : pics) {
-            platformTagSearchResultPics[pic.id] = pic;
-        }
-    }
-    std::unordered_map<uint64_t, PicInfo> textSearchResultPics;
-    for (const auto& platformID : lastTextSearchResult) {
-        Metadata metadata = database.getMetadata(platformID, true);
-        std::vector<PicInfo> pics = getPicInfoFromMetadata(metadata);
-        for (const auto& pic : pics) {
-            textSearchResultPics[pic.id] = pic;
-        }
-    }
 
     // intersect all search results
-    std::vector<PicInfo> resultPics;
-    if (!lastTagSearchResult.empty()) {
-        for (const auto& id : lastTagSearchResult) {
-            bool inTextSearch = textSearchResultPics.find(id) != textSearchResultPics.end();
-            bool inPlatformTagSearch = platformTagSearchResultPics.find(id) != platformTagSearchResultPics.end();
+    std::vector<DisplayItem> resultItems;
+    if (displayType == DisplayItemType::Metadata) {
+        std::vector<PlatformID> intersectedResult;
+        if (textSearchApplied && platformTagSearchApplied) {
+            const auto& small = lastTextSearchResult.size() < lastPlatformTagSearchResult.size() ? lastTextSearchResult
+                                                                                                 : lastPlatformTagSearchResult;
+            const auto& large = lastTextSearchResult.size() < lastPlatformTagSearchResult.size() ? lastPlatformTagSearchResult
+                                                                                                 : lastTextSearchResult;
+            for (const auto& id : small) {
+                if (large.find(id) != large.end()) {
+                    intersectedResult.push_back(id);
+                }
+            }
+        } else if (textSearchApplied) {
+            for (const auto& id : lastTextSearchResult) {
+                intersectedResult.push_back(id);
+            }
+        } else if (platformTagSearchApplied) {
+            for (const auto& id : lastPlatformTagSearchResult) {
+                intersectedResult.push_back(id);
+            }
+        }
+        for (const auto& platformID : intersectedResult) {
+            DisplayItem item;
+            item.type = DisplayItemType::Metadata;
+            item.metadata.push_back(database.getMetadata(platformID));
+            item.pics = database.getMetadataPicInfos(platformID);
+            resultItems.push_back(item);
+        }
 
-            // skip if not in other search results when other searches are applied
-            if ((textSearchApplied && !inTextSearch) || (platformTagSearchApplied && !inPlatformTagSearch)) {
-                continue;
-            }
+    } else if (displayType == DisplayItemType::Pic) { // tag search is always applied
+        std::vector<uint64_t> intersectedResult;
+        std::unordered_set<uint64_t> platformTagSearchIntersectedResult;
+        std::unordered_set<uint64_t> textSearchIntersectedResult;
 
-            // gather result PicInfo
-            if (inPlatformTagSearch) { // use existing PicInfo to avoid duplicate database queries
-                resultPics.push_back(platformTagSearchResultPics[id]);
-            } else if (inTextSearch) { // use existing PicInfo to avoid duplicate database queries
-                resultPics.push_back(textSearchResultPics[id]);
-            } else {
-                resultPics.push_back(database.getPicInfo(id, true));
+        // first intersect tag search result with platform tag and text search result separately
+        if (platformTagSearchApplied) {
+            std::unordered_set<uint64_t> platformTagSearchResultPics;
+            for (const auto& platformID : lastPlatformTagSearchResult) {
+                auto picIds = database.getMetadataPicIds(platformID);
+                platformTagSearchResultPics.insert(picIds.begin(), picIds.end());
+            }
+            const auto& small = lastTagSearchResult.size() < platformTagSearchResultPics.size() ? lastTagSearchResult
+                                                                                                : platformTagSearchResultPics;
+            const auto& large = lastTagSearchResult.size() < platformTagSearchResultPics.size() ? platformTagSearchResultPics
+                                                                                                : lastTagSearchResult;
+            for (const auto& id : small) {
+                if (large.find(id) != large.end()) {
+                    platformTagSearchIntersectedResult.insert(id);
+                }
             }
         }
-    } else if (!platformTagSearchResultPics.empty()) {
-        for (const auto& [id, pic] : platformTagSearchResultPics) {
-            if (textSearchApplied && textSearchResultPics.find(id) == textSearchResultPics.end()) {
-                continue;
+        if (textSearchApplied) {
+            std::unordered_set<uint64_t> textSearchResultPics;
+            for (const auto& platformID : lastTextSearchResult) {
+                auto picIds = database.getMetadataPicIds(platformID);
+                textSearchResultPics.insert(picIds.begin(), picIds.end());
             }
-            resultPics.push_back(pic);
+            const auto& small =
+                lastTagSearchResult.size() < textSearchResultPics.size() ? lastTagSearchResult : textSearchResultPics;
+            const auto& large =
+                lastTagSearchResult.size() < textSearchResultPics.size() ? textSearchResultPics : lastTagSearchResult;
+            for (const auto& id : small) {
+                if (large.find(id) != large.end()) {
+                    textSearchIntersectedResult.insert(id);
+                }
+            }
         }
-    } else if (!textSearchResultPics.empty()) {
-        for (const auto& [id, pic] : textSearchResultPics) {
-            resultPics.push_back(pic);
+
+        // then intersect with tag search result if tag search applied, otherwise use platform tag or text search result directly
+        if (platformTagSearchApplied && textSearchApplied) {
+            const auto& small = platformTagSearchIntersectedResult.size() < textSearchIntersectedResult.size()
+                                    ? platformTagSearchIntersectedResult
+                                    : textSearchIntersectedResult;
+            const auto& large = platformTagSearchIntersectedResult.size() < textSearchIntersectedResult.size()
+                                    ? textSearchIntersectedResult
+                                    : platformTagSearchIntersectedResult;
+            for (const auto& id : small) {
+                if (large.find(id) != large.end()) {
+                    intersectedResult.push_back(id);
+                }
+            }
+        } else if (platformTagSearchApplied) {
+            for (const auto& id : platformTagSearchIntersectedResult) {
+                intersectedResult.push_back(id);
+            }
+        } else if (textSearchApplied) {
+            for (const auto& id : textSearchIntersectedResult) {
+                intersectedResult.push_back(id);
+            }
+        } else {
+            for (const auto& id : lastTagSearchResult) {
+                intersectedResult.push_back(id);
+            }
         }
-    } else {
-        // no search criteria, return empty result
-        emit searchComplete(resultPics, {}, {}, requestId);
-        return;
+
+        for (const auto& id : intersectedResult) {
+            DisplayItem item;
+            item.type = DisplayItemType::Pic;
+            PicInfo picInfo = database.getPicInfo(id);
+            item.pics.push_back(picInfo);
+            for (const auto& identifier : picInfo.sourceIdentifiers) {
+                item.metadata.push_back(database.getMetadata(identifier));
+            }
+            resultItems.push_back(item);
+        }
     }
 
-    // gather available tags from resultPics
+    // gather available tags from resultItems
     std::unordered_map<uint32_t, int> tagCount;
     std::unordered_map<uint32_t, int> platformTagCount;
-    std::unordered_set<int64_t> countedMetadata; // to avoid double counting metadata tags
-    for (const auto& pic : resultPics) {
-        for (const auto& picTag : pic.tags) {
-            tagCount[picTag.tagId]++;
+    std::unordered_set<PlatformID> countedMetadata; // to avoid double counting metadata tags
+    std::unordered_set<uint64_t> countedPics;       // to avoid double counting pic tags
+    for (const auto& item : resultItems) {
+        for (const auto& pic : item.pics) {
+            if (countedPics.find(pic.id) != countedPics.end()) continue;
+            countedPics.insert(pic.id);
+            for (const auto& picTag : pic.tags) {
+                tagCount[picTag.tagId]++;
+            }
         }
-        for (const auto& metadata : pic.associatedMetadata) {
-            if (countedMetadata.find(metadata.id) != countedMetadata.end()) continue;
-            countedMetadata.insert(metadata.id);
+        for (const auto& metadata : item.metadata) {
+            if (countedMetadata.find(metadata.getPlatformID()) != countedMetadata.end()) continue;
+            countedMetadata.insert(metadata.getPlatformID());
             for (const auto& tagId : metadata.tagIds) {
                 platformTagCount[tagId]++;
             }
@@ -145,8 +198,7 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
     std::vector<TagCount> availableTags;
     std::vector<PlatformTagCount> availablePlatformTags;
     for (const auto& [tagId, count] : tagCount) {
-        if (std::find(includedTags.begin(), includedTags.end(), tagId) != includedTags.end() ||
-            std::find(excludedTags.begin(), excludedTags.end(), tagId) != excludedTags.end()) {
+        if (includedTags.find(tagId) != includedTags.end() || excludedTags.find(tagId) != excludedTags.end()) {
             continue; // skip tags already in filter
         }
         TagCount tagCountEntry;
@@ -156,8 +208,8 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
         availableTags.push_back(tagCountEntry);
     }
     for (const auto& [tagId, count] : platformTagCount) {
-        if (std::find(includedPlatformTags.begin(), includedPlatformTags.end(), tagId) != includedPlatformTags.end() ||
-            std::find(excludedPlatformTags.begin(), excludedPlatformTags.end(), tagId) != excludedPlatformTags.end()) {
+        if (includedPlatformTags.find(tagId) != includedPlatformTags.end() ||
+            excludedPlatformTags.find(tagId) != excludedPlatformTags.end()) {
             continue; // skip tags already in filter
         }
         PlatformTagCount tagCountEntry;
@@ -171,5 +223,5 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
               availablePlatformTags.end(),
               [](const PlatformTagCount& a, const PlatformTagCount& b) { return b.count < a.count; });
 
-    emit searchComplete(resultPics, availableTags, availablePlatformTags, requestId);
+    emit searchComplete(resultItems, availableTags, availablePlatformTags, requestId);
 }

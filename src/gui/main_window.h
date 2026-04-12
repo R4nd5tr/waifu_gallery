@@ -98,7 +98,7 @@ private:
     Ui::MainWindow* ui;
     PicDatabase database;
     QThread* searchWorkerThread = nullptr;
-    ImageLoader imageLoadThreadPool{this};   // Blazing fast!!!
+    ImageLoader imageLoader{this};           // Blazing fast!!!
     Importer importer{reportImportProgress}; // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
     void initInterface();
@@ -225,9 +225,9 @@ private:
     // searching
     size_t searchRequestId = 0; // to identify latest search request
     void picSearch();
-    void handleSearchResults(const std::vector<PicInfo>& pics,
-                             std::vector<TagCount> availableTags,
-                             std::vector<PlatformTagCount> availablePlatformTags,
+    void handleSearchResults(const std::vector<DisplayItem>& displayItems,
+                             const std::vector<TagCount> availableTags,
+                             const std::vector<PlatformTagCount> availablePlatformTags,
                              size_t requestId);
     void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
     bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
@@ -240,16 +240,14 @@ private:
     void displayMorePicOnScroll(int value);
 
     uint displayIndex;
-    std::vector<PicInfo> noMetadataPics; // pics without metadata, displayed when no filters are set
-    std::vector<PicInfo> resultPics;
+    std::vector<DisplayItem> resultPics;
     std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
     std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
-    std::unordered_map<uint64_t, QPixmap> imageThumbCache;    // TODO: optimize memory usage? implement LRU cache?
     void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call displayMorePics()
     bool isMatchFilter(const PicInfo& pic);
     void displayMorePics(uint rows = 5); // display more pics in the scroll area
     void sortPics();                     // sort resultPics vector
     void clearAllPicFrames();
     void removePicFramesFromLayout();
-    void displayImage(uint64_t picId, QImage&& img);
+    void displayImage(uint64_t picId, LoadType loadType);
 };

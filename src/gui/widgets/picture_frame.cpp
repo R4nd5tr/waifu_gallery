@@ -17,6 +17,7 @@
  */
 
 #include "picture_frame.h"
+#include "gui/image_loader.h"
 #include "ui_picture_frame.h"
 
 QString getFileTypeStr(ImageFormat fileType) {
@@ -33,63 +34,91 @@ QString getFileTypeStr(ImageFormat fileType) {
         return QString("Unknown");
     }
 }
+static size_t wrapIndex(int index, size_t count) {
+    if (count == 0) return 0;
+    int m = index % static_cast<int>(count);
+    if (m < 0) m += static_cast<int>(count);
+    return static_cast<size_t>(m);
+}
+
 const int MAX_TITLE_LENGTH = 20;
+
 const std::string PIXIV_BASE_URL = "https://www.pixiv.net/artworks/";
 const std::string PIXIV_AUTHOR_URL = "https://www.pixiv.net/users/";
 const std::string TWITTER_BASE_URL = "https://twitter.com/i/web/status/";
 const std::string TWITTER_AUTHOR_URL = "https://twitter.com/";
 
-PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField searchField)
-    : QFrame(parent), ui(new Ui::PictureFrame) {
-    ui->setupUi(this);
-    ui->resolutionLabel->setText(QString("%1x%2").arg(picinfo.width).arg(picinfo.height));
-    ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
-                                          .arg(getFileTypeStr(picinfo.fileType))
-                                          .arg(static_cast<double>(picinfo.size) / (1024 * 1024), 0, 'f', 2));
-    imgPaths = picinfo.filePaths;
+const size_t PRELOAD_PREVIEW_COUNT = 2;
 
-    ui->titleLabel->setResponsive(false);
+// initialize
+
+PictureFrame::PictureFrame(QWidget* parent, const DisplayItem* displayItem, ImageLoader& imageLoader, SearchField searchField)
+    : QFrame(parent), ui(new Ui::PictureFrame), displayItem(displayItem), imageLoader(imageLoader) {
+    ui->setupUi(this);
+    connectSignals();
+    showInfo(searchField);
+    showThumbnail();
+}
+PictureFrame::~PictureFrame() {
+    delete ui;
+}
+void PictureFrame::connectSignals() {
+    connect(ui->imageLabel, &ImageLabel::loadPreviewSignal, this, &PictureFrame::loadPreviewImage);
+    connect(ui->imageLabel, &ImageLabel::showPreviewSignal, this, &PictureFrame::showPreview);
 
     connect(ui->resolutionLabel, &ClickableLabel::clicked, this, &PictureFrame::openFileWithDefaultApp);
     connect(ui->fileTypeAndSizeLabel, &ClickableLabel::clicked, this, &PictureFrame::openFileLocation);
     connect(ui->illustratorLabel, &ClickableLabel::clicked, this, &PictureFrame::openIllustratorUrl);
     connect(ui->idLabel, &ClickableLabel::clicked, this, &PictureFrame::openIdUrl);
 
-    if (picinfo.associatedMetadata.size() > 0) {
-        switch (picinfo.associatedMetadata[0].platformType) {
-        case PlatformType::Pixiv:
-            ui->titleLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].title));
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].authorName));
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(picinfo.associatedMetadata[0].id)));
+    this->installEventFilter(this);
+    ui->imageLabel->installEventFilter(this);
+    previewer.installEventFilter(this);
+}
+void PictureFrame::reset() {
+    ui->imageLabel->clear();
+    ui->titleLabel->clear();
+    ui->illustratorLabel->clear();
+    ui->idLabel->clear();
+    ui->resolutionLabel->clear();
+    ui->fileTypeAndSizeLabel->clear();
 
-            illustratorURL = QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(picinfo.associatedMetadata[0].authorID));
-            idURL = QString::fromStdString(PIXIV_BASE_URL + std::to_string(picinfo.associatedMetadata[0].id));
+    displayingPreview = false;
+    previewingIndex = 0;
+    displayItem = nullptr;
+}
+
+void PictureFrame::showInfo(SearchField searchField) {
+    showPicInfo();
+
+    ui->titleLabel->setResponsive(false);
+    // show metadata if available, otherwise show filename and disable links
+    if (!displayItem->metadata.empty()) { // display metadata if available, otherwise show filename and disable links
+        switch (displayItem->metadata[0].platformType) {
+        case PlatformType::Pixiv:
+            ui->titleLabel->setText(QString::fromStdString(displayItem->metadata[0].title));
+            ui->illustratorLabel->setText(QString::fromStdString(displayItem->metadata[0].authorName));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(displayItem->metadata[0].id)));
             break;
         case PlatformType::Twitter: {
-            QString description = QString::fromStdString(picinfo.associatedMetadata[0].description).split('\n').first();
+            QString description = QString::fromStdString(displayItem->metadata[0].description).split('\n').first();
             if (description.length() > MAX_TITLE_LENGTH) {
                 description = description.left(MAX_TITLE_LENGTH) + "...";
             }
             ui->titleLabel->setText(description);
-            ui->illustratorLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(picinfo.associatedMetadata[0].authorName)));
-
-            illustratorURL = QString::fromStdString(TWITTER_AUTHOR_URL + picinfo.associatedMetadata[0].authorName);
-            idURL = QString::fromStdString(TWITTER_BASE_URL + std::to_string(picinfo.associatedMetadata[0].id));
+            ui->illustratorLabel->setText(QString::fromStdString(displayItem->metadata[0].authorNick));
+            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(displayItem->metadata[0].authorName)));
             break;
         }
         default:
-            ui->titleLabel->setText(QString::fromStdString(picinfo.associatedMetadata[0].title));
-            ui->idLabel->setText(QString::number(picinfo.associatedMetadata[0].id));
+            ui->titleLabel->setText(QString::fromStdString(displayItem->metadata[0].title));
+            ui->idLabel->setText(QString::number(displayItem->metadata[0].id));
             ui->illustratorLabel->setResponsive(false);
             ui->idLabel->setResponsive(false);
-
-            illustratorURL = "";
-            idURL = "";
             break;
         }
-    } else { // fallback to file name
-        QString filename = QString::fromStdString(picinfo.filePaths.begin()->filename().string());
+    } else { // no metadata, show filename and disable links
+        QString filename = QString::fromStdString(displayItem->pics[0].filePaths.begin()->filename().string());
         if (filename.length() > MAX_TITLE_LENGTH) {
             filename = filename.left(MAX_TITLE_LENGTH) + "...";
         }
@@ -97,39 +126,184 @@ PictureFrame::PictureFrame(QWidget* parent, const PicInfo& picinfo, SearchField 
         ui->idLabel->setText("N/A");
         ui->illustratorLabel->setResponsive(false);
         ui->idLabel->setResponsive(false);
-
-        illustratorURL = "";
-        idURL = "";
     }
 
     switch (searchField) { // highlight search result
     case SearchField::Title: {
-        QFont font = ui->titleLabel->font();
-        font.setBold(true);
-        ui->titleLabel->setFont(font);
+        ui->titleLabel->setHighlighted(true);
         break;
     }
     case SearchField::AuthorID:
     case SearchField::AuthorName:
     case SearchField::AuthorNick: {
-        QFont font = ui->illustratorLabel->font();
-        font.setBold(true);
-        ui->illustratorLabel->setFont(font);
+        ui->illustratorLabel->setHighlighted(true);
         break;
     }
     case SearchField::PlatformID: {
-        QFont font = ui->idLabel->font();
-        font.setBold(true);
-        ui->idLabel->setFont(font);
+        ui->idLabel->setHighlighted(true);
         break;
     }
     default:
         break;
     }
 }
-PictureFrame::~PictureFrame() {
-    delete ui;
+void PictureFrame::showPicInfo() {
+    if (displayItem->type == DisplayItemType::Metadata && displayItem->pics.size() > 1 && !displayingPreview) {
+        ui->resolutionLabel->setText("");
+        ui->fileTypeAndSizeLabel->setText(QString("%1 pics").arg(displayItem->pics.size()));
+        ui->resolutionLabel->setResponsive(false);
+        ui->fileTypeAndSizeLabel->setResponsive(false);
+    } else {
+        showPicInfo(previewingIndex);
+    }
 }
-void PictureFrame::setPixmap(const QPixmap& pixmap) {
-    ui->imageLabel->setPixmap(pixmap.scaled(ui->imageLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+void PictureFrame::showPicInfo(size_t index) {
+    ui->resolutionLabel->setText(QString("%1x%2").arg(displayItem->pics[index].width).arg(displayItem->pics[index].height));
+    ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
+                                          .arg(getFileTypeStr(displayItem->pics[index].fileType))
+                                          .arg(static_cast<double>(displayItem->pics[index].size) / (1024 * 1024), 0, 'f', 2));
+    ui->resolutionLabel->setResponsive(true);
+    ui->fileTypeAndSizeLabel->setResponsive(true);
+}
+void PictureFrame::showThumbnail() {
+    if (!displayItem || displayItem->pics.empty()) return;
+
+    if (auto img = imageLoader.getImage(displayItem->pics[0], LoadType::Thumbnail)) {
+        QPixmap pixmap = QPixmap::fromImage(*img);
+        ui->imageLabel->setPixmap(pixmap);
+    }
+}
+
+// asyncronus loaded image display
+
+void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
+    if (auto img = imageLoader.getImage(picId, loadType)) {
+        if (loadType == LoadType::Thumbnail) {
+            QPixmap pixmap = QPixmap::fromImage(*img);
+            ui->imageLabel->setPixmap(pixmap);
+        } else if (loadType == LoadType::Preview && displayingPreview && displayItem->pics[previewingIndex].id == picId) {
+            // only display if it's the preview image currently being previewed
+            QPixmap pixmap = QPixmap::fromImage(*img);
+            previewer.setPixmap(pixmap);
+            showPicInfo(previewingIndex);
+        }
+    } else {
+        Error() << "Failed to display image for PicID:" << picId;
+    }
+}
+
+// previewer
+
+bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
+    if ((watched == ui->imageLabel || watched == &previewer || watched == this) && event->type() == QEvent::Wheel) {
+        if (!displayingPreview || !displayItem || displayItem->pics.size() <= 1) {
+            return QFrame::eventFilter(watched, event);
+        }
+
+        auto* wheelEvent = static_cast<QWheelEvent*>(event);
+
+        if (wheelEvent->angleDelta().y() > 0) {
+            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) - 1, displayItem->pics.size());
+        } else {
+            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) + 1, displayItem->pics.size());
+        }
+        displayPreviewImage();
+        showPicInfo(previewingIndex);
+
+        wheelEvent->accept();
+        return true;
+    }
+
+    return QFrame::eventFilter(watched, event);
+}
+void PictureFrame::loadPreviewImage() {
+    if (!displayItem || displayItem->pics.empty()) return;
+
+    const size_t count = displayItem->pics.size();
+    const size_t center = wrapIndex(static_cast<int>(previewingIndex), count);
+
+    imageLoader.getImage(displayItem->pics[center], LoadType::Preview);
+
+    for (size_t offset = 1; offset <= PRELOAD_PREVIEW_COUNT; ++offset) {
+        const size_t left = wrapIndex(static_cast<int>(center) - static_cast<int>(offset), count);
+        const size_t right = wrapIndex(static_cast<int>(center) + static_cast<int>(offset), count);
+
+        imageLoader.getImage(displayItem->pics[left], LoadType::Preview);
+        if (right != left) {
+            imageLoader.getImage(displayItem->pics[right], LoadType::Preview);
+        }
+    }
+}
+void PictureFrame::displayPreviewImage(size_t index) {
+    if (auto img = imageLoader.getImage(displayItem->pics[index], LoadType::Preview)) { // cache hit
+        QPixmap pixmap = QPixmap::fromImage(*img);
+        previewer.setPixmap(pixmap);
+        showPicInfo(index);
+    }
+    // cache miss, the preview image will be loaded asynchronously and
+    // displayed when it's ready through displayImage function
+}
+void PictureFrame::displayPreviewImage() {
+    displayPreviewImage(previewingIndex);
+}
+void PictureFrame::showPreview() {
+    displayPreviewImage();
+    QPoint globalPos = mapToGlobal(QPoint(0, height()));
+    previewer.move(globalPos);
+    previewer.show();
+    displayingPreview = true;
+}
+void PictureFrame::hidePreview() {
+    previewer.hide();
+    displayingPreview = false;
+}
+
+// shortcuts
+
+void PictureFrame::openFileWithDefaultApp() {
+    for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
+        try {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
+            break;
+        } catch (...) {
+            continue;
+        }
+    }
+}
+void PictureFrame::openFileLocation() {
+    for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
+        try {
+            std::wstring command = L"explorer /select,\"";
+            std::wstring winPath = path.wstring();
+            std::replace(winPath.begin(), winPath.end(), L'/', L'\\');
+            command += winPath;
+            command += L"\"";
+            int result = _wsystem(command.c_str());
+            if (result == -1) {
+                Info() << "Failed to open file location for path:" << path;
+                continue;
+            }
+        } catch (...) {
+            continue;
+        }
+        break;
+    }
+}
+void PictureFrame::openIllustratorUrl() {
+    if (displayItem->metadata.empty()) return;
+    if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
+        QDesktopServices::openUrl(
+            QUrl(QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(displayItem->metadata[0].authorID))));
+    } else if (displayItem->metadata[0].platformType == PlatformType::Twitter) {
+        QDesktopServices::openUrl(
+            QUrl(QString::fromStdString(TWITTER_AUTHOR_URL + std::to_string(displayItem->metadata[0].authorID))));
+    }
+}
+void PictureFrame::openIdUrl() {
+    if (displayItem->metadata.empty()) return;
+    if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(displayItem->metadata[0].id))));
+    } else if (displayItem->metadata[0].platformType == PlatformType::Twitter) {
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(TWITTER_BASE_URL + std::to_string(displayItem->metadata[0].id))));
+    }
 }

@@ -92,7 +92,7 @@ void Tagger::forceStop() {
 bool Tagger::finish() {
     if (finished) return true; // already finished
 
-    if (analyzed < totalSupported.load(std::memory_order_relaxed) && !stopFlag.load()) {
+    if (analyzed < totalSupported.load() && !stopFlag.load()) {
         return false; // not finished yet
     }
 
@@ -110,14 +110,14 @@ bool Tagger::finish() {
     picFileMutex.lock();
     picFilesForTagging.clear();
     picFileMutex.unlock();
-    nextIndex.store(0, std::memory_order_relaxed);
-    totalSupported.store(0, std::memory_order_relaxed);
+    nextIndex.store(0);
+    totalSupported.store(0);
     preprocessedMutex.lock();
     while (!preprocessedPic.empty()) {
         preprocessedPic.pop();
     }
     preprocessedMutex.unlock();
-    stopFlag.store(false, std::memory_order_relaxed);
+    stopFlag.store(false);
     finished = true;
 
     Info() << "Tagging process finalized.";
@@ -128,7 +128,7 @@ void Tagger::preprocessWorkerFunc() {
 
     {
         std::unique_lock<std::mutex> lock(picFileMutex);
-        readyCv.wait(lock, [this]() { return readyFlag.load(std::memory_order_acquire) || stopFlag.load(); });
+        readyCv.wait(lock, [this]() { return readyFlag.load() || stopFlag.load(); });
     }
 
     while ((index = nextIndex.fetch_add(1)) < picFilesForTagging.size() && !stopFlag.load()) {
@@ -164,12 +164,12 @@ void Tagger::analyzeThreadFunc() {
     picFilesForTagging = threadDb.getUntaggedPics();
     totalSupported = picFilesForTagging.size();
     Info() << "Total pictures to tag:" << totalSupported.load();
-    readyFlag.store(true, std::memory_order_release);
+    readyFlag.store(true);
     readyCv.notify_all();
     analyzed = 0;
 
     threadDb.beginTransaction();
-    while (analyzed < totalSupported.load(std::memory_order_relaxed) && !stopFlag.load()) {
+    while (analyzed < totalSupported.load() && !stopFlag.load()) {
         // fetch preprocessed data
         std::pair<uint64_t, std::vector<float>> item;
         {
@@ -198,7 +198,7 @@ void Tagger::analyzeThreadFunc() {
 
         analyzed++;
         if (analyzed % 100 == 0) {
-            if (progressCallBack) progressCallBack(analyzed, totalSupported.load(std::memory_order_relaxed));
+            if (progressCallBack) progressCallBack(analyzed, totalSupported.load());
             if (!threadDb.commitTransaction()) {
                 Error() << "Failed to commit tagging transaction, rolling back.";
                 threadDb.rollbackTransaction();
@@ -223,5 +223,5 @@ void Tagger::analyzeThreadFunc() {
 
     Info() << "Tagging process completed.";
     // progress equals total means finished
-    if (progressCallBack) progressCallBack(analyzed, totalSupported.load(std::memory_order_relaxed));
+    if (progressCallBack) progressCallBack(analyzed, totalSupported.load());
 }

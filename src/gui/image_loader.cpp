@@ -22,7 +22,8 @@
 #include <QCoreApplication>
 #include <QImageReader>
 
-const size_t IMAGE_RESOLUTION_LIMIT = 256;
+const size_t THUMBNAIL_RESOLUTION_LIMIT = 256;
+const size_t PREVIEW_RESOLUTION_LIMIT = 512;
 
 const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 
@@ -34,15 +35,30 @@ ImageLoader::ImageLoader(MainWindow* mainWindow, size_t numThreads) : mainWindow
 ImageLoader::~ImageLoader() {
     stop();
 }
-void ImageLoader::loadImage(const PicInfo& picInfo) {
+QImage* ImageLoader::getImage(uint64_t picId, LoadType loadType) {
+    // check cache first
+    if (loadType == LoadType::Thumbnail) {
+        if (auto img = thumbnailCache.get(picId)) return img;
+
+    } else if (loadType == LoadType::Preview) {
+        if (auto img = previewCache.get(picId)) return img;
+    }
+    return nullptr;
+}
+QImage* ImageLoader::getImage(const PicInfo& picInfo, LoadType loadType) {
+    // check cache first
+    if (auto img = getImage(picInfo.id, loadType)) return img;
+
+    // cache miss, load image asynchronously
     if (picInfo.filePaths.empty()) {
         Warn() << "No file paths available for PicInfo ID:" << picInfo.id;
-        return;
+        return nullptr;
     }
-    ImageLoadTask task{picInfo.id, picInfo.filePaths};
+    ImageLoadTask task{loadType, picInfo.id, picInfo.filePaths};
     std::lock_guard<std::mutex> lock(mutex);
     taskQueue.push(task);
     condVar.notify_one();
+    return nullptr;
 }
 void ImageLoader::clearTasks() {
     std::lock_guard<std::mutex> lock(mutex);
@@ -51,7 +67,7 @@ void ImageLoader::clearTasks() {
     }
 }
 void ImageLoader::stop() {
-    stopFlag.store(true, std::memory_order_release);
+    stopFlag.store(true);
     clearTasks();
     condVar.notify_all();
     for (auto& worker : workers) {
@@ -62,17 +78,18 @@ void ImageLoader::stop() {
     workers.clear();
 }
 void ImageLoader::workerFunction() {
+    ImageLoadTask task;
     while (true) {
-        ImageLoadTask task;
-        {
+        { // acquire task
             std::unique_lock<std::mutex> lock(mutex);
-            if (stopFlag.load(std::memory_order_acquire)) return;
-            condVar.wait(lock, [this]() { return !taskQueue.empty() || stopFlag.load(std::memory_order_acquire); });
-            if (stopFlag.load(std::memory_order_acquire) && taskQueue.empty()) return;
+            if (stopFlag.load()) return;
+            condVar.wait(lock, [this]() { return !taskQueue.empty() || stopFlag.load(); });
+            if (stopFlag.load() && taskQueue.empty()) return;
             task = taskQueue.front();
             taskQueue.pop();
         }
 
+        // get valid file path
         QString filePathStr;
         for (const auto& filePath : task.filePaths) {
             if (!std::filesystem::exists(filePath)) {
@@ -89,16 +106,31 @@ void ImageLoader::workerFunction() {
         }
         reader.setAutoTransform(true);
 
-        QImage img;
+        // read image
+        std::unique_ptr<QImage> img = std::make_unique<QImage>();
         QSize originalSize = reader.size();
         if (!originalSize.isValid()) originalSize = QSize(1, 1);
-        if (originalSize.width() > IMAGE_RESOLUTION_LIMIT || originalSize.height() > IMAGE_RESOLUTION_LIMIT) {
-            reader.setScaledSize(originalSize.scaled(IMAGE_RESOLUTION_LIMIT, IMAGE_RESOLUTION_LIMIT, Qt::KeepAspectRatio));
+        if (task.loadType == LoadType::Thumbnail &&
+            (originalSize.width() > THUMBNAIL_RESOLUTION_LIMIT || originalSize.height() > THUMBNAIL_RESOLUTION_LIMIT)) {
+            reader.setScaledSize(
+                originalSize.scaled(THUMBNAIL_RESOLUTION_LIMIT, THUMBNAIL_RESOLUTION_LIMIT, Qt::KeepAspectRatio));
         }
-        if (!reader.read(&img)) {
+        if (task.loadType == LoadType::Preview &&
+            (originalSize.width() > PREVIEW_RESOLUTION_LIMIT || originalSize.height() > PREVIEW_RESOLUTION_LIMIT)) {
+            reader.setScaledSize(originalSize.scaled(PREVIEW_RESOLUTION_LIMIT, PREVIEW_RESOLUTION_LIMIT, Qt::KeepAspectRatio));
+        }
+        if (!reader.read(img.get())) {
             Warn() << "Failed to read image:" << filePathStr << ", Error:" << reader.errorString();
             continue;
         }
-        QCoreApplication::postEvent(mainWindow, new ImageLoadCompleteEvent(task.id, std::move(img)));
+
+        // update cache
+        if (task.loadType == LoadType::Thumbnail) {
+            thumbnailCache.put(task.id, std::move(img));
+        } else if (task.loadType == LoadType::Preview) {
+            previewCache.put(task.id, std::move(img));
+        }
+
+        QCoreApplication::postEvent(mainWindow, new ImageLoadCompleteEvent({task.loadType, task.id}));
     }
 }
