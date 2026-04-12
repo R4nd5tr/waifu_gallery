@@ -761,7 +761,9 @@ void MainWindow::displayMorePics(uint rows) {
             } else { // create PictureFrame with highlighted search text
                 picFrame = new PictureFrame(this, &pic, imageLoader, searchField);
             }
-            idToFrameMap[pic.pics[0].id] = picFrame;
+            for (const auto& picInfo : pic.pics) {
+                idToFrameMap[picInfo.id] = picFrame;
+            }
 
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn); // add to layout and display
         }
