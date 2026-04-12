@@ -23,7 +23,7 @@ set(PROJECT_LIBS Qt6::Core Qt6::Gui Qt6::Widgets xxHash::xxhash WebP::webp WebP:
 
 # src files
 set(PROJECT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/external)
-file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp) # remember configure CMake before build
+file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp ${PROJECT_SOURCE_DIR}/src/*.h) # remember configure CMake before build
 file(GLOB UI_FILES ${PROJECT_SOURCE_DIR}/src/ui/*.ui)
 file(GLOB RES_FILES ${PROJECT_SOURCE_DIR}/res/*.qrc)
 file(GLOB RC_FILES ${PROJECT_SOURCE_DIR}/res/*.rc)
@@ -39,7 +39,7 @@ target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 
 # test
 if(BUILD_TEST_TARGET STREQUAL "ON")
-    file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+    file(GLOB_RECURSE TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cpp ${PROJECT_SOURCE_DIR}/src/*.h)
     list(REMOVE_ITEM TEST_SRC_FILES ${PROJECT_SOURCE_DIR}/src/main.cpp) # exclude main.cpp
     file(GLOB TEST_FILES ${PROJECT_SOURCE_DIR}/tests/*.cpp) # include test files
     add_executable(TEST_waifu_gallery

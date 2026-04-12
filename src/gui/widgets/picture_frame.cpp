@@ -183,9 +183,7 @@ void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
             ui->imageLabel->setPixmap(pixmap);
         } else if (loadType == LoadType::Preview && displayingPreview && displayItem->pics[previewingIndex].id == picId) {
             // only display if it's the preview image currently being previewed
-            QPixmap pixmap = QPixmap::fromImage(*img);
-            previewer.setPixmap(pixmap);
-            showPicInfo(previewingIndex);
+            displayPreviewImage();
         }
     } else {
         Error() << "Failed to display image for PicID:" << picId;
@@ -238,6 +236,17 @@ void PictureFrame::displayPreviewImage(size_t index) {
     if (auto img = imageLoader.getImage(displayItem->pics[index], LoadType::Preview)) { // cache hit
         QPixmap pixmap = QPixmap::fromImage(*img);
         previewer.setPixmap(pixmap);
+        const QPoint topLeft = mapToGlobal(QPoint(0, 0));
+        const int x = topLeft.x() - previewer.width();
+
+        QWidget* win = window();
+        const QRect winRect = win ? win->frameGeometry() : QRect(topLeft, size());
+        const int widgetCenterY = topLeft.y() + height() / 2;
+        const bool upperHalf = widgetCenterY < winRect.center().y();
+
+        const int yPos = upperHalf ? topLeft.y() : (topLeft.y() + height() - previewer.height());
+
+        previewer.move(x, yPos);
         showPicInfo(index);
     }
     // cache miss, the preview image will be loaded asynchronously and
@@ -248,8 +257,6 @@ void PictureFrame::displayPreviewImage() {
 }
 void PictureFrame::showPreview() {
     displayPreviewImage();
-    QPoint globalPos = mapToGlobal(QPoint(0, height()));
-    previewer.move(globalPos);
     previewer.show();
     displayingPreview = true;
 }

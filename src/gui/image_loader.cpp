@@ -54,9 +54,15 @@ QImage* ImageLoader::getImage(const PicInfo& picInfo, LoadType loadType) {
         Warn() << "No file paths available for PicInfo ID:" << picInfo.id;
         return nullptr;
     }
-    ImageLoadTask task{loadType, picInfo.id, picInfo.filePaths};
+
     std::lock_guard<std::mutex> lock(mutex);
-    taskQueue.push(task);
+    auto& loadingSet = (loadType == LoadType::Thumbnail) ? loadingThumbnailIds : loadingPreviewIds;
+    if (loadingSet.find(picInfo.id) != loadingSet.end()) {
+        return nullptr; // already queued or loading
+    }
+
+    loadingSet.insert(picInfo.id);
+    taskQueue.push({loadType, picInfo.id, picInfo.filePaths});
     condVar.notify_one();
     return nullptr;
 }
@@ -65,6 +71,8 @@ void ImageLoader::clearTasks() {
     while (!taskQueue.empty()) {
         taskQueue.pop();
     }
+    loadingThumbnailIds.clear();
+    loadingPreviewIds.clear();
 }
 void ImageLoader::stop() {
     stopFlag.store(true);
@@ -102,6 +110,11 @@ void ImageLoader::workerFunction() {
         QImageReader reader(filePathStr);
         if (!reader.canRead()) {
             Warn() << "Cannot read image format:" << filePathStr;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                auto& loadingSet = (task.loadType == LoadType::Thumbnail) ? loadingThumbnailIds : loadingPreviewIds;
+                loadingSet.erase(task.id);
+            }
             continue;
         }
         reader.setAutoTransform(true);
@@ -121,6 +134,11 @@ void ImageLoader::workerFunction() {
         }
         if (!reader.read(img.get())) {
             Warn() << "Failed to read image:" << filePathStr << ", Error:" << reader.errorString();
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                auto& loadingSet = (task.loadType == LoadType::Thumbnail) ? loadingThumbnailIds : loadingPreviewIds;
+                loadingSet.erase(task.id);
+            }
             continue;
         }
 
@@ -129,6 +147,12 @@ void ImageLoader::workerFunction() {
             thumbnailCache.put(task.id, std::move(img));
         } else if (task.loadType == LoadType::Preview) {
             previewCache.put(task.id, std::move(img));
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto& loadingSet = (task.loadType == LoadType::Thumbnail) ? loadingThumbnailIds : loadingPreviewIds;
+            loadingSet.erase(task.id);
         }
 
         QCoreApplication::postEvent(mainWindow, new ImageLoadCompleteEvent({task.loadType, task.id}));

@@ -27,6 +27,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 class MainWindow;
@@ -69,6 +70,9 @@ private:
     std::mutex mutex;
     std::condition_variable condVar;
     std::atomic<bool> stopFlag{false};
+
+    std::unordered_set<uint64_t> loadingThumbnailIds;
+    std::unordered_set<uint64_t> loadingPreviewIds;
 
     ImageCache thumbnailCache{200}; // LRU cache for thumbnails
     ImageCache previewCache{50};    // LRU cache for previews

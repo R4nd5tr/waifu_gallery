@@ -22,23 +22,8 @@ void ImageCache::put(uint64_t id, std::unique_ptr<QImage> img) {
     if (capacity == 0 || img == nullptr) return;
     std::lock_guard<std::mutex> lock(mutex);
     auto it = idToIndexMap.find(id);
-    if (it != idToIndexMap.end()) { // already in cache, update image and move to head
-        size_t index = it->second;
-        nodeArray[index].img = std::move(img);
-        if (index == tailIndex) {
-            headIndex = tailIndex;
-            tailIndex = nodeArray[index].prev;
-        } else if (index != headIndex) {
-            // remove from current position
-            nodeArray[nodeArray[index].prev].next = nodeArray[index].next;
-            nodeArray[nodeArray[index].next].prev = nodeArray[index].prev;
-            // insert at head
-            nodeArray[index].next = headIndex;
-            nodeArray[index].prev = tailIndex;
-            nodeArray[headIndex].prev = index;
-            nodeArray[tailIndex].next = index;
-            headIndex = index;
-        }
+    if (it != idToIndexMap.end()) { // already in cache, do nothing
+        return;
     } else { // not in cache, add new node
         if (size < capacity) {
             size_t index = size;
@@ -70,10 +55,10 @@ void ImageCache::put(uint64_t id, std::unique_ptr<QImage> img) {
 }
 
 QImage* ImageCache::get(uint64_t id) {
+    std::lock_guard<std::mutex> lock(mutex);
     auto it = idToIndexMap.find(id);
     if (it == idToIndexMap.end()) return nullptr; // not found
 
-    std::lock_guard<std::mutex> lock(mutex);
     size_t index = it->second;
     if (index == tailIndex) {
         headIndex = tailIndex;
