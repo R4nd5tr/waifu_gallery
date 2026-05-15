@@ -23,15 +23,15 @@
 QString getFileTypeStr(ImageFormat fileType) {
     switch (fileType) {
     case ImageFormat::JPG:
-        return QString("JPG");
+        return {"JPG"};
     case ImageFormat::PNG:
-        return QString("PNG");
+        return {"PNG"};
     case ImageFormat::GIF:
-        return QString("GIF");
+        return {"GIF"};
     case ImageFormat::WebP:
-        return QString("WebP");
+        return {"WebP"};
     default:
-        return QString("Unknown");
+        return {"Unknown"};
     }
 }
 static size_t wrapIndex(int index, size_t count) {
@@ -41,14 +41,14 @@ static size_t wrapIndex(int index, size_t count) {
     return static_cast<size_t>(m);
 }
 
-const int MAX_TITLE_LENGTH = 20;
+constexpr int MAX_TITLE_LENGTH = 20;
 
 const std::string PIXIV_BASE_URL = "https://www.pixiv.net/artworks/";
 const std::string PIXIV_AUTHOR_URL = "https://www.pixiv.net/users/";
 const std::string TWITTER_BASE_URL = "https://twitter.com/i/web/status/";
 const std::string TWITTER_AUTHOR_URL = "https://twitter.com/";
 
-const size_t PRELOAD_PREVIEW_COUNT = 2;
+constexpr size_t PRELOAD_PREVIEW_COUNT = 2;
 
 // initialize
 
@@ -88,7 +88,7 @@ void PictureFrame::reset() {
     displayItem = nullptr;
 }
 
-void PictureFrame::showInfo(SearchField searchField) {
+void PictureFrame::showInfo(SearchField searchField) const {
     showPicInfo();
 
     ui->titleLabel->setResponsive(false);
@@ -147,7 +147,7 @@ void PictureFrame::showInfo(SearchField searchField) {
         break;
     }
 }
-void PictureFrame::showPicInfo() {
+void PictureFrame::showPicInfo() const {
     if (displayItem->type == DisplayItemType::Metadata && displayItem->pics.size() > 1 && !displayingPreview) {
         ui->resolutionLabel->setText("");
         ui->fileTypeAndSizeLabel->setText(QString("%1 pics").arg(displayItem->pics.size()));
@@ -157,7 +157,7 @@ void PictureFrame::showPicInfo() {
         showPicInfo(previewingIndex);
     }
 }
-void PictureFrame::showPicInfo(size_t index) {
+void PictureFrame::showPicInfo(size_t index) const {
     ui->resolutionLabel->setText(QString("%1x%2").arg(displayItem->pics[index].width).arg(displayItem->pics[index].height));
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
                                           .arg(getFileTypeStr(displayItem->pics[index].fileType))
@@ -165,7 +165,7 @@ void PictureFrame::showPicInfo(size_t index) {
     ui->resolutionLabel->setResponsive(true);
     ui->fileTypeAndSizeLabel->setResponsive(true);
 }
-void PictureFrame::showThumbnail() {
+void PictureFrame::showThumbnail() const {
     if (!displayItem || displayItem->pics.empty()) return;
 
     if (auto img = imageLoader.getImage(displayItem->pics[0], LoadType::Thumbnail)) {
@@ -174,10 +174,10 @@ void PictureFrame::showThumbnail() {
     }
 }
 
-// asyncronus loaded image display
+// asynchronous loaded image display
 
 void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
-    if (auto img = imageLoader.getImage(picId, loadType)) {
+    if (const auto img = imageLoader.getImage(picId, loadType)) {
         if (loadType == LoadType::Thumbnail) {
             QPixmap pixmap = QPixmap::fromImage(*img);
             ui->imageLabel->setPixmap(pixmap);
@@ -198,7 +198,7 @@ bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
             return QFrame::eventFilter(watched, event);
         }
 
-        auto* wheelEvent = static_cast<QWheelEvent*>(event);
+        auto* wheelEvent = dynamic_cast<QWheelEvent*>(event);
 
         if (wheelEvent->angleDelta().y() > 0) {
             previewingIndex = wrapIndex(static_cast<int>(previewingIndex) - 1, displayItem->pics.size());
@@ -214,7 +214,7 @@ bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
 
     return QFrame::eventFilter(watched, event);
 }
-void PictureFrame::loadPreviewImage() {
+void PictureFrame::loadPreviewImage() const {
     if (!displayItem || displayItem->pics.empty()) return;
 
     const size_t count = displayItem->pics.size();
@@ -267,7 +267,7 @@ void PictureFrame::hidePreview() {
 
 // shortcuts
 
-void PictureFrame::openFileWithDefaultApp() {
+void PictureFrame::openFileWithDefaultApp() const {
     for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
         try {
             QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
@@ -277,7 +277,7 @@ void PictureFrame::openFileWithDefaultApp() {
         }
     }
 }
-void PictureFrame::openFileLocation() {
+void PictureFrame::openFileLocation() const {
     for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
         try {
             std::wstring command = L"explorer /select,\"";
@@ -296,7 +296,7 @@ void PictureFrame::openFileLocation() {
         break;
     }
 }
-void PictureFrame::openIllustratorUrl() {
+void PictureFrame::openIllustratorUrl() const {
     if (displayItem->metadata.empty()) return;
     if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(
@@ -306,7 +306,7 @@ void PictureFrame::openIllustratorUrl() {
             QUrl(QString::fromStdString(TWITTER_AUTHOR_URL + std::to_string(displayItem->metadata[0].authorID))));
     }
 }
-void PictureFrame::openIdUrl() {
+void PictureFrame::openIdUrl() const {
     if (displayItem->metadata.empty()) return;
     if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(displayItem->metadata[0].id))));

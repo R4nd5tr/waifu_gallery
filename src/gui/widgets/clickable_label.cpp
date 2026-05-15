@@ -18,7 +18,6 @@
 
 #include "clickable_label.h"
 #include <QCursor>
-#include <filesystem>
 
 ClickableLabel::ClickableLabel(QWidget* parent) : QLabel(parent) {
     setCursor(Qt::PointingHandCursor); // 设置鼠标悬停时的手型光标

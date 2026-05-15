@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
-#include <iostream>
 #include <mutex>
 #include <sqlite3.h>
 #include <unordered_map>
@@ -144,7 +143,7 @@ public:
         }
         std::lock_guard<std::mutex> lock(writeMutex);
         platformTags.emplace_back(tag);
-        uint32_t newId = static_cast<uint32_t>(platformTags.size());
+        auto newId = static_cast<uint32_t>(platformTags.size());
         platformTagToId[tag] = newId;
         return newId;
     }
@@ -198,9 +197,9 @@ public:
             Error() << "Failed to disable foreign key restriction:" << sqlite3_errmsg(db);
         }
     }
-    bool beginTransaction() { return execute("BEGIN TRANSACTION;"); }
-    bool commitTransaction() { return execute("COMMIT;"); }
-    bool rollbackTransaction() { return execute("ROLLBACK;"); }
+    bool beginTransaction() const { return execute("BEGIN TRANSACTION;"); }
+    bool commitTransaction() const { return execute("COMMIT;"); }
+    bool rollbackTransaction() const { return execute("ROLLBACK;"); }
     void setMode(DbMode mode) {
         if (currentMode == mode) return;
         execute("PRAGMA journal_mode = WAL");
@@ -224,6 +223,9 @@ public:
             execute("PRAGMA foreign_keys = ON");
             execute("PRAGMA query_only = ON");
             break;
+
+        default:
+            break;
         }
         currentMode = mode;
     }
@@ -234,7 +236,7 @@ public:
     std::vector<PicInfo> getMetadataPicInfos(const PlatformID& platformID) const;
 
     Metadata getMetadata(PlatformType platform, int64_t PlatformID) const;
-    Metadata getMetadata(ImageSource identifier) const { return getMetadata(identifier.platform, identifier.platformID); }
+    Metadata getMetadata(const ImageSource& identifier) const { return getMetadata(identifier.platform, identifier.platformID); }
     Metadata getMetadata(const PlatformID& platformID) const { return getMetadata(platformID.platform, platformID.platformID); }
 
     std::vector<TagCount> getTagCounts() const; // for gui tag selection panel display
@@ -243,9 +245,9 @@ public:
     PlatformTagStr getPlatformStringTag(uint32_t tagId) const { return cache.getPlatformStringTag(tagId); }
 
     // insert functions
-    bool insertPicture(const ParsedPicture& picInfo);
+    bool insertPicture(const ParsedPicture& picInfo) const;
     bool insertMetadata(const ParsedMetadata& metadataInfo);
-    bool updateMetadata(const ParsedMetadata& metadataInfo);
+    bool updateMetadata(const ParsedMetadata& metadataInfo) const;
 
     // search functions
     std::unordered_set<uint64_t> tagSearch(const std::unordered_set<uint32_t>& includedTagIds,
@@ -258,23 +260,23 @@ public:
     // import functions
     void importFilesFromDirectory(
         const std::filesystem::path& directory,   // single-threaded import function, only for debug use
-        ParserType parserType = ParserType::None, // use as a base line comparison to multi-threaded Importer class
+        ParserType parserType = ParserType::None, // use as a baseline comparison to multithreaded Importer class
         ProgressCallback progressCallback = nullptr);
     void processAndImportSingleFile(const std::filesystem::path& path, ParserType parserType = ParserType::None);
-    void syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds = {}); // post-import operations
+    void syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds = {}) const; // post-import operations
     bool isFileImported(const std::filesystem::path& filePath) const { return cache.isFileImported(filePath); }
-    void addImportedFile(const std::filesystem::path& filePath);
-    void updatePlatformTagCounts(); // update platform tag counts after bulk import
-    void updateTagCounts();         // update tag counts after bulk import
+    void addImportedFile(const std::filesystem::path& filePath) const;
+    void updatePlatformTagCounts() const; // update platform tag counts after bulk import
+    void updateTagCounts() const;         // update tag counts after bulk import
 
     // tagger functions
     std::string getModelName() const;
-    void importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags); // (tag, isCharacter)
-    std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> getUntaggedPics();                 // (picID, filePath)
+    void importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags) const; // (tag, isCharacter)
+    std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> getUntaggedPics() const;                 // (picID, filePath)
     void updatePicTags(uint64_t picID,
                        const std::vector<PicTag>& picTags,
                        RestrictType restrictType,
-                       std::vector<uint8_t> featureHash);
+                       const std::vector<uint8_t>& featureHash) const;
 
 private:
     sqlite3* db = nullptr;
@@ -284,9 +286,9 @@ private:
     std::unordered_set<PlatformID> newMetadataIds; // for syncMetadataAndPicTables use
 
     void initDatabase(const std::string& databaseFile);
-    bool createTables();
-    void initTagMapping();
-    void initImportedFiles();
+    bool createTables() const;
+    void initTagMapping() const;
+    void initImportedFiles() const;
 
     bool execute(const std::string& sql) const {
         char* errorMsg = nullptr;

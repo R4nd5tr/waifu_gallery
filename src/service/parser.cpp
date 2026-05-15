@@ -19,9 +19,7 @@
 #include "parser.h"
 #include "utils/logger.h"
 #include <algorithm>
-#include <cctype>
 #include <fstream>
-#include <iostream>
 #include <nlohmann/json.hpp>
 #include <rapidcsv.h>
 #include <regex>
@@ -92,15 +90,15 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
         if (fileName.find("_p") == std::string::npos) {
             std::string stem = pictureFilePath.stem().string();
             if (std::all_of(stem.begin(), stem.end(), ::isdigit)) {
-                uint32_t pixivId = static_cast<uint32_t>(std::stoul(stem));
+                auto pixivId = static_cast<uint32_t>(std::stoul(stem));
                 parsedPic.identifier = ImageSource{PlatformType::Pixiv, pixivId, 0};
             }
         } else {
             std::regex pattern(R"(.*?(\d+)_p(\d+).*)");
             std::smatch match;
             if (std::regex_match(fileName, match, pattern) && match.size() == 3) {
-                uint32_t pixivId = static_cast<uint32_t>(std::stoul(match[1].str()));
-                uint32_t index = static_cast<uint32_t>(std::stoul(match[2].str()));
+                auto pixivId = static_cast<uint32_t>(std::stoul(match[1].str()));
+                auto index = static_cast<uint32_t>(std::stoul(match[2].str()));
                 parsedPic.identifier = ImageSource{PlatformType::Pixiv, pixivId, index};
             }
         }
@@ -119,7 +117,7 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
             std::string tweetIdStr = fileName.substr(0, firstUnderscore);
             std::string indexStr = fileName.substr(firstUnderscore + 1, dot - firstUnderscore - 1);
             int64_t tweetId = std::stoll(tweetIdStr);
-            uint32_t index = static_cast<uint32_t>(std::stoul(indexStr));
+            auto index = static_cast<uint32_t>(std::stoul(indexStr));
             parsedPic.identifier = ImageSource{PlatformType::Twitter, tweetId, index};
         }
         break;
@@ -163,14 +161,14 @@ ParsedMetadata parsePixivMetadata(const std::filesystem::path& pixivMetadataFile
             }
             if (line == "Tags") {              // This logic handles two formats of metadata files:
                 std::getline(file, line);      // 1. The description section is at the end of the file.
-                while (line != "") {           // 2. The description section is followed by the tags section.
+                while (!line.empty()) {           // 2. The description section is followed by the tags section.
                     info.tags.push_back(line); // This approach ensures all line breaks in the description are
                     std::getline(file, line);  // preserved and both formats are supported.
                 }
             }
         } else if (line == "Tags") {
             std::getline(file, line);
-            while (line != "") {
+            while (!line.empty()) {
                 info.tags.push_back(line);
                 std::getline(file, line);
             }
@@ -279,7 +277,7 @@ std::vector<ParsedMetadata> powerfulPixivDownloaderMetadataParser(const std::fil
 ParsedMetadata gallerydlTwitterMetadataParser(const std::filesystem::path& metadataFilePath) {
     if (metadataFilePath.extension() != ".json") return ParsedMetadata{}; // invalid file type
 
-    ParsedMetadata info;
+    ParsedMetadata info = {};
     std::vector<uint8_t> data = readFileToBuffer(metadataFilePath);
     auto json = nlohmann::json::parse(data.begin(), data.end());
     if (!json.is_object()) {
@@ -395,8 +393,8 @@ std::tuple<int, int, ImageFormat> getImageResolution(const std::vector<uint8_t>&
 
 struct ImageHeaderInfo {
     ImageFormat format = ImageFormat::Unknown;
-    int width = 0;
-    int height = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
     bool isValid = false;
     std::string formatName;
 };
@@ -558,7 +556,7 @@ std::tuple<int, int, ImageFormat> getImageResolutionOptimized(const std::vector<
     Warn() << "Failed to parse image header, falling back to full decoding.";
     return getImageResolution(buffer, fileType);
 }
-// get {file creation time, last modified time} in ISO 8601 format from windows API
+// get {file creation time, last modified time} in ISO 8601 format from Windows API
 std::pair<std::string, std::string> getFileTimestamps(const std::filesystem::path& filePath) {
     WIN32_FILE_ATTRIBUTE_DATA fileInfo;
     if (!GetFileAttributesExW(filePath.wstring().c_str(), GetFileExInfoStandard, &fileInfo)) {

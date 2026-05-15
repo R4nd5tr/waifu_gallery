@@ -46,7 +46,7 @@ public:
                           SearchField searchField = SearchField::None);
     ~PictureFrame();
 
-    void displayImage(uint64_t picId, LoadType loadType); // asyncronus loaded image will be displayed through this function
+    void displayImage(uint64_t picId, LoadType loadType); // asynchronous loaded image will be displayed through this function
 
     void reset();
     void updateDisplayItem(const DisplayItem* newDisplayItem, SearchField searchField) {
@@ -69,23 +69,23 @@ private:
     ImageLoader& imageLoader;
     void connectSignals();
 
-    void showInfo(SearchField searchField);
-    void showPicInfo();             // defalt
-    void showPicInfo(size_t index); // show specific pic info
+    void showInfo(SearchField searchField) const;
+    void showPicInfo() const;             // default
+    void showPicInfo(size_t index) const; // show specific pic info
 
-    void showThumbnail();
+    void showThumbnail() const;
 
     // shortcuts
-    void openFileWithDefaultApp();
-    void openFileLocation();
-    void openIllustratorUrl();
-    void openIdUrl();
+    void openFileWithDefaultApp() const;
+    void openFileLocation() const;
+    void openIllustratorUrl() const;
+    void openIdUrl() const;
 
     // previewer
     size_t previewingIndex = 0;
     bool displayingPreview = false;
     ImagePreviewer previewer;
-    void loadPreviewImage();
+    void loadPreviewImage() const;
     void displayPreviewImage(size_t index);
     void displayPreviewImage();
     void showPreview();

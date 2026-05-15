@@ -26,7 +26,7 @@
 #include <queue>
 #include <thread>
 
-const int MAX_PREPROCESS_QUEUE_SIZE = 32;
+constexpr int MAX_PREPROCESS_QUEUE_SIZE = 32;
 
 class Tagger {
 public:
@@ -38,7 +38,7 @@ public:
     bool loadTaggerDLL(const std::filesystem::path& dllPath);
     bool taggerLoaded() const { return tagger != nullptr; }
     bool gpuAvailable() const { return tagger ? tagger->gpuAvailable() : false; }
-    void loadTagSetToDatabase();
+    void loadTagSetToDatabase() const;
     std::string getModelName() const { return tagger ? tagger->getModelName() : ""; }
 
     void startTagging();

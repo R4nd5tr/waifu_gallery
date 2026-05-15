@@ -17,8 +17,6 @@
  */
 
 #pragma once
-#include <QEnterEvent>
-#include <QEvent>
 #include <QLabel>
 #include <QMouseEvent>
 

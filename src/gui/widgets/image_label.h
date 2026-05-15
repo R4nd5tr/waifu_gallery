@@ -18,7 +18,6 @@
 
 #pragma once
 #include <QLabel>
-#include <QPixmap>
 #include <QTimer>
 #include <QWidget>
 

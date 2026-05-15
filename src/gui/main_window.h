@@ -44,10 +44,10 @@ enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Hei
 
 enum class SortOrder { Ascending, Descending };
 
-const size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
-const int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
-const int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
-const int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
+constexpr size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
+constexpr int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
+constexpr int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
+constexpr int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
 
 class ImportProgressReportEvent : public QEvent {
 public:
@@ -193,7 +193,7 @@ private:
     QTimer tagClickTimer;  // use for double click detection
     QTimer tagSearchTimer; // use for debouncing removing selected tags
     bool tagDoubleClicked = false;
-    bool isSelectedTagsEmpty() {
+    bool isSelectedTagsEmpty() const {
         return includedTags.empty() && excludedTags.empty() && includedPlatformTags.empty() && excludedPlatformTags.empty();
     };
     // tag search handler

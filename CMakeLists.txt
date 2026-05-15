@@ -35,6 +35,9 @@ else()
     add_executable(waifu_gallery WIN32 ${SRC_FILES} ${UI_FILES} ${RES_FILES} ${RC_FILES})
 endif()
 target_include_directories(waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
+if(COMMAND qt_import_plugins)
+qt_import_plugins(waifu_gallery EXCLUDE Qt::QPdfPlugin)
+endif()
 target_link_libraries(waifu_gallery PRIVATE ${PROJECT_LIBS})
 
 # test
@@ -47,5 +50,8 @@ if(BUILD_TEST_TARGET STREQUAL "ON")
         ${TEST_FILES}
     )
     target_include_directories(TEST_waifu_gallery PRIVATE ${PROJECT_INCLUDE_DIRS})
+    if(COMMAND qt_import_plugins)
+    qt_import_plugins(TEST_waifu_gallery EXCLUDE Qt::QPdfPlugin)
+    endif()
     target_link_libraries(TEST_waifu_gallery PRIVATE ${PROJECT_LIBS})
 endif()

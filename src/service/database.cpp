@@ -20,9 +20,7 @@
 #include "model.h"
 #include "parser.h"
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
-#include <iostream>
 
 // utility functions
 
@@ -76,7 +74,7 @@ void PicDatabase::initDatabase(const std::string& databaseFile) {
     }
     Info() << "Database initialized";
 }
-bool PicDatabase::createTables() {
+bool PicDatabase::createTables() const {
     const std::string metadataTable = R"(
         CREATE TABLE IF NOT EXISTS metadata (
             key TEXT PRIMARY KEY,
@@ -267,7 +265,7 @@ bool PicDatabase::createTables() {
     commitTransaction();
     return true;
 }
-void PicDatabase::initTagMapping() {
+void PicDatabase::initTagMapping() const {
     if (cache.tagMappingLoaded()) return;
 
     SQLiteStatement stmt;
@@ -296,7 +294,7 @@ void PicDatabase::initTagMapping() {
     }
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         const char* tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0));
-        PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
+        auto platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
         platformTags.emplace_back(PlatformTagStr{platform, tag});
         if (currentMode == DbMode::Import)
             platformTagToId[PlatformTagStr{platform, tag}] = static_cast<uint32_t>(platformTags.size() - 1); // same as above
@@ -306,7 +304,7 @@ void PicDatabase::initTagMapping() {
 
     Info() << "Tag mappings loaded. Tags:" << tags.size() << "Platform Tags:" << platformTags.size();
 }
-void PicDatabase::initImportedFiles() {
+void PicDatabase::initImportedFiles() const {
     if (cache.importedFileLoaded()) return;
     SQLiteStatement stmt;
     std::unordered_map<std::string, std::unordered_set<std::string>> importedFiles;
@@ -334,7 +332,7 @@ void PicDatabase::initImportedFiles() {
 
 // insert functions
 
-bool PicDatabase::insertPicture(const ParsedPicture& picInfo) {
+bool PicDatabase::insertPicture(const ParsedPicture& picInfo) const {
     SQLiteStatement stmt;
     // insert into pictures table
     stmt = prepare(R"(
@@ -471,7 +469,7 @@ bool PicDatabase::insertMetadata(const ParsedMetadata& metadataInfo) {
     newMetadataIds.insert(PlatformID{metadataInfo.platformType, metadataInfo.id});
     return true;
 }
-bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) {
+bool PicDatabase::updateMetadata(const ParsedMetadata& metadataInfo) const {
     if (metadataInfo.id == 0) return false; // invalid metadata ID
     SQLiteStatement stmt;
     // update picture_metadata table
@@ -613,14 +611,14 @@ PicInfo PicDatabase::getPicInfo(uint64_t id) const {
     stmt = prepare("SELECT file_path FROM picture_file_paths WHERE id = ?");
     sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(id));
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        info.filePaths.emplace_back(std::filesystem::path(reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0))));
+        info.filePaths.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 0)));
     }
 
     // query tags
     stmt = prepare("SELECT tag_id, probability FROM picture_tags WHERE id = ?");
     sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(id));
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        PicTag picTag;
+        PicTag picTag{};
         picTag.tagId = sqlite3_column_int(stmt.get(), 0);
         picTag.probability = static_cast<float>(sqlite3_column_double(stmt.get(), 1));
         info.tags.push_back(picTag);
@@ -712,7 +710,7 @@ Metadata PicDatabase::getMetadata(PlatformType platform, int64_t platformID) con
     sqlite3_bind_int(stmt.get(), 1, static_cast<int>(platform));
     sqlite3_bind_int64(stmt.get(), 2, platformID);
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        uint32_t tagId = static_cast<uint32_t>(sqlite3_column_int(stmt.get(), 0));
+        auto tagId = static_cast<uint32_t>(sqlite3_column_int(stmt.get(), 0));
         info.tagIds.push_back(tagId);
     }
 
@@ -760,7 +758,7 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
     }
     disableForeignKeyRestriction();
 
-    const size_t BATCH_SIZE = 1000;
+    constexpr size_t BATCH_SIZE = 1000;
     size_t processed = 0;
     for (size_t i = 0; i < files.size(); i += BATCH_SIZE) {
         beginTransaction();
@@ -792,7 +790,7 @@ void PicDatabase::importFilesFromDirectory(const std::filesystem::path& director
     enableForeignKeyRestriction();
     // Info() << "Import completed. Total files processed:" << processed;
 }
-void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds) { // post-import operations
+void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMetadataIds) const { // post-import operations
     SQLiteStatement stmt;
     // sync restrict_type and ai_type in pictures table
     if (newMetadataIds.empty()) {
@@ -839,7 +837,7 @@ void PicDatabase::syncMetadataAndPicTables(std::unordered_set<PlatformID> newMet
     }
     enableForeignKeyRestriction();
 }
-void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
+void PicDatabase::addImportedFile(const std::filesystem::path& filePath) const {
     if (isFileImported(filePath)) return;
 
     cache.addImportedFile(filePath);
@@ -886,7 +884,7 @@ void PicDatabase::addImportedFile(const std::filesystem::path& filePath) {
         Error() << "Failed to insert imported file: " << sqlite3_errmsg(db);
     }
 }
-void PicDatabase::updatePlatformTagCounts() {
+void PicDatabase::updatePlatformTagCounts() const {
     SQLiteStatement stmt;
     if (!execute(R"(
         UPDATE platform_tags SET count = (
@@ -896,7 +894,7 @@ void PicDatabase::updatePlatformTagCounts() {
         Warn() << "Failed to count platform tags:" << sqlite3_errmsg(db);
     }
 }
-void PicDatabase::updateTagCounts() {
+void PicDatabase::updateTagCounts() const {
     SQLiteStatement stmt;
     if (!execute(R"(
         UPDATE tags SET count = (
@@ -935,7 +933,7 @@ std::unordered_set<uint64_t> PicDatabase::tagSearch(const std::unordered_set<uin
                       ")) GROUP BY id HAVING COUNT(DISTINCT tag_id) = " + std::to_string(includedTagIds.size());
 
     SQLiteStatement stmt;
-    stmt = prepare(sql.c_str());
+    stmt = prepare(sql);
     if (!stmt.get()) {
         Error() << "Failed to prepare tag search statement:" << sqlite3_errmsg(db);
         return results;
@@ -982,7 +980,7 @@ std::unordered_set<PlatformID> PicDatabase::platformTagSearch(const std::unorder
         return results;
     }
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        PlatformID platformID;
+        PlatformID platformID{};
         platformID.platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
         platformID.platformID = sqlite3_column_int64(stmt.get(), 1);
         results.insert(platformID);
@@ -1051,7 +1049,7 @@ PicDatabase::textSearch(const std::string& searchText, PlatformType platformType
         return results;
     }
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
-        PlatformID platformID;
+        PlatformID platformID{};
         platformID.platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 0));
         platformID.platformID = sqlite3_column_int64(stmt.get(), 1);
         results.insert(platformID);
@@ -1078,7 +1076,7 @@ std::vector<PlatformTagCount> PicDatabase::getPlatformTagCounts() const {
     SQLiteStatement stmt = prepare("SELECT tag_id, platform, tag, count FROM platform_tags ORDER BY count DESC");
     while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
         uint32_t tagId = sqlite3_column_int(stmt.get(), 0);
-        PlatformType platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
+        auto platform = static_cast<PlatformType>(sqlite3_column_int(stmt.get(), 1));
         std::string tag = reinterpret_cast<const char*>(sqlite3_column_text(stmt.get(), 2));
         uint32_t count = sqlite3_column_int(stmt.get(), 3);
         tagCounts.emplace_back(PlatformTagCount{PlatformTagStr{platform, tag}, tagId, count});
@@ -1097,7 +1095,7 @@ std::string PicDatabase::getModelName() const {
     }
     return "";
 }
-void PicDatabase::importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags) {
+void PicDatabase::importTagSet(const std::string& modelName, const std::vector<std::pair<std::string, bool>>& tags) const {
     SQLiteStatement stmt;
     beginTransaction();
     // update model name
@@ -1144,7 +1142,7 @@ void PicDatabase::importTagSet(const std::string& modelName, const std::vector<s
     cache.clearTagMapping();
     initTagMapping();
 }
-std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase::getUntaggedPics() {
+std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase::getUntaggedPics() const {
     std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> untaggedPics;
     SQLiteStatement stmt = prepare(R"(
         SELECT p.id, pfp.file_path
@@ -1167,7 +1165,7 @@ std::vector<std::pair<uint64_t, std::vector<std::filesystem::path>>> PicDatabase
 void PicDatabase::updatePicTags(uint64_t picID,
                                 const std::vector<PicTag>& picTags,
                                 RestrictType restrictType,
-                                std::vector<uint8_t> featureHash) {
+                                const std::vector<uint8_t>& featureHash) const {
     SQLiteStatement stmt;
     // delete existing tags
     stmt = prepare(R"(

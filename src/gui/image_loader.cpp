@@ -22,8 +22,8 @@
 #include <QCoreApplication>
 #include <QImageReader>
 
-const size_t THUMBNAIL_RESOLUTION_LIMIT = 256;
-const size_t PREVIEW_RESOLUTION_LIMIT = 512;
+constexpr size_t THUMBNAIL_RESOLUTION_LIMIT = 256;
+constexpr size_t PREVIEW_RESOLUTION_LIMIT = 512;
 
 const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 

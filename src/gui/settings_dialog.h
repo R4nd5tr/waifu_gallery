@@ -30,7 +30,7 @@ class SettingsDialog : public QDialog {
 public:
     explicit SettingsDialog(QWidget* parent = nullptr);
     ~SettingsDialog();
-    void setupTableWidget();
+    void setupTableWidget() const;
 
     void loadSettings();
     void saveSettings();

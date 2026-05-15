@@ -24,8 +24,6 @@
 #include <functional>
 #include <set>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 enum class PlatformType { Unknown, Pixiv, Twitter };
@@ -63,13 +61,13 @@ struct PlatformTagStr {
 };
 struct TagCount { // for gui tag selection panel display
     TagStr tag;
-    uint32_t tagId;
-    uint32_t count;
+    uint32_t tagId = 0;
+    uint32_t count = 0;
 };
 struct PlatformTagCount { // for gui tag selection panel display
     PlatformTagStr tag;
-    uint32_t tagId;
-    uint32_t count;
+    uint32_t tagId = 0;
+    uint32_t count = 0;
 };
 namespace std {
 template <> struct hash<PlatformTagStr> {

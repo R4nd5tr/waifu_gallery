@@ -30,7 +30,7 @@ struct ParsedMetadata {
     int64_t id = 0;
     std::string date;
 
-    int64_t authorID;
+    int64_t authorID = 0;
     std::string authorName;
     std::string authorNick;
     std::string authorDescription;

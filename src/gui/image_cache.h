@@ -25,8 +25,8 @@
 
 struct ImageCacheNode {
     std::unique_ptr<QImage> img;
-    size_t prev;
-    size_t next;
+    size_t prev = 0;
+    size_t next = 0;
 };
 
 class ImageCache {

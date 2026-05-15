@@ -48,7 +48,7 @@ SettingsDialog::SettingsDialog(QWidget* parent) : QDialog(parent), ui(new Ui::Se
 SettingsDialog::~SettingsDialog() {
     delete ui;
 }
-void SettingsDialog::setupTableWidget() {
+void SettingsDialog::setupTableWidget() const {
     QStringList headers;
     headers << "图片目录"
             << "解析器类型";
@@ -89,7 +89,7 @@ void SettingsDialog::saveSettings() {
     for (int i = 0; i < ui->picDirsTable->rowCount(); ++i) {
         picDirectories.emplace_back(
             ui->picDirsTable->item(i, 0)->text().toStdString(),
-            static_cast<ParserType>(static_cast<QComboBox*>(ui->picDirsTable->cellWidget(i, 1))->currentIndex()));
+            static_cast<ParserType>(dynamic_cast<QComboBox*>(ui->picDirsTable->cellWidget(i, 1))->currentIndex()));
     }
     Settings::picDirectories = picDirectories;
 
@@ -116,8 +116,8 @@ void SettingsDialog::deletePicDirectory() {
     int currentRow = ui->picDirsTable->currentRow();
     if (currentRow < 0) return;
 
-    QMessageBox::StandardButton reply;
-    reply = QMessageBox::question(this, "确认删除", "确定要删除选中的目录吗？", QMessageBox::Yes | QMessageBox::No);
+    QMessageBox::StandardButton reply =
+        QMessageBox::question(this, "确认删除", "确定要删除选中的目录吗？", QMessageBox::Yes | QMessageBox::No);
     if (reply == QMessageBox::No) return;
 
     picDirectories.erase(picDirectories.begin() + currentRow);

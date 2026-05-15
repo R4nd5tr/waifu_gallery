@@ -18,7 +18,6 @@
 
 #pragma once
 #include "database.h"
-#include "model.h"
 #include "parser.h"
 #include <atomic>
 #include <condition_variable>
@@ -29,8 +28,8 @@
 class Importer {
 public:
     Importer(ProgressCallback progressCallback = nullptr,
-             std::string dbFile = DEFAULT_DATABASE_FILE,
-             size_t threadCount = std::thread::hardware_concurrency())
+             const std::string& dbFile = DEFAULT_DATABASE_FILE,
+             const size_t threadCount = std::thread::hardware_concurrency())
         : progressCallback(progressCallback), dbFile(dbFile), threadCount(threadCount) {};
     ~Importer() {
         forceStop();

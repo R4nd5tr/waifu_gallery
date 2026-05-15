@@ -47,7 +47,7 @@ bool Tagger::loadTaggerDLL(const std::filesystem::path& dllPath) {
     tagger->setLogCallback(logCallback);
     return true;
 }
-void Tagger::loadTagSetToDatabase() {
+void Tagger::loadTagSetToDatabase() const {
     if (!tagger) {
         Error() << "No tagger loaded.";
         return;
@@ -73,6 +73,8 @@ void Tagger::startTagging() {
         Warn() << "Tagger is already running.";
         return;
     }
+
+    finished = false;
 
     // start analyze thread
     analyzeThread = std::thread(&Tagger::analyzeThreadFunc, this);
@@ -155,7 +157,7 @@ void Tagger::preprocessWorkerFunc() {
         }
         if (!preprocessed) {
             Warn() << "Failed to preprocess any file for picID:" << picID;
-            totalSupported--;
+            totalSupported.fetch_sub(1);
         }
     }
 }
@@ -193,7 +195,7 @@ void Tagger::analyzeThreadFunc() {
         for (size_t i = 0; i < tagResult.tagIndexes.size(); ++i) {
             picTags.emplace_back(PicTag{static_cast<uint32_t>(tagResult.tagIndexes[i]), tagResult.tagProbabilities[i]});
         }
-        RestrictType restrictType = static_cast<RestrictType>(static_cast<int>(tagResult.restrictType));
+        auto restrictType = static_cast<RestrictType>(static_cast<int>(tagResult.restrictType));
         threadDb.updatePicTags(picID, picTags, restrictType, predictResult.featureHash);
 
         analyzed++;
