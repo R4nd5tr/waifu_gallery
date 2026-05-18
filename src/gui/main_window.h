@@ -18,14 +18,14 @@
 
 #pragma once
 #include "about_dialog.h"
-#include "image_loader.h"
+#include "controllers/image_loader.h"
+#include "controllers/worker.h"
 #include "service/database.h"
 #include "service/importer.h"
 #include "service/model.h"
 #include "service/tagger.h"
 #include "settings_dialog.h"
 #include "widgets/picture_frame.h"
-#include "worker.h"
 #include <QCoreApplication>
 #include <QListWidgetItem>
 #include <QMainWindow>
@@ -226,11 +226,11 @@ private:
     size_t searchRequestId = 0; // to identify latest search request
     void picSearch();
     void handleSearchResults(const std::vector<DisplayItem>& displayItems,
-                             const std::vector<TagCount> availableTags,
-                             const std::vector<PlatformTagCount> availablePlatformTags,
+                             std::vector<TagCount> availableTags,
+                             std::vector<PlatformTagCount> availablePlatformTags,
                              size_t requestId);
     void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
-    bool isSearchCriteriaEmpty() { return searchText.empty() && isSelectedTagsEmpty(); };
+    bool isSearchCriteriaEmpty() const { return searchText.empty() && isSelectedTagsEmpty(); };
 
     // displaying   TODO: refactor display logic, make it accept picinfo and metadata directly
     uint picsPerRow;

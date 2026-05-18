@@ -17,7 +17,7 @@
  */
 
 #include "picture_frame.h"
-#include "gui/image_loader.h"
+#include "../controllers/image_loader.h"
 #include "ui_picture_frame.h"
 
 QString getFileTypeStr(ImageFormat fileType) {

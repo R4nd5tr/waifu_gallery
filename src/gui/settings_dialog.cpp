@@ -17,8 +17,8 @@
  */
 
 #include "settings_dialog.h"
+#include "controllers/utils.h"
 #include "ui_settings_dialog.h"
-#include "utils.h"
 #include <QComboBox>
 #include <QMessageBox>
 

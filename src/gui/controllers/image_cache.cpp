@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "image_cache.h"
+#include "../image_cache.h"
 
 void ImageCache::put(uint64_t id, std::unique_ptr<QImage> img) {
     if (capacity == 0 || img == nullptr) return;

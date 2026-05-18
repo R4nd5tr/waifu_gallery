@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "worker.h"
+#include "../worker.h"
 #include "service/database.h"
 #include <QImageReader>
 
