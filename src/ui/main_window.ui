@@ -160,8 +160,8 @@
       <widget class="QWidget" name="imageFilter">
        <property name="geometry">
         <rect>
-         <x>-4</x>
-         <y>-62</y>
+         <x>0</x>
+         <y>0</y>
          <width>280</width>
          <height>690</height>
         </rect>
@@ -298,7 +298,7 @@
              <item>
               <widget class="QCheckBox" name="allAgeCheckBox">
                <property name="text">
-                <string>全年龄</string>
+                <string>一般</string>
                </property>
                <property name="checked">
                 <bool>true</bool>
@@ -1155,7 +1155,6 @@
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
-         <layout class="QGridLayout" name="picDisplayLayout"/>
         </widget>
        </widget>
       </item>

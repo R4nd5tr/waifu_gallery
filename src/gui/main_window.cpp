@@ -263,91 +263,91 @@ void MainWindow::initTagger() {
 // Functions for filters and sorting
 
 void MainWindow::updateShowJPG(bool checked) {
-    showJPG = checked;
+    filterCtx.showJPG = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowPNG(bool checked) {
-    showPNG = checked;
+    filterCtx.showPNG = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowGIF(bool checked) {
-    showGIF = checked;
+    filterCtx.showGIF = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowWEBP(bool checked) {
-    showWEBP = checked;
+    filterCtx.showWEBP = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowUnknowRestrict(bool checked) {
-    showUnknowRestrict = checked;
+    filterCtx.showUnknowRestrict = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowAllAge(bool checked) {
-    showAllAge = checked;
+    filterCtx.showAllAge = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowSensitive(bool checked) {
-    showSensitive = checked;
+    filterCtx.showSensitive = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowQuestionable(bool checked) {
-    showQuestionable = checked;
+    filterCtx.showQuestionable = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowR18(bool checked) {
-    showR18 = checked;
+    filterCtx.showR18 = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowR18g(bool checked) {
-    showR18g = checked;
+    filterCtx.showR18G = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowUnknowAI(bool checked) {
-    showUnknowAI = checked;
+    filterCtx.showUnknowAI = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowAI(bool checked) {
-    showAI = checked;
+    filterCtx.showAI = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateShowNonAI(bool checked) {
-    showNonAI = checked;
+    filterCtx.showNonAI = checked;
     refreshPicDisplay();
 }
 void MainWindow::updateMaxWidth(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
     if (ok) {
-        maxWidth = value;
+        filterCtx.maxWidth = value;
     } else {
-        maxWidth = std::numeric_limits<uint>::max();
+        filterCtx.maxWidth = std::numeric_limits<uint>::max();
     }
 }
 void MainWindow::updateMinWidth(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
     if (ok) {
-        minWidth = value;
+        filterCtx.minWidth = value;
     } else {
-        minWidth = 0;
+        filterCtx.minWidth = 0;
     }
 }
 void MainWindow::updateMaxHeight(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
     if (ok) {
-        maxHeight = value;
+        filterCtx.maxHeight = value;
     } else {
-        maxHeight = std::numeric_limits<uint>::max();
+        filterCtx.maxHeight = std::numeric_limits<uint>::max();
     }
 }
 void MainWindow::updateMinHeight(const QString& text) {
     bool ok;
     uint value = text.toUInt(&ok);
     if (ok) {
-        minHeight = value;
+        filterCtx.minHeight = value;
     } else {
-        minHeight = 0;
+        filterCtx.minHeight = 0;
     }
 }
 void MainWindow::clearResolutionFilters() {
@@ -355,22 +355,22 @@ void MainWindow::clearResolutionFilters() {
     ui->minWidthEdit->clear();
     ui->maxHeightEdit->clear();
     ui->minHeightEdit->clear();
-    maxWidth = std::numeric_limits<uint>::max();
-    minWidth = 0;
-    maxHeight = std::numeric_limits<uint>::max();
-    minHeight = 0;
+    filterCtx.maxWidth = std::numeric_limits<uint>::max();
+    filterCtx.minWidth = 0;
+    filterCtx.maxHeight = std::numeric_limits<uint>::max();
+    filterCtx.minHeight = 0;
     refreshPicDisplay();
 }
 void MainWindow::handleResolutionTimerTimeout() {
     refreshPicDisplay();
 }
 void MainWindow::updateSortBy(int index) {
-    sortBy = static_cast<SortBy>(index);
+    sortCtx.sortBy = static_cast<SortBy>(index);
     sortPics();
     refreshPicDisplay();
 }
 void MainWindow::updateSortOrder(int index) {
-    sortOrder = static_cast<SortOrder>(index);
+    sortCtx.sortOrder = static_cast<SortOrder>(index);
     sortPics();
     refreshPicDisplay();
 }
@@ -404,12 +404,12 @@ void MainWindow::updateRatioSlider(int value) {
     ratioSliderValue = value;
     if (value >= 0) {
         double temp = 1.0 + (value / 20.0);
-        ratio = 1.0 / temp;
+        sortCtx.ratio = 1.0 / temp;
         widthRatioSpinBoxValue = 1.0;
         heightRatioSpinBoxValue = temp;
     } else {
         double temp = 1.0 - (value / 20.0);
-        ratio = temp;
+        sortCtx.ratio = temp;
         widthRatioSpinBoxValue = temp;
         heightRatioSpinBoxValue = 1.0;
     }
@@ -423,13 +423,13 @@ void MainWindow::updateRatioSpinBox(double value) {
     widthRatioSpinBoxValue = ui->widthRatioSpinBox->value();
     heightRatioSpinBoxValue = ui->heightRatioSpinBox->value();
     if (widthRatioSpinBoxValue == 0) {
-        ratio = 0;
+        sortCtx.ratio = 0;
     } else if (heightRatioSpinBoxValue == 0) {
-        ratio = std::numeric_limits<double>::infinity();
+        sortCtx.ratio = std::numeric_limits<double>::infinity();
     } else {
-        ratio = widthRatioSpinBoxValue / heightRatioSpinBoxValue;
+        sortCtx.ratio = widthRatioSpinBoxValue / heightRatioSpinBoxValue;
     }
-    ui->ratioSlider->setValue(ratioToSliderValue(ratio));
+    ui->ratioSlider->setValue(ratioToSliderValue(sortCtx.ratio));
     ratioSpinBoxEditing = false;
 }
 void MainWindow::handleRatioTimerTimeout() {
@@ -443,54 +443,54 @@ void MainWindow::sortPics() {
         if (ratioSortEnabled) {
             double ratioA = (a.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(a.width) / a.height;
             double ratioB = (b.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(b.width) / b.height;
-            double diffA = std::abs(ratioA - ratio);
-            double diffB = std::abs(ratioB - ratio);
+            double diffA = std::abs(ratioA - sortCtx.ratio);
+            double diffB = std::abs(ratioB - sortCtx.ratio);
             if (diffA != diffB) {
                 return diffA < diffB;
             }
             return false; // if ratios are equally close, sort by ID to ensure consistent order
         }
-        switch (sortBy) {
+        switch (sortCtx.sortBy) {
         case SortBy::None:
             return false;
         case SortBy::ID:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.id < b.id;
             } else {
                 return a.id > b.id;
             }
         case SortBy::Size:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.size < b.size;
             } else {
                 return a.size > b.size;
             }
         case SortBy::DownloadDate:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.downloadTime < b.downloadTime;
             } else {
                 return a.downloadTime > b.downloadTime;
             }
         case SortBy::EditDate:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.editTime < b.editTime;
             } else {
                 return a.editTime > b.editTime;
             }
         case SortBy::Filename:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.filePaths.begin()->filename().string() < b.filePaths.begin()->filename().string();
             } else {
                 return a.filePaths.begin()->filename().string() > b.filePaths.begin()->filename().string();
             }
         case SortBy::Width:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.width < b.width;
             } else {
                 return a.width > b.width;
             }
         case SortBy::Height:
-            if (sortOrder == SortOrder::Ascending) {
+            if (sortCtx.sortOrder == SortOrder::Ascending) {
                 return a.height < b.height;
             } else {
                 return a.height > b.height;
@@ -505,17 +505,17 @@ void MainWindow::sortPics() {
 // Functions for text and tag search
 
 void MainWindow::updateSearchPlatform(int index) {
-    searchPlatform = static_cast<PlatformType>(index);
+    searchCtx.searchPlatform = static_cast<PlatformType>(index);
 }
 void MainWindow::updateSearchField(int index) {
-    searchField = static_cast<SearchField>(index);
+    searchCtx.searchField = static_cast<SearchField>(index);
 }
 void MainWindow::updateSearchText(const QString& text) {
-    searchText = text.toStdString();
+    searchCtx.searchText = text.toStdString();
 }
 void MainWindow::clearSearchText() {
     ui->searchLineEdit->clear();
-    searchText = "";
+    searchCtx.searchText = "";
     picSearch();
 }
 void MainWindow::handleListWidgetItemSingleClick(QListWidgetItem* item) {
@@ -537,14 +537,14 @@ void MainWindow::addIncludedTags() {
     tagButton->setPalette(palette);
     tagButton->setProperty("tag", tagId);
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
-        if (includedTags.find(tagId) == includedTags.end()) {
-            includedTags.insert(tagId);
+        if (searchCtx.includedTags.find(tagId) == searchCtx.includedTags.end()) {
+            searchCtx.includedTags.insert(tagId);
             tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedTags(tagButton); });
         }
     } else if (listWidget == ui->platformTagList) {
-        if (includedPlatformTags.find(tagId) == includedPlatformTags.end()) {
-            includedPlatformTags.insert(tagId);
+        if (searchCtx.includedPlatformTags.find(tagId) == searchCtx.includedPlatformTags.end()) {
+            searchCtx.includedPlatformTags.insert(tagId);
             tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeIncludedPlatformTags(tagButton); });
         }
@@ -567,14 +567,14 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
     tagButton->setPalette(palette);
     tagButton->setProperty("tag", tagId);
     if (listWidget == ui->generalTagList || listWidget == ui->characterTagList) {
-        if (excludedTags.find(tagId) == excludedTags.end()) {
-            excludedTags.insert(tagId);
+        if (searchCtx.excludedTags.find(tagId) == searchCtx.excludedTags.end()) {
+            searchCtx.excludedTags.insert(tagId);
             tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedTags(tagButton); });
         }
     } else if (listWidget == ui->platformTagList) {
-        if (excludedPlatformTags.find(tagId) == excludedPlatformTags.end()) {
-            excludedPlatformTags.insert(tagId);
+        if (searchCtx.excludedPlatformTags.find(tagId) == searchCtx.excludedPlatformTags.end()) {
+            searchCtx.excludedPlatformTags.insert(tagId);
             tagButton->setText(item->text().left(item->text().lastIndexOf(' ')));
             connect(tagButton, &QPushButton::clicked, this, [this, tagButton]() { removeExcludedPlatformTags(tagButton); });
         }
@@ -585,7 +585,7 @@ void MainWindow::addExcludedTags(QListWidgetItem* item) {
 }
 void MainWindow::removeIncludedTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
-    includedTags.erase(tag);
+    searchCtx.includedTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -595,7 +595,7 @@ void MainWindow::removeIncludedTags(QPushButton* button) {
 }
 void MainWindow::removeExcludedTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
-    excludedTags.erase(tag);
+    searchCtx.excludedTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -605,7 +605,7 @@ void MainWindow::removeExcludedTags(QPushButton* button) {
 }
 void MainWindow::removeIncludedPlatformTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
-    includedPlatformTags.erase(tag);
+    searchCtx.includedPlatformTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -615,7 +615,7 @@ void MainWindow::removeIncludedPlatformTags(QPushButton* button) {
 }
 void MainWindow::removeExcludedPlatformTags(QPushButton* button) {
     uint32_t tag = button->property("tag").toUInt();
-    includedPlatformTags.erase(tag);
+    searchCtx.includedPlatformTags.erase(tag);
     ui->selectedTagLayout->removeWidget(button);
     button->deleteLater();
     if (isSelectedTagsEmpty()) {
@@ -645,14 +645,7 @@ void MainWindow::picSearch() {
     }
     ui->statusbar->showMessage("正在搜索...");
     searchRequestId++;
-    emit searchPics(includedTags,
-                    excludedTags,
-                    includedPlatformTags,
-                    excludedPlatformTags,
-                    searchPlatform,
-                    searchField,
-                    searchText,
-                    searchRequestId);
+    emit searchPics(searchCtx, searchRequestId);
 }
 void MainWindow::handleSearchResults(const std::vector<DisplayItem>& displayItems,
                                      const std::vector<TagCount> availableTags,
@@ -713,23 +706,23 @@ void MainWindow::refreshPicDisplay() {
     displayMorePics();
 }
 bool MainWindow::isMatchFilter(const PicInfo& pic) {
-    if (!showJPG && pic.fileType == ImageFormat::JPG) return false;
-    if (!showPNG && pic.fileType == ImageFormat::PNG) return false;
-    if (!showGIF && pic.fileType == ImageFormat::GIF) return false;
-    if (!showWEBP && pic.fileType == ImageFormat::WebP) return false;
-    if (!showUnknowRestrict && pic.restrictType == RestrictType::Unknown) return false;
-    if (!showAllAge && pic.restrictType == RestrictType::AllAges) return false;
-    if (!showSensitive && pic.restrictType == RestrictType::Sensitive) return false;
-    if (!showQuestionable && pic.restrictType == RestrictType::Questionable) return false;
-    if (!showR18 && pic.restrictType == RestrictType::R18) return false;
-    if (!showR18g && pic.restrictType == RestrictType::R18G) return false;
-    if (!showUnknowAI && pic.aiType == AIType::Unknown) return false;
-    if (!showAI && pic.aiType == AIType::AI) return false;
-    if (!showNonAI && pic.aiType == AIType::NotAI) return false;
-    if (maxWidth != 0 && pic.width > maxWidth) return false;
-    if (minWidth != 0 && pic.width < minWidth) return false;
-    if (maxHeight != 0 && pic.height > maxHeight) return false;
-    if (minHeight != 0 && pic.height < minHeight) return false;
+    if (!filterCtx.showJPG && pic.fileType == ImageFormat::JPG) return false;
+    if (!filterCtx.showPNG && pic.fileType == ImageFormat::PNG) return false;
+    if (!filterCtx.showGIF && pic.fileType == ImageFormat::GIF) return false;
+    if (!filterCtx.showWEBP && pic.fileType == ImageFormat::WebP) return false;
+    if (!filterCtx.showUnknowRestrict && pic.restrictType == RestrictType::Unknown) return false;
+    if (!filterCtx.showAllAge && pic.restrictType == RestrictType::AllAges) return false;
+    if (!filterCtx.showSensitive && pic.restrictType == RestrictType::Sensitive) return false;
+    if (!filterCtx.showQuestionable && pic.restrictType == RestrictType::Questionable) return false;
+    if (!filterCtx.showR18 && pic.restrictType == RestrictType::R18) return false;
+    if (!filterCtx.showR18G && pic.restrictType == RestrictType::R18G) return false;
+    if (!filterCtx.showUnknowAI && pic.aiType == AIType::Unknown) return false;
+    if (!filterCtx.showAI && pic.aiType == AIType::AI) return false;
+    if (!filterCtx.showNonAI && pic.aiType == AIType::NotAI) return false;
+    if (filterCtx.maxWidth != 0 && pic.width > filterCtx.maxWidth) return false;
+    if (filterCtx.minWidth != 0 && pic.width < filterCtx.minWidth) return false;
+    if (filterCtx.maxHeight != 0 && pic.height > filterCtx.maxHeight) return false;
+    if (filterCtx.minHeight != 0 && pic.height < filterCtx.minHeight) return false;
     return true;
 }
 void MainWindow::displayMorePics(uint rows) {
@@ -756,10 +749,10 @@ void MainWindow::displayMorePics(uint rows) {
             picFrame = frameIt->second;
             ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
         } else { // create new PictureFrame
-            if (searchText.empty() || searchField == SearchField::None) {
+            if (searchCtx.searchText.empty() || searchCtx.searchField == SearchField::None) {
                 picFrame = new PictureFrame(this, &pic, imageLoader);
             } else { // create PictureFrame with highlighted search text
-                picFrame = new PictureFrame(this, &pic, imageLoader, searchField);
+                picFrame = new PictureFrame(this, &pic, imageLoader, searchCtx.searchField);
             }
             for (const auto& picInfo : pic.pics) {
                 idToFrameMap[picInfo.id] = picFrame;

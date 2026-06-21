@@ -18,6 +18,7 @@
 
 #pragma once
 #include "about_dialog.h"
+#include "controllers/context_controller.h"
 #include "controllers/image_loader.h"
 #include "controllers/worker.h"
 #include "service/database.h"
@@ -39,10 +40,6 @@
 namespace Ui {
 class MainWindow;
 }
-
-enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Height };
-
-enum class SortOrder { Ascending, Descending };
 
 constexpr size_t MAX_PIC_CACHE = 1000;    // max number of pictures in cache
 constexpr int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
@@ -78,14 +75,7 @@ public:
     };
 
 signals:
-    void searchPics(const std::unordered_set<uint32_t>& includedTags,
-                    const std::unordered_set<uint32_t>& excludedTags,
-                    const std::unordered_set<uint32_t>& includedPlatformTags,
-                    const std::unordered_set<uint32_t>& excludedPlatformTags,
-                    PlatformType platform,
-                    SearchField searchField,
-                    const std::string& searchText,
-                    size_t requestId);
+    void searchPics(const SearchContext& ctx, size_t requestId);
 
 protected:
     bool firstShow_ = true;
@@ -110,43 +100,7 @@ private:
     void loadTags();
     void initTagger();
 
-    // filter context
-    bool showPNG = true;
-    bool showJPG = true;
-    bool showGIF = true;
-    bool showWEBP = true;
-    bool showUnknowRestrict = true;
-    bool showAllAge = true;
-    bool showSensitive = false;
-    bool showQuestionable = false;
-    bool showR18 = false;
-    bool showR18g = false;
-    bool showUnknowAI = true;
-    bool showAI = true;
-    bool showNonAI = true;
-    uint maxHeight = std::numeric_limits<uint>::max();
-    uint minHeight = 0;
-    uint maxWidth = std::numeric_limits<uint>::max();
-    uint minWidth = 0;
-    // sorting context
-    SortBy sortBy = SortBy::None;
-    SortOrder sortOrder = SortOrder::Ascending;
-    int ratioSliderValue;
-    double widthRatioSpinBoxValue;
-    double heightRatioSpinBoxValue;
-    double ratio = 1.0f;
-    bool ratioSortEnabled = false;
-    bool ratioSliderEditing = false;
-    bool ratioSpinBoxEditing = false;
-    // search context
-    PlatformType searchPlatform = PlatformType::Unknown;
-    SearchField searchField = SearchField::None;
-    std::string searchText;
-    std::unordered_set<uint32_t> includedTags;
-    std::unordered_set<uint32_t> excludedTags;
-    std::unordered_set<uint32_t> includedPlatformTags;
-    std::unordered_set<uint32_t> excludedPlatformTags;
-    // filter update handlers
+    FilterContext filterCtx;
     void updateShowPNG(bool checked);
     void updateShowJPG(bool checked);
     void updateShowGIF(bool checked);
@@ -168,7 +122,14 @@ private:
     void clearResolutionFilters();
     QTimer resolutionTimer;
     void handleResolutionTimerTimeout();
-    // sort handlers
+
+    SortContext sortCtx;
+    bool ratioSortEnabled = false;
+    bool ratioSliderEditing = false;
+    bool ratioSpinBoxEditing = false;
+    int ratioSliderValue;
+    double widthRatioSpinBoxValue;
+    double heightRatioSpinBoxValue;
     void updateSortBy(int index);
     void updateSortOrder(int index);
     void updateEnableRatioSort(bool checked);
@@ -176,6 +137,8 @@ private:
     void updateRatioSpinBox(double value);
     QTimer ratioSortTimer;
     void handleRatioTimerTimeout();
+
+    SearchContext searchCtx;
     // pic text search handlers
     void updateSearchPlatform(int index);
     void updateSearchField(int index);
@@ -194,7 +157,8 @@ private:
     QTimer tagSearchTimer; // use for debouncing removing selected tags
     bool tagDoubleClicked = false;
     bool isSelectedTagsEmpty() const {
-        return includedTags.empty() && excludedTags.empty() && includedPlatformTags.empty() && excludedPlatformTags.empty();
+        return searchCtx.includedTags.empty() && searchCtx.excludedTags.empty() && searchCtx.includedPlatformTags.empty() &&
+               searchCtx.excludedPlatformTags.empty();
     };
     // tag search handler
     void tagSearch(const QString& text);
@@ -230,7 +194,7 @@ private:
                              std::vector<PlatformTagCount> availablePlatformTags,
                              size_t requestId);
     void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
-    bool isSearchCriteriaEmpty() const { return searchText.empty() && isSelectedTagsEmpty(); };
+    bool isSearchCriteriaEmpty() const { return searchCtx.searchText.empty() && isSelectedTagsEmpty(); };
 
     // displaying   TODO: refactor display logic, make it accept picinfo and metadata directly
     uint picsPerRow;
