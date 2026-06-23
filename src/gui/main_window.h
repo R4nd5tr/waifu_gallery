@@ -19,6 +19,7 @@
 #pragma once
 #include "about_dialog.h"
 #include "controllers/context_controller.h"
+#include "controllers/display_controller.h"
 #include "controllers/image_loader.h"
 #include "controllers/worker.h"
 #include "service/database.h"
@@ -91,6 +92,7 @@ private:
     ImageLoader imageLoader{this};           // Blazing fast!!!
     Importer importer{reportImportProgress}; // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
+    DisplayController displayController;
     void initInterface();
     void fillComboBox();
     void initWorkerThreads();
@@ -189,29 +191,12 @@ private:
     // searching
     size_t searchRequestId = 0; // to identify latest search request
     void picSearch();
-    void handleSearchResults(const std::vector<DisplayItem>& displayItems,
-                             std::vector<TagCount> availableTags,
-                             std::vector<PlatformTagCount> availablePlatformTags,
+    void handleSearchResults(DisplayItems* displayItems,
+                             const std::vector<TagCount>& availableTags,
+                             const std::vector<PlatformTagCount>& availablePlatformTags,
                              size_t requestId);
     void displayTags(const std::vector<TagCount>& tags = {}, const std::vector<PlatformTagCount>& platformTags = {});
     bool isSearchCriteriaEmpty() const { return searchCtx.searchText.empty() && isSelectedTagsEmpty(); };
 
-    // displaying   TODO: refactor display logic, make it accept picinfo and metadata directly
-    uint picsPerRow;
-    uint currentColumn;
-    uint currentRow;
-    void handleWindowSizeChange();
-    void displayMorePicOnScroll(int value);
-
-    uint displayIndex;
-    std::vector<DisplayItem> resultPics;
-    std::vector<uint64_t> displayingPicIds;                   // use for rearranging layout when window resized
-    std::unordered_map<uint64_t, PictureFrame*> idToFrameMap; // cache created frames, also use for clearing cache
-    void refreshPicDisplay();                                 // clear widget, set displayIndex to 0, and call displayMorePics()
-    bool isMatchFilter(const PicInfo& pic);
-    void displayMorePics(uint rows = 5); // display more pics in the scroll area
-    void sortPics();                     // sort resultPics vector
-    void clearAllPicFrames();
-    void removePicFramesFromLayout();
-    void displayImage(uint64_t picId, LoadType loadType);
+    void handleScrollBarValueChanged(int value) { displayController.handleScrollBarValueChanged(value); };
 };

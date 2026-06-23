@@ -69,7 +69,7 @@ struct SearchContext {
     std::unordered_set<uint32_t> excludedPlatformTags;
 };
 
-bool isMatchFilter(const PicInfo& pic, const FilterContext& filterCtx) {
+inline bool isMatchFilter(const PicInfo& pic, const FilterContext& filterCtx) {
     if (!filterCtx.showUnknowPlatform && pic.sourceIdentifiers.empty()) return false;
     for (const auto& source : pic.sourceIdentifiers) {
         if (source.platform == PlatformType::Pixiv && !filterCtx.showPixiv) return false;
@@ -98,7 +98,7 @@ bool isMatchFilter(const PicInfo& pic, const FilterContext& filterCtx) {
 
     return true;
 };
-bool isMatchFilter(const Metadata& metadata, const FilterContext& filterCtx) {
+inline bool isMatchFilter(const Metadata& metadata, const FilterContext& filterCtx) {
     if (!filterCtx.showUnknowPlatform && metadata.platformType == PlatformType::Unknown) return false;
     if (metadata.platformType == PlatformType::Pixiv && !filterCtx.showPixiv) return false;
     if (metadata.platformType == PlatformType::Twitter && !filterCtx.showTwitter) return false;
@@ -115,4 +115,44 @@ bool isMatchFilter(const Metadata& metadata, const FilterContext& filterCtx) {
     if (!filterCtx.showNonAI && metadata.aiType == AIType::NotAI) return false;
 
     return true;
+};
+inline bool comparePicInfo(const PicInfo& a, const PicInfo& b, const SortContext& sortContext) {
+    switch (sortContext.sortBy) {
+    case SortBy::ID:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.id < b.id : a.id > b.id;
+    case SortBy::DownloadDate:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.downloadTime < b.downloadTime : a.downloadTime > b.downloadTime;
+    case SortBy::EditDate:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.editTime < b.editTime : a.editTime > b.editTime;
+    case SortBy::Size:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.size < b.size : a.size > b.size;
+    case SortBy::Filename:
+        return sortContext.sortOrder == SortOrder::Ascending
+                   ? a.filePaths[0].filename().string() < b.filePaths[0].filename().string()
+                   : a.filePaths[0].filename().string() > b.filePaths[0].filename().string();
+    case SortBy::Width:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.width < b.width : a.width > b.width;
+    case SortBy::Height:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.height < b.height : a.height > b.height;
+    case SortBy::Ratio:
+        return std::abs(sortContext.ratio - a.getRatio()) < std::abs(sortContext.ratio - b.getRatio());
+    default:
+        return false;
+    }
+};
+inline bool comparePicItems(const PicItem& a, const PicItem& b, const SortContext& sortContext) {
+    return comparePicInfo(a.info, b.info, sortContext);
+};
+inline bool compareMetadata(const Metadata& a, const Metadata& b, const SortContext& sortContext) {
+    switch (sortContext.sortBy) {
+    case SortBy::ID:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.id < b.id : a.id > b.id;
+    case SortBy::DownloadDate:
+        return sortContext.sortOrder == SortOrder::Ascending ? a.date < b.date : a.date > b.date;
+    default:
+        return false;
+    }
+};
+inline bool compareMetadataItems(const MetadataItem& a, const MetadataItem& b, const SortContext& sortContext) {
+    return compareMetadata(a.metadata, b.metadata, sortContext);
 };

@@ -49,7 +49,7 @@ public:
     DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader);
     ~DisplayController();
 
-    void setDisplayItems(std::unique_ptr<DisplayItems>& displayItems, SearchField searchField);
+    void setDisplayItems(DisplayItems* displayItems, SearchField searchField);
 
     void handleWindowResize();
     void handleScrollBarValueChanged(int value);
@@ -63,11 +63,11 @@ private:
     Ui::MainWindow* ui;
     PicFramePool picFramePool;
 
-    std::unique_ptr<DisplayItems> displayItems;
     DisplayItemType displayMode = DisplayItemType::Pic;
-
+    DisplayItems* displayItems = nullptr;
     std::vector<size_t> sortedItemIndices; // index of displayItems in sorted order
-    size_t filteredIndex = 0;
+
+    size_t nextMatchSortedIndex = 0;
     std::vector<size_t> displayingItemIndices; // indices of displayItems filtered and currently being displayed
 
     std::vector<PictureFrame*> picFrames; // displaying PictureFrames, corresponds to displayingIndices
@@ -86,4 +86,5 @@ private:
 
     Vec2 getPicFramePosition(size_t displayIndex) const;
     void displayPicFrames();
+    void refreshDisplay();
 };

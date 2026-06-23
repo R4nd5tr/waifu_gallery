@@ -66,7 +66,7 @@ void DatabaseWorker::searchPics(const SearchContext& searchCtx, size_t requestId
     }
 
     // intersect all search results
-    std::unique_ptr<DisplayItems> displayItems = std::make_unique<DisplayItems>();
+    DisplayItems* displayItems = new DisplayItems();
     if (displayType == DisplayItemType::Metadata) {
         std::vector<PlatformID> intersectedResult;
         if (textSearchApplied && platformTagSearchApplied) {
@@ -235,5 +235,5 @@ void DatabaseWorker::searchPics(const SearchContext& searchCtx, size_t requestId
               availablePlatformTags.end(),
               [](const PlatformTagCount& a, const PlatformTagCount& b) { return b.count < a.count; });
 
-    emit searchComplete(std::move(displayItems), availableTags, availablePlatformTags, requestId);
+    emit searchComplete(displayItems, availableTags, availablePlatformTags, requestId);
 }

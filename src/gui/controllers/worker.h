@@ -33,7 +33,7 @@ public:
     void searchPics(const SearchContext& searchCtx, size_t requestId);
 
 signals:
-    void searchComplete(std::unique_ptr<DisplayItems> displayItems,
+    void searchComplete(DisplayItems* displayItems,
                         const std::vector<TagCount> availableTags,
                         const std::vector<PlatformTagCount> availablePlatformTags,
                         size_t requestId);

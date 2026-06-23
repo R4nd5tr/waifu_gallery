@@ -28,10 +28,32 @@ DisplayController::DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoade
     this->picsPerRow = ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING)) + 1;
 }
 
-DisplayController::~DisplayController() {}
+DisplayController::~DisplayController() {
+    if (displayItems) {
+        delete displayItems;
+        displayItems = nullptr;
+    }
+}
 
-void DisplayController::setDisplayItems(std::unique_ptr<DisplayItems>& displayItems, SearchField searchField) {
-    this->displayItems = std::move(displayItems);
+void DisplayController::refreshDisplay() {
+    this->displayingItemIndices.clear();
+    this->scrollBarValue = 0;
+    this->picIdToFrameIdxMap.clear();
+    for (int i = startDisplayIndex; i <= endDisplayIndex; i++) {
+        picFramePool.release(picFrames[i]);
+    }
+    this->picFrames.clear();
+    this->startDisplayIndex = 0;
+    this->endDisplayIndex = 0;
+    this->ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
+    // update totalHeight to max possible height, will be updated when displaying items
+    this->totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (this->sortedItemIndices.size() / this->picsPerRow);
+    this->ui->picBrowseWidget->setMinimumHeight(this->totalHeight);
+}
+
+void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField searchField) {
+    delete this->displayItems; // delete previous displayItems
+    this->displayItems = displayItems;
     this->displayMode = this->displayItems->type;
     this->sortedItemIndices.resize(this->displayItems->metadataItems.size()
                                        ? this->displayItems->type == DisplayItemType::Metadata
@@ -39,21 +61,19 @@ void DisplayController::setDisplayItems(std::unique_ptr<DisplayItems>& displayIt
     std::iota(this->sortedItemIndices.begin(), this->sortedItemIndices.end(), 0);
     this->searchField = searchField;
 
-    // reset state
-    this->displayingItemIndices.clear();
-    this->scrollBarValue = 0;
-    this->picIdToFrameIdxMap.clear();
-    for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
-        picFramePool.release(picFrames[i]);
-    }
-    this->picFrames.clear();
-    this->startDisplayIndex = 0;
-    this->endDisplayIndex = 0;
-    this->ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
+    refreshDisplay();
+}
 
-    // update totalHeight
-    this->totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (this->displayingItemIndices.size() / this->picsPerRow + 1);
-    this->ui->picBrowseWidget->setMinimumHeight(this->totalHeight);
+void DisplayController::displayImage(uint64_t picId, LoadType loadType) {
+    auto it = picIdToFrameIdxMap.find(picId);
+    if (it != picIdToFrameIdxMap.end()) {
+        size_t idx = it->second;
+        if (idx < startDisplayIndex || idx > endDisplayIndex) return; // not currently displayed
+        PictureFrame* picFrame = picFrames[idx];
+        if (picFrame) {
+            picFrame->displayImage(picId, loadType);
+        }
+    }
 }
 
 Vec2 DisplayController::getPicFramePosition(size_t displayIndex) const {
@@ -66,6 +86,8 @@ Vec2 DisplayController::getPicFramePosition(size_t displayIndex) const {
 }
 
 void DisplayController::displayPicFrames() {
+    if (!displayItems) return; // no display items to display
+
     int viewportTopRow = std::max(0, (scrollBarValue - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING);
     int viewportBottomRow = (std::max(0, (scrollBarValue + viewportHeight - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING)) + 1;
 
@@ -110,20 +132,27 @@ void DisplayController::displayPicFrames() {
 
     if (newEndDisplayIndex > endDisplayIndex) { // need to load new frames at the bottom
         for (size_t i = endDisplayIndex + 1; i <= newEndDisplayIndex; i++) {
-            if (i >= displayingItemIndices.size()) { // need to find next filtered item
-                filteredIndex += 1;
-                while (filteredIndex < sortedItemIndices.size()) {
-                    if (displayMode == DisplayItemType::Pic) {
-                        if (isMatchFilter(displayItems->picItems[sortedItemIndices[filteredIndex]].info, filterCtx)) break;
-                    } else if (displayMode == DisplayItemType::Metadata) {
-                        if (isMatchFilter(displayItems->metadataItems[sortedItemIndices[filteredIndex]].metadata, filterCtx))
-                            break;
+            if (i >= displayingItemIndices.size()) { // need to find next item that matches filter
+                while (nextMatchSortedIndex < sortedItemIndices.size()) {
+                    if (displayMode == DisplayItemType::Pic &&
+                        isMatchFilter(displayItems->picItems[sortedItemIndices[nextMatchSortedIndex]].info, filterCtx)) {
+                        break;
+                    } else if (displayMode == DisplayItemType::Metadata &&
+                               isMatchFilter(displayItems->metadataItems[sortedItemIndices[nextMatchSortedIndex]].metadata,
+                                             filterCtx)) {
+                        break;
                     }
-                    filteredIndex += 1;
+                    nextMatchSortedIndex += 1;
                 }
 
-                if (filteredIndex >= sortedItemIndices.size()) break;
-                displayingItemIndices.push_back(sortedItemIndices[filteredIndex]);
+                if (nextMatchSortedIndex >= sortedItemIndices.size()) { // no more items to display
+                    // update totalHeight to reflect the actual number of items that match the filter
+                    this->totalHeight =
+                        MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (displayingItemIndices.size() / this->picsPerRow);
+                    this->ui->picBrowseWidget->setMinimumHeight(this->totalHeight);
+                    break;
+                }
+                displayingItemIndices.push_back(sortedItemIndices[nextMatchSortedIndex]);
             }
 
             size_t displayItemIdx = displayingItemIndices[i];
@@ -164,4 +193,40 @@ void DisplayController::displayPicFrames() {
         }
         endDisplayIndex = newEndDisplayIndex;
     }
+}
+
+void DisplayController::handleWindowResize() {
+    this->totalWidth = ui->picBrowseScrollArea->width();
+    this->viewportHeight = ui->picBrowseScrollArea->height();
+    this->picsPerRow = ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING)) + 1;
+    displayPicFrames();
+    for (size_t i = startDisplayIndex; i <= endDisplayIndex; i++) {
+        Vec2 pos = getPicFramePosition(i);
+        picFrames[i]->move(pos.x, pos.y);
+    }
+}
+void DisplayController::handleScrollBarValueChanged(int value) {
+    this->scrollBarValue = value;
+    displayPicFrames();
+}
+
+void DisplayController::sortDisplayItems(const SortContext& sortContext) {
+    if (!displayItems) return; // no display items to display
+
+    if (displayMode == DisplayItemType::Pic) {
+        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](size_t a, size_t b) {
+            return comparePicItems(displayItems->picItems[a], displayItems->picItems[b], sortContext);
+        });
+    } else if (displayMode == DisplayItemType::Metadata) {
+        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](size_t a, size_t b) {
+            return compareMetadataItems(displayItems->metadataItems[a], displayItems->metadataItems[b], sortContext);
+        });
+    }
+    refreshDisplay();
+    displayPicFrames();
+}
+void DisplayController::setFilterContext(const FilterContext& filterContext) {
+    this->filterCtx = filterContext;
+    refreshDisplay();
+    displayPicFrames();
 }

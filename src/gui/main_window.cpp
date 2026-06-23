@@ -30,7 +30,7 @@ const QEvent::Type TaggingProgressReportEvent::EventType = static_cast<QEvent::T
 
 // MainWindow implementation
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), displayController(ui, &imageLoader) {
     ui->setupUi(this);
 
     Settings::loadSettings();
@@ -165,7 +165,8 @@ void MainWindow::connectSignalSlots() {
     connect(ui->searchTagTextEdit, &QLineEdit::textChanged, this, &MainWindow::tagSearch);
 
     // scroll area scrollbar
-    connect(ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::displayMorePicOnScroll);
+    connect(
+        ui->picBrowseScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::handleScrollBarValueChanged);
 
     // menu actions
     connect(ui->importNewPicsAction, &QAction::triggered, this, &MainWindow::handleImportNewPicsAction);
@@ -264,55 +265,55 @@ void MainWindow::initTagger() {
 
 void MainWindow::updateShowJPG(bool checked) {
     filterCtx.showJPG = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowPNG(bool checked) {
     filterCtx.showPNG = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowGIF(bool checked) {
     filterCtx.showGIF = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowWEBP(bool checked) {
     filterCtx.showWEBP = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowUnknowRestrict(bool checked) {
     filterCtx.showUnknowRestrict = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowAllAge(bool checked) {
     filterCtx.showAllAge = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowSensitive(bool checked) {
     filterCtx.showSensitive = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowQuestionable(bool checked) {
     filterCtx.showQuestionable = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowR18(bool checked) {
     filterCtx.showR18 = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowR18g(bool checked) {
     filterCtx.showR18G = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowUnknowAI(bool checked) {
     filterCtx.showUnknowAI = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowAI(bool checked) {
     filterCtx.showAI = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateShowNonAI(bool checked) {
     filterCtx.showNonAI = checked;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateMaxWidth(const QString& text) {
     bool ok;
@@ -359,20 +360,20 @@ void MainWindow::clearResolutionFilters() {
     filterCtx.minWidth = 0;
     filterCtx.maxHeight = std::numeric_limits<uint>::max();
     filterCtx.minHeight = 0;
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::handleResolutionTimerTimeout() {
-    refreshPicDisplay();
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateSortBy(int index) {
     sortCtx.sortBy = static_cast<SortBy>(index);
-    sortPics();
-    refreshPicDisplay();
+    displayController.sortDisplayItems(sortCtx);
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateSortOrder(int index) {
     sortCtx.sortOrder = static_cast<SortOrder>(index);
-    sortPics();
-    refreshPicDisplay();
+    displayController.sortDisplayItems(sortCtx);
+    displayController.setFilterContext(filterCtx);
 }
 void MainWindow::updateEnableRatioSort(bool checked) {
     ratioSortEnabled = checked;
@@ -383,8 +384,8 @@ void MainWindow::updateEnableRatioSort(bool checked) {
         ui->sortComboBox->setEnabled(true);
         ui->orderComboBox->setEnabled(true);
     }
-    sortPics();
-    refreshPicDisplay();
+    displayController.sortDisplayItems(sortCtx);
+    displayController.setFilterContext(filterCtx);
 }
 int ratioToSliderValue(double ratio) {
     if (ratio <= 0) {
@@ -434,72 +435,9 @@ void MainWindow::updateRatioSpinBox(double value) {
 }
 void MainWindow::handleRatioTimerTimeout() {
     if (ratioSortEnabled) {
-        sortPics();
-        refreshPicDisplay();
+        displayController.sortDisplayItems(sortCtx);
+        displayController.setFilterContext(filterCtx);
     }
-}
-void MainWindow::sortPics() {
-    auto comparator = [this](const PicInfo& a, const PicInfo& b) {
-        if (ratioSortEnabled) {
-            double ratioA = (a.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(a.width) / a.height;
-            double ratioB = (b.height == 0) ? std::numeric_limits<double>::infinity() : static_cast<double>(b.width) / b.height;
-            double diffA = std::abs(ratioA - sortCtx.ratio);
-            double diffB = std::abs(ratioB - sortCtx.ratio);
-            if (diffA != diffB) {
-                return diffA < diffB;
-            }
-            return false; // if ratios are equally close, sort by ID to ensure consistent order
-        }
-        switch (sortCtx.sortBy) {
-        case SortBy::None:
-            return false;
-        case SortBy::ID:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.id < b.id;
-            } else {
-                return a.id > b.id;
-            }
-        case SortBy::Size:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.size < b.size;
-            } else {
-                return a.size > b.size;
-            }
-        case SortBy::DownloadDate:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.downloadTime < b.downloadTime;
-            } else {
-                return a.downloadTime > b.downloadTime;
-            }
-        case SortBy::EditDate:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.editTime < b.editTime;
-            } else {
-                return a.editTime > b.editTime;
-            }
-        case SortBy::Filename:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.filePaths.begin()->filename().string() < b.filePaths.begin()->filename().string();
-            } else {
-                return a.filePaths.begin()->filename().string() > b.filePaths.begin()->filename().string();
-            }
-        case SortBy::Width:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.width < b.width;
-            } else {
-                return a.width > b.width;
-            }
-        case SortBy::Height:
-            if (sortCtx.sortOrder == SortOrder::Ascending) {
-                return a.height < b.height;
-            } else {
-                return a.height > b.height;
-            }
-        default:
-            return false;
-        }
-    };
-    // std::sort(resultPics.begin(), resultPics.end(), comparator);
 }
 
 // Functions for text and tag search
@@ -637,180 +575,38 @@ void MainWindow::tagSearch(const QString& text) {
 // Main search function
 void MainWindow::picSearch() {
     imageLoader.clearTasks();
-    clearAllPicFrames();
     if (isSearchCriteriaEmpty()) {
         displayTags();
-        clearAllPicFrames();
         return;
     }
     ui->statusbar->showMessage("正在搜索...");
     searchRequestId++;
     emit searchPics(searchCtx, searchRequestId);
 }
-void MainWindow::handleSearchResults(const std::vector<DisplayItem>& displayItems,
-                                     const std::vector<TagCount> availableTags,
-                                     const std::vector<PlatformTagCount> availablePlatformTags,
+void MainWindow::handleSearchResults(DisplayItems* displayItems,
+                                     const std::vector<TagCount>& availableTags,
+                                     const std::vector<PlatformTagCount>& availablePlatformTags,
                                      size_t requestId) {
     if (requestId != searchRequestId) return;
-    resultPics = std::move(displayItems);
+    displayController.setDisplayItems(displayItems, searchCtx.searchField);
     displayTags(availableTags, availablePlatformTags);
-    ui->statusbar->showMessage("搜索完成，找到 " + QString::number(resultPics.size()) + " 张图片");
-    sortPics();
-    displayMorePics();
+    displayController.sortDisplayItems(sortCtx);
 }
 
 // Functions for window resizing and layout
 
-void MainWindow::handleWindowSizeChange() {
-    int width = ui->picBrowseWidget->width();
-    picsPerRow = width / 270;
-    if (picsPerRow < 1) picsPerRow = 1;
-    while (ui->picDisplayLayout->count() > 0) {
-        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
-        if (item) {
-            ui->picDisplayLayout->removeItem(item);
-        }
-        delete item;
-    }
-    currentColumn = 0;
-    currentRow = 0;
-    for (const auto& picId : displayingPicIds) {
-        auto frameIt = idToFrameMap.find(picId);
-        if (frameIt == idToFrameMap.end()) continue;
-        ui->picDisplayLayout->addWidget(frameIt->second, currentRow, currentColumn);
-        currentColumn++;
-        if (currentColumn >= picsPerRow) {
-            currentColumn = 0;
-            currentRow++;
-        }
-    }
-}
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     if (firstShow_) {
         firstShow_ = false;
-        handleWindowSizeChange();
+        displayController.handleWindowResize();
         picSearch(); // display no metadata pics initially
     }
 }
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     Settings::setWidthHeight(width(), height());
-    handleWindowSizeChange();
-}
-
-// Functions for picture display and loading
-
-void MainWindow::refreshPicDisplay() {
-    removePicFramesFromLayout();
-    displayMorePics();
-}
-bool MainWindow::isMatchFilter(const PicInfo& pic) {
-    if (!filterCtx.showJPG && pic.fileType == ImageFormat::JPG) return false;
-    if (!filterCtx.showPNG && pic.fileType == ImageFormat::PNG) return false;
-    if (!filterCtx.showGIF && pic.fileType == ImageFormat::GIF) return false;
-    if (!filterCtx.showWEBP && pic.fileType == ImageFormat::WebP) return false;
-    if (!filterCtx.showUnknowRestrict && pic.restrictType == RestrictType::Unknown) return false;
-    if (!filterCtx.showAllAge && pic.restrictType == RestrictType::AllAges) return false;
-    if (!filterCtx.showSensitive && pic.restrictType == RestrictType::Sensitive) return false;
-    if (!filterCtx.showQuestionable && pic.restrictType == RestrictType::Questionable) return false;
-    if (!filterCtx.showR18 && pic.restrictType == RestrictType::R18) return false;
-    if (!filterCtx.showR18G && pic.restrictType == RestrictType::R18G) return false;
-    if (!filterCtx.showUnknowAI && pic.aiType == AIType::Unknown) return false;
-    if (!filterCtx.showAI && pic.aiType == AIType::AI) return false;
-    if (!filterCtx.showNonAI && pic.aiType == AIType::NotAI) return false;
-    if (filterCtx.maxWidth != 0 && pic.width > filterCtx.maxWidth) return false;
-    if (filterCtx.minWidth != 0 && pic.width < filterCtx.minWidth) return false;
-    if (filterCtx.maxHeight != 0 && pic.height > filterCtx.maxHeight) return false;
-    if (filterCtx.minHeight != 0 && pic.height < filterCtx.minHeight) return false;
-    return true;
-}
-void MainWindow::displayMorePics(uint rows) {
-    uint picsLoaded = 0;
-    uint picsToLoad = 0;
-    // calculate how many pics to load to fill the specified number of rows
-    if (displayingPicIds.size() % picsPerRow != 0) { // fill current row first
-        picsToLoad = picsPerRow - (displayingPicIds.size() % picsPerRow);
-    }
-    picsToLoad += rows * picsPerRow;
-
-    // load pics
-    while (displayIndex < resultPics.size() && picsLoaded < picsToLoad) {
-        const DisplayItem& pic = resultPics[displayIndex];
-        displayIndex++;
-        if (pic.pics.empty()) continue;
-        if (!isMatchFilter(pic.pics[0])) continue;
-
-        displayingPicIds.push_back(pic.pics[0].id);
-
-        PictureFrame* picFrame = nullptr;
-        auto frameIt = idToFrameMap.find(pic.pics[0].id);
-        if (frameIt != idToFrameMap.end()) { // reuse existing PictureFrame
-            picFrame = frameIt->second;
-            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn);
-        } else { // create new PictureFrame
-            if (searchCtx.searchText.empty() || searchCtx.searchField == SearchField::None) {
-                picFrame = new PictureFrame(this, &pic, imageLoader);
-            } else { // create PictureFrame with highlighted search text
-                picFrame = new PictureFrame(this, &pic, imageLoader, searchCtx.searchField);
-            }
-            for (const auto& picInfo : pic.pics) {
-                idToFrameMap[picInfo.id] = picFrame;
-            }
-
-            ui->picDisplayLayout->addWidget(picFrame, currentRow, currentColumn); // add to layout and display
-        }
-
-        picsLoaded++;
-        currentColumn++;
-        if (currentColumn >= picsPerRow) {
-            currentColumn = 0;
-            currentRow++;
-        }
-    }
-}
-void MainWindow::displayMorePicOnScroll(int value) {
-    if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 100) {
-        displayMorePics(4);
-    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 200) {
-        displayMorePics(2);
-    } else if (ui->picBrowseScrollArea->verticalScrollBar()->maximum() - value < 400) {
-        displayMorePics(1);
-    }
-}
-void MainWindow::clearAllPicFrames() { // clear all PictureFrames and free memory
-    while (ui->picDisplayLayout->count() > 0) {
-        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
-        if (item->widget()) {
-            item->widget()->setParent(nullptr);
-        }
-        delete item;
-    }
-
-    for (auto& [id, frame] : idToFrameMap) {
-        delete frame;
-    }
-    idToFrameMap.clear();
-
-    displayIndex = 0;
-    displayingPicIds.clear();
-    currentColumn = 0;
-    currentRow = 0;
-    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
-}
-void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from layout but keep them in memory
-    while (ui->picDisplayLayout->count() > 0) {
-        QLayoutItem* item = ui->picDisplayLayout->takeAt(0);
-        if (item->widget()) {
-            item->widget()->setParent(nullptr);
-        }
-        delete item;
-    }
-    displayIndex = 0;
-    displayingPicIds.clear();
-    currentColumn = 0;
-    currentRow = 0;
-    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
+    displayController.handleWindowResize();
 }
 
 // Custom event handling for image loading and import progress
@@ -818,7 +614,7 @@ void MainWindow::removePicFramesFromLayout() { // remove all PictureFrames from 
 bool MainWindow::event(QEvent* event) {
     if (event->type() == ImageLoadCompleteEvent::EventType) {
         auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
-        displayImage(imageEvent->result.id, imageEvent->result.loadType);
+        displayController.displayImage(imageEvent->result.id, imageEvent->result.loadType);
         return true;
     } else if (event->type() == ImportProgressReportEvent::EventType) {
         auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
@@ -831,12 +627,7 @@ bool MainWindow::event(QEvent* event) {
     }
     return QMainWindow::event(event);
 }
-void MainWindow::displayImage(uint64_t picId, LoadType loadType) {
-    auto frameIt = idToFrameMap.find(picId);
-    if (frameIt != idToFrameMap.end()) {
-        frameIt->second->displayImage(picId, loadType);
-    }
-}
+
 void MainWindow::displayImportProgress(size_t progress, size_t total) {
     if (progress >= total) { // import complete
         finalizeImport(total);
