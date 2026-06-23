@@ -32,6 +32,7 @@ const QEvent::Type TaggingProgressReportEvent::EventType = static_cast<QEvent::T
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow), displayController(ui, &imageLoader) {
     ui->setupUi(this);
+    displayController.setup();
 
     Settings::loadSettings();
     resize(Settings::windowWidth, Settings::windowHeight);

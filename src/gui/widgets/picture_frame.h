@@ -53,6 +53,7 @@ public:
     void updateDisplayItem(const PicItem* newPicItem, const MetadataItem* newMetadataItem, SearchField searchField) {
         picItem = newPicItem;
         metadataItem = newMetadataItem;
+        released = false;
         showInfo(searchField);
         showThumbnail();
     }
@@ -70,6 +71,7 @@ private:
     const PicItem* picItem;
     const MetadataItem* metadataItem;
     ImageLoader& imageLoader;
+    bool released = true; // whether this frame is released back to the pool
     void connectSignals();
 
     void showInfo(SearchField searchField) const;

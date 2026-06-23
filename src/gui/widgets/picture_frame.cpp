@@ -84,13 +84,18 @@ void PictureFrame::reset() {
     ui->resolutionLabel->clear();
     ui->fileTypeAndSizeLabel->clear();
 
+    hidePreview();
+
     displayingPreview = false;
     previewingIndex = 0;
     picItem = nullptr;
     metadataItem = nullptr;
+
+    released = true;
 }
 
 void PictureFrame::showInfo(SearchField searchField) const {
+    if (released) return;
     showPicInfo();
 
     ui->titleLabel->setResponsive(false);
@@ -150,6 +155,7 @@ void PictureFrame::showInfo(SearchField searchField) const {
     }
 }
 void PictureFrame::showPicInfo() const {
+    if (released) return;
     if (metadataItem && metadataItem->picCount > 1 && !displayingPreview) {
         ui->resolutionLabel->setText("");
         ui->fileTypeAndSizeLabel->setText(QString("%1 pics").arg(metadataItem->picCount));
@@ -160,7 +166,8 @@ void PictureFrame::showPicInfo() const {
     }
 }
 void PictureFrame::showPicInfo(size_t index) const {
-    if (index >= metadataItem->picCount) return;
+    if (released) return;
+    if (metadataItem && index >= metadataItem->picCount) return;
     const PicInfo& currentPic = (picItem + index)->info;
     ui->resolutionLabel->setText(QString("%1x%2").arg(currentPic.width).arg(currentPic.height));
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
@@ -170,6 +177,7 @@ void PictureFrame::showPicInfo(size_t index) const {
     ui->fileTypeAndSizeLabel->setResponsive(true);
 }
 void PictureFrame::showThumbnail() const {
+    if (released) return;
     if (!picItem) return;
 
     if (auto img = imageLoader.getImage(picItem->info, LoadType::Thumbnail)) {
@@ -181,6 +189,7 @@ void PictureFrame::showThumbnail() const {
 // asynchronous loaded image display
 
 void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
+    if (released) return;
     if (const auto img = imageLoader.getImage(picId, loadType)) {
         if (loadType == LoadType::Thumbnail) {
             QPixmap pixmap = QPixmap::fromImage(*img);
@@ -219,7 +228,7 @@ bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
     return QFrame::eventFilter(watched, event);
 }
 void PictureFrame::loadPreviewImage() const {
-    if (!picItem || !metadataItem) return;
+    if (released || !picItem || !metadataItem) return;
 
     const size_t count = metadataItem ? metadataItem->picCount : 0;
     const size_t center = wrapIndex(static_cast<int>(previewingIndex), count);
@@ -237,6 +246,7 @@ void PictureFrame::loadPreviewImage() const {
     }
 }
 void PictureFrame::displayPreviewImage(size_t index) {
+    if (released || !picItem) return;
     if (auto img = imageLoader.getImage((picItem + index)->info, LoadType::Preview)) { // cache hit
         QPixmap pixmap = QPixmap::fromImage(*img);
         previewer.setPixmap(pixmap);
@@ -260,11 +270,13 @@ void PictureFrame::displayPreviewImage() {
     displayPreviewImage(previewingIndex);
 }
 void PictureFrame::showPreview() {
+    if (released) return;
     displayPreviewImage();
     previewer.show();
     displayingPreview = true;
 }
 void PictureFrame::hidePreview() {
+    if (released) return;
     previewer.hide();
     displayingPreview = false;
 }
@@ -272,6 +284,7 @@ void PictureFrame::hidePreview() {
 // shortcuts
 
 void PictureFrame::openFileWithDefaultApp() const {
+    if (released) return;
     for (const auto& path : picItem->info.filePaths) {
         try {
             QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
@@ -282,6 +295,7 @@ void PictureFrame::openFileWithDefaultApp() const {
     }
 }
 void PictureFrame::openFileLocation() const {
+    if (released) return;
     for (const auto& path : picItem->info.filePaths) {
         try {
             std::wstring command = L"explorer /select,\"";
@@ -301,6 +315,7 @@ void PictureFrame::openFileLocation() const {
     }
 }
 void PictureFrame::openIllustratorUrl() const {
+    if (released) return;
     if (!metadataItem) return;
     if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(
@@ -311,6 +326,7 @@ void PictureFrame::openIllustratorUrl() const {
     }
 }
 void PictureFrame::openIdUrl() const {
+    if (released) return;
     if (!metadataItem) return;
     if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(metadataItem->metadata.id))));

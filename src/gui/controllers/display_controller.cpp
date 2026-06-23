@@ -20,13 +20,7 @@
 #include "ui_main_window.h"
 #include <QScrollBar>
 
-DisplayController::DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader)
-    : ui(ui), picFramePool(ui->picBrowseWidget, imageLoader) {
-    this->totalWidth = ui->picBrowseScrollArea->width();
-    this->totalHeight = ui->picBrowseWidget->height();
-    this->viewportHeight = ui->picBrowseScrollArea->height();
-    this->picsPerRow = ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING)) + 1;
-}
+DisplayController::DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader) : ui(ui), imageLoader(imageLoader) {}
 
 DisplayController::~DisplayController() {
     if (displayItems) {
@@ -35,12 +29,19 @@ DisplayController::~DisplayController() {
     }
 }
 
+void DisplayController::setup() {
+    picFramePool = std::make_unique<PicFramePool>(ui->picBrowseWidget, imageLoader);
+}
+
 void DisplayController::refreshDisplay() {
     this->displayingItemIndices.clear();
     this->scrollBarValue = 0;
     this->picIdToFrameIdxMap.clear();
-    for (int i = startDisplayIndex; i <= endDisplayIndex; i++) {
-        picFramePool.release(picFrames[i]);
+    this->nextMatchSortedIndex = 0;
+    if (displaying) {
+        for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
+            picFramePool->release(picFrames[i]);
+        }
     }
     this->picFrames.clear();
     this->startDisplayIndex = 0;
@@ -55,20 +56,21 @@ void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField 
     delete this->displayItems; // delete previous displayItems
     this->displayItems = displayItems;
     this->displayMode = this->displayItems->type;
-    this->sortedItemIndices.resize(this->displayItems->metadataItems.size()
-                                       ? this->displayItems->type == DisplayItemType::Metadata
+    this->sortedItemIndices.resize(this->displayItems->type == DisplayItemType::Metadata
+                                       ? this->displayItems->metadataItems.size()
                                        : this->displayItems->picItems.size());
     std::iota(this->sortedItemIndices.begin(), this->sortedItemIndices.end(), 0);
     this->searchField = searchField;
 
     refreshDisplay();
+    displayPicFrames();
 }
 
 void DisplayController::displayImage(uint64_t picId, LoadType loadType) {
     auto it = picIdToFrameIdxMap.find(picId);
     if (it != picIdToFrameIdxMap.end()) {
-        size_t idx = it->second;
-        if (idx < startDisplayIndex || idx > endDisplayIndex) return; // not currently displayed
+        int idx = it->second;
+        if (idx < startDisplayIndex || idx >= endDisplayIndex) return; // not currently displayed
         PictureFrame* picFrame = picFrames[idx];
         if (picFrame) {
             picFrame->displayImage(picId, loadType);
@@ -76,11 +78,11 @@ void DisplayController::displayImage(uint64_t picId, LoadType loadType) {
     }
 }
 
-Vec2 DisplayController::getPicFramePosition(size_t displayIndex) const {
-    int availableWidth = totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH;
-    size_t row = displayIndex / picsPerRow;
-    size_t col = displayIndex % picsPerRow;
-    int x = MARGIN + col * (PIC_FRAME_WIDTH + availableWidth / picsPerRow);
+Vec2 DisplayController::getPicFramePosition(int displayIndex) const {
+    int availableWidth = totalWidth - 2 * MARGIN - (PIC_FRAME_WIDTH * picsPerRow);
+    int row = displayIndex / picsPerRow;
+    int col = displayIndex % picsPerRow;
+    int x = MARGIN + col * (PIC_FRAME_WIDTH + (availableWidth / picsPerRow)) + std::min(col, availableWidth % picsPerRow);
     int y = MARGIN + row * (PIC_FRAME_HEIGHT + SPACING);
     return Vec2{x, y};
 }
@@ -91,8 +93,8 @@ void DisplayController::displayPicFrames() {
     int viewportTopRow = std::max(0, (scrollBarValue - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING);
     int viewportBottomRow = (std::max(0, (scrollBarValue + viewportHeight - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING)) + 1;
 
-    size_t newStartDisplayIndex = std::max(0, viewportTopRow - PRE_LOAD_ROWS) * picsPerRow;
-    size_t newEndDisplayIndex = (viewportBottomRow + PRE_LOAD_ROWS) * picsPerRow;
+    int newStartDisplayIndex = std::max(0, viewportTopRow - PRE_LOAD_ROWS) * picsPerRow;
+    int newEndDisplayIndex = (viewportBottomRow + PRE_LOAD_ROWS) * picsPerRow;
 
     if (newStartDisplayIndex == startDisplayIndex && newEndDisplayIndex == endDisplayIndex) return; // no change
 
@@ -100,8 +102,8 @@ void DisplayController::displayPicFrames() {
     assert(newStartDisplayIndex < endDisplayIndex || newEndDisplayIndex > startDisplayIndex);
 
     if (newStartDisplayIndex < startDisplayIndex) { // need to load new frames at the top
-        for (size_t i = startDisplayIndex - 1; i >= newStartDisplayIndex; i--) {
-            size_t displayItemIdx = displayingItemIndices[i];
+        for (int i = startDisplayIndex - 1; i >= newStartDisplayIndex; i--) {
+            int displayItemIdx = displayingItemIndices[i];
             PicItem* picItem = nullptr;
             MetadataItem* metadataItem = nullptr;
             switch (displayMode) {
@@ -116,30 +118,33 @@ void DisplayController::displayPicFrames() {
                 picItem = &displayItems->picItems[metadataItem->picStartIndex];
                 break;
             }
-            PictureFrame* picFrame = picFramePool.acquire(picItem, metadataItem, searchField);
+            PictureFrame* picFrame = picFramePool->acquire(picItem, metadataItem, searchField);
             picFrames[i] = picFrame;
             Vec2 pos = getPicFramePosition(i);
             picFrame->move(pos.x, pos.y);
         }
         startDisplayIndex = newStartDisplayIndex;
     } else if (newStartDisplayIndex > startDisplayIndex) { // need to release frames at the top
-        for (size_t i = startDisplayIndex; i < newStartDisplayIndex; i++) {
-            picFramePool.release(picFrames[i]);
+        for (int i = startDisplayIndex; i < newStartDisplayIndex; i++) {
+            picFramePool->release(picFrames[i]);
             picFrames[i] = nullptr;
         }
         startDisplayIndex = newStartDisplayIndex;
     }
 
     if (newEndDisplayIndex > endDisplayIndex) { // need to load new frames at the bottom
-        for (size_t i = endDisplayIndex + 1; i <= newEndDisplayIndex; i++) {
+        int i;
+        for (i = endDisplayIndex; i < newEndDisplayIndex; i++) {
             if (i >= displayingItemIndices.size()) { // need to find next item that matches filter
                 while (nextMatchSortedIndex < sortedItemIndices.size()) {
                     if (displayMode == DisplayItemType::Pic &&
                         isMatchFilter(displayItems->picItems[sortedItemIndices[nextMatchSortedIndex]].info, filterCtx)) {
+                        nextMatchSortedIndex += 1;
                         break;
                     } else if (displayMode == DisplayItemType::Metadata &&
                                isMatchFilter(displayItems->metadataItems[sortedItemIndices[nextMatchSortedIndex]].metadata,
                                              filterCtx)) {
+                        nextMatchSortedIndex += 1;
                         break;
                     }
                     nextMatchSortedIndex += 1;
@@ -155,7 +160,7 @@ void DisplayController::displayPicFrames() {
                 displayingItemIndices.push_back(sortedItemIndices[nextMatchSortedIndex]);
             }
 
-            size_t displayItemIdx = displayingItemIndices[i];
+            int displayItemIdx = displayingItemIndices[i];
             PicItem* picItem = nullptr;
             MetadataItem* metadataItem = nullptr;
             switch (displayMode) {
@@ -176,7 +181,8 @@ void DisplayController::displayPicFrames() {
                 }
                 break;
             }
-            PictureFrame* picFrame = picFramePool.acquire(picItem, metadataItem, searchField);
+            PictureFrame* picFrame = picFramePool->acquire(picItem, metadataItem, searchField);
+            Info() << "picFrame width: " << picFrame->width() << ", height: " << picFrame->height();
             if (i >= picFrames.size()) {
                 picFrames.push_back(picFrame);
             } else {
@@ -185,24 +191,30 @@ void DisplayController::displayPicFrames() {
             Vec2 pos = getPicFramePosition(i);
             picFrame->move(pos.x, pos.y);
         }
-        endDisplayIndex = newEndDisplayIndex;
+        endDisplayIndex = i;
     } else if (newEndDisplayIndex < endDisplayIndex) { // need to release frames at the bottom
-        for (size_t i = endDisplayIndex; i > newEndDisplayIndex; i--) {
-            picFramePool.release(picFrames[i]);
+        for (int i = newEndDisplayIndex; i < endDisplayIndex; i++) {
+            picFramePool->release(picFrames[i]);
             picFrames[i] = nullptr;
         }
         endDisplayIndex = newEndDisplayIndex;
     }
+
+    displaying = true;
 }
 
 void DisplayController::handleWindowResize() {
+    Info() << "scroll area width: " << ui->picBrowseScrollArea->width() << ", height: " << ui->picBrowseScrollArea->height();
+    Info() << "content widget width: " << ui->picBrowseWidget->width() << ", height: " << ui->picBrowseWidget->height();
     this->totalWidth = ui->picBrowseScrollArea->width();
     this->viewportHeight = ui->picBrowseScrollArea->height();
     this->picsPerRow = ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING)) + 1;
-    displayPicFrames();
-    for (size_t i = startDisplayIndex; i <= endDisplayIndex; i++) {
-        Vec2 pos = getPicFramePosition(i);
-        picFrames[i]->move(pos.x, pos.y);
+    if (displayItems) {
+        displayPicFrames();
+        for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
+            Vec2 pos = getPicFramePosition(i);
+            picFrames[i]->move(pos.x, pos.y);
+        }
     }
 }
 void DisplayController::handleScrollBarValueChanged(int value) {
@@ -214,11 +226,11 @@ void DisplayController::sortDisplayItems(const SortContext& sortContext) {
     if (!displayItems) return; // no display items to display
 
     if (displayMode == DisplayItemType::Pic) {
-        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](size_t a, size_t b) {
+        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](int a, int b) {
             return comparePicItems(displayItems->picItems[a], displayItems->picItems[b], sortContext);
         });
     } else if (displayMode == DisplayItemType::Metadata) {
-        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](size_t a, size_t b) {
+        std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](int a, int b) {
             return compareMetadataItems(displayItems->metadataItems[a], displayItems->metadataItems[b], sortContext);
         });
     }

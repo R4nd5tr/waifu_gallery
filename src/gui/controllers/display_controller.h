@@ -48,6 +48,7 @@ class DisplayController {
 public:
     DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader);
     ~DisplayController();
+    void setup();
 
     void setDisplayItems(DisplayItems* displayItems, SearchField searchField);
 
@@ -61,19 +62,20 @@ public:
 
 private:
     Ui::MainWindow* ui;
-    PicFramePool picFramePool;
+    std::unique_ptr<PicFramePool> picFramePool = nullptr;
+    ImageLoader* imageLoader = nullptr;
 
     DisplayItemType displayMode = DisplayItemType::Pic;
     DisplayItems* displayItems = nullptr;
-    std::vector<size_t> sortedItemIndices; // index of displayItems in sorted order
+    std::vector<int> sortedItemIndices; // index of displayItems in sorted order
 
-    size_t nextMatchSortedIndex = 0;
-    std::vector<size_t> displayingItemIndices; // indices of displayItems filtered and currently being displayed
+    int nextMatchSortedIndex = 0;
+    std::vector<int> displayingItemIndices; // indices of displayItems filtered and currently being displayed
 
     std::vector<PictureFrame*> picFrames; // displaying PictureFrames, corresponds to displayingIndices
-    size_t startDisplayIndex = 0;
-    size_t endDisplayIndex = 0;
-    std::unordered_map<uint64_t, size_t> picIdToFrameIdxMap;
+    int startDisplayIndex = 0;
+    int endDisplayIndex = 0;
+    std::unordered_map<uint64_t, int> picIdToFrameIdxMap;
 
     FilterContext filterCtx;
     SearchField searchField = SearchField::None;
@@ -82,9 +84,10 @@ private:
     int totalHeight = 0;
     int viewportHeight = 0;
     int scrollBarValue = 0;
-    size_t picsPerRow = 0;
+    int picsPerRow = 0;
+    bool displaying = false;
 
-    Vec2 getPicFramePosition(size_t displayIndex) const;
+    Vec2 getPicFramePosition(int displayIndex) const;
     void displayPicFrames();
     void refreshDisplay();
 };
