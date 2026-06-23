@@ -68,3 +68,51 @@ struct SearchContext {
     std::unordered_set<uint32_t> includedPlatformTags;
     std::unordered_set<uint32_t> excludedPlatformTags;
 };
+
+bool isMatchFilter(const PicInfo& pic, const FilterContext& filterCtx) {
+    if (!filterCtx.showUnknowPlatform && pic.sourceIdentifiers.empty()) return false;
+    for (const auto& source : pic.sourceIdentifiers) {
+        if (source.platform == PlatformType::Pixiv && !filterCtx.showPixiv) return false;
+        if (source.platform == PlatformType::Twitter && !filterCtx.showTwitter) return false;
+    }
+    if (!filterCtx.showPNG && pic.fileType == ImageFormat::PNG) return false;
+    if (!filterCtx.showJPG && pic.fileType == ImageFormat::JPG) return false;
+    if (!filterCtx.showGIF && pic.fileType == ImageFormat::GIF) return false;
+    if (!filterCtx.showWEBP && pic.fileType == ImageFormat::WebP) return false;
+
+    if (!filterCtx.showUnknowRestrict && pic.restrictType == RestrictType::Unknown) return false;
+    if (!filterCtx.showAllAge && pic.restrictType == RestrictType::AllAges) return false;
+    if (!filterCtx.showSensitive && pic.restrictType == RestrictType::Sensitive) return false;
+    if (!filterCtx.showQuestionable && pic.restrictType == RestrictType::Questionable) return false;
+    if (!filterCtx.showR18 && pic.restrictType == RestrictType::R18) return false;
+    if (!filterCtx.showR18G && pic.restrictType == RestrictType::R18G) return false;
+
+    if (!filterCtx.showUnknowAI && pic.aiType == AIType::Unknown) return false;
+    if (!filterCtx.showAI && pic.aiType == AIType::AI) return false;
+    if (!filterCtx.showNonAI && pic.aiType == AIType::NotAI) return false;
+
+    if (pic.width > filterCtx.maxWidth) return false;
+    if (pic.width < filterCtx.minWidth) return false;
+    if (pic.height > filterCtx.maxHeight) return false;
+    if (pic.height < filterCtx.minHeight) return false;
+
+    return true;
+};
+bool isMatchFilter(const Metadata& metadata, const FilterContext& filterCtx) {
+    if (!filterCtx.showUnknowPlatform && metadata.platformType == PlatformType::Unknown) return false;
+    if (metadata.platformType == PlatformType::Pixiv && !filterCtx.showPixiv) return false;
+    if (metadata.platformType == PlatformType::Twitter && !filterCtx.showTwitter) return false;
+
+    if (!filterCtx.showUnknowRestrict && metadata.restrictType == RestrictType::Unknown) return false;
+    if (!filterCtx.showAllAge && metadata.restrictType == RestrictType::AllAges) return false;
+    if (!filterCtx.showSensitive && metadata.restrictType == RestrictType::Sensitive) return false;
+    if (!filterCtx.showQuestionable && metadata.restrictType == RestrictType::Questionable) return false;
+    if (!filterCtx.showR18 && metadata.restrictType == RestrictType::R18) return false;
+    if (!filterCtx.showR18G && metadata.restrictType == RestrictType::R18G) return false;
+
+    if (!filterCtx.showUnknowAI && metadata.aiType == AIType::Unknown) return false;
+    if (!filterCtx.showAI && metadata.aiType == AIType::AI) return false;
+    if (!filterCtx.showNonAI && metadata.aiType == AIType::NotAI) return false;
+
+    return true;
+};

@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "context_controller.h"
 #include "service/database.h"
 #include <QObject>
 #include <QPixmap>
@@ -29,17 +30,10 @@ public:
     explicit DatabaseWorker(QObject* parent = nullptr);
     ~DatabaseWorker();
 
-    void searchPics(const std::unordered_set<uint32_t>& includedTags,
-                    const std::unordered_set<uint32_t>& excludedTags,
-                    const std::unordered_set<uint32_t>& includedPlatformTags,
-                    const std::unordered_set<uint32_t>& excludedPlatformTags,
-                    PlatformType platform,
-                    SearchField searchField,
-                    const std::string& searchText,
-                    size_t requestId);
+    void searchPics(const SearchContext& searchCtx, size_t requestId);
 
 signals:
-    void searchComplete(const std::vector<DisplayItem>& pics,
+    void searchComplete(std::unique_ptr<DisplayItems> displayItems,
                         const std::vector<TagCount> availableTags,
                         const std::vector<PlatformTagCount> availablePlatformTags,
                         size_t requestId);

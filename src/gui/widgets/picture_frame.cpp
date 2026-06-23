@@ -52,8 +52,9 @@ constexpr size_t PRELOAD_PREVIEW_COUNT = 2;
 
 // initialize
 
-PictureFrame::PictureFrame(QWidget* parent, const DisplayItem* displayItem, ImageLoader& imageLoader, SearchField searchField)
-    : QFrame(parent), ui(new Ui::PictureFrame), displayItem(displayItem), imageLoader(imageLoader) {
+PictureFrame::PictureFrame(
+    QWidget* parent, const PicItem* picItem, const MetadataItem* metadataItem, ImageLoader& imageLoader, SearchField searchField)
+    : QFrame(parent), ui(new Ui::PictureFrame), picItem(picItem), metadataItem(metadataItem), imageLoader(imageLoader) {
     ui->setupUi(this);
     connectSignals();
     showInfo(searchField);
@@ -85,7 +86,8 @@ void PictureFrame::reset() {
 
     displayingPreview = false;
     previewingIndex = 0;
-    displayItem = nullptr;
+    picItem = nullptr;
+    metadataItem = nullptr;
 }
 
 void PictureFrame::showInfo(SearchField searchField) const {
@@ -93,32 +95,32 @@ void PictureFrame::showInfo(SearchField searchField) const {
 
     ui->titleLabel->setResponsive(false);
     // show metadata if available, otherwise show filename and disable links
-    if (!displayItem->metadata.empty()) { // display metadata if available, otherwise show filename and disable links
-        switch (displayItem->metadata[0].platformType) {
+    if (metadataItem) { // display metadata if available, otherwise show filename and disable links
+        switch (metadataItem->metadata.platformType) {
         case PlatformType::Pixiv:
-            ui->titleLabel->setText(QString::fromStdString(displayItem->metadata[0].title));
-            ui->illustratorLabel->setText(QString::fromStdString(displayItem->metadata[0].authorName));
-            ui->idLabel->setText(QString("pid: %1").arg(QString::number(displayItem->metadata[0].id)));
+            ui->titleLabel->setText(QString::fromStdString(metadataItem->metadata.title));
+            ui->illustratorLabel->setText(QString::fromStdString(metadataItem->metadata.authorName));
+            ui->idLabel->setText(QString("pid: %1").arg(QString::number(metadataItem->metadata.id)));
             break;
         case PlatformType::Twitter: {
-            QString description = QString::fromStdString(displayItem->metadata[0].description).split('\n').first();
+            QString description = QString::fromStdString(metadataItem->metadata.description).split('\n').first();
             if (description.length() > MAX_TITLE_LENGTH) {
                 description = description.left(MAX_TITLE_LENGTH) + "...";
             }
             ui->titleLabel->setText(description);
-            ui->illustratorLabel->setText(QString::fromStdString(displayItem->metadata[0].authorNick));
-            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(displayItem->metadata[0].authorName)));
+            ui->illustratorLabel->setText(QString::fromStdString(metadataItem->metadata.authorNick));
+            ui->idLabel->setText(QString("@%1").arg(QString::fromStdString(metadataItem->metadata.authorName)));
             break;
         }
         default:
-            ui->titleLabel->setText(QString::fromStdString(displayItem->metadata[0].title));
-            ui->idLabel->setText(QString::number(displayItem->metadata[0].id));
+            ui->titleLabel->setText(QString::fromStdString(metadataItem->metadata.title));
+            ui->idLabel->setText(QString::number(metadataItem->metadata.id));
             ui->illustratorLabel->setResponsive(false);
             ui->idLabel->setResponsive(false);
             break;
         }
     } else { // no metadata, show filename and disable links
-        QString filename = QString::fromStdString(displayItem->pics[0].filePaths.begin()->filename().string());
+        QString filename = QString::fromStdString(picItem->info.filePaths.begin()->filename().string());
         if (filename.length() > MAX_TITLE_LENGTH) {
             filename = filename.left(MAX_TITLE_LENGTH) + "...";
         }
@@ -148,9 +150,9 @@ void PictureFrame::showInfo(SearchField searchField) const {
     }
 }
 void PictureFrame::showPicInfo() const {
-    if (displayItem->type == DisplayItemType::Metadata && displayItem->pics.size() > 1 && !displayingPreview) {
+    if (metadataItem && metadataItem->picCount > 1 && !displayingPreview) {
         ui->resolutionLabel->setText("");
-        ui->fileTypeAndSizeLabel->setText(QString("%1 pics").arg(displayItem->pics.size()));
+        ui->fileTypeAndSizeLabel->setText(QString("%1 pics").arg(metadataItem->picCount));
         ui->resolutionLabel->setResponsive(false);
         ui->fileTypeAndSizeLabel->setResponsive(false);
     } else {
@@ -158,17 +160,19 @@ void PictureFrame::showPicInfo() const {
     }
 }
 void PictureFrame::showPicInfo(size_t index) const {
-    ui->resolutionLabel->setText(QString("%1x%2").arg(displayItem->pics[index].width).arg(displayItem->pics[index].height));
+    if (index >= metadataItem->picCount) return;
+    const PicInfo& currentPic = (picItem + index)->info;
+    ui->resolutionLabel->setText(QString("%1x%2").arg(currentPic.width).arg(currentPic.height));
     ui->fileTypeAndSizeLabel->setText(QString("%1 | %2 MB")
-                                          .arg(getFileTypeStr(displayItem->pics[index].fileType))
-                                          .arg(static_cast<double>(displayItem->pics[index].size) / (1024 * 1024), 0, 'f', 2));
+                                          .arg(getFileTypeStr(currentPic.fileType))
+                                          .arg(static_cast<double>(currentPic.size) / (1024 * 1024), 0, 'f', 2));
     ui->resolutionLabel->setResponsive(true);
     ui->fileTypeAndSizeLabel->setResponsive(true);
 }
 void PictureFrame::showThumbnail() const {
-    if (!displayItem || displayItem->pics.empty()) return;
+    if (!picItem) return;
 
-    if (auto img = imageLoader.getImage(displayItem->pics[0], LoadType::Thumbnail)) {
+    if (auto img = imageLoader.getImage(picItem->info, LoadType::Thumbnail)) {
         QPixmap pixmap = QPixmap::fromImage(*img);
         ui->imageLabel->setPixmap(pixmap);
     }
@@ -181,7 +185,7 @@ void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
         if (loadType == LoadType::Thumbnail) {
             QPixmap pixmap = QPixmap::fromImage(*img);
             ui->imageLabel->setPixmap(pixmap);
-        } else if (loadType == LoadType::Preview && displayingPreview && displayItem->pics[previewingIndex].id == picId) {
+        } else if (loadType == LoadType::Preview && displayingPreview && (picItem + previewingIndex)->info.id == picId) {
             // only display if it's the preview image currently being previewed
             displayPreviewImage();
         }
@@ -194,16 +198,16 @@ void PictureFrame::displayImage(uint64_t picId, LoadType loadType) {
 
 bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
     if ((watched == ui->imageLabel || watched == &previewer || watched == this) && event->type() == QEvent::Wheel) {
-        if (!displayingPreview || !displayItem || displayItem->pics.size() <= 1) {
+        if (!displayingPreview || !metadataItem || metadataItem->picCount <= 1) {
             return QFrame::eventFilter(watched, event);
         }
 
         auto* wheelEvent = dynamic_cast<QWheelEvent*>(event);
 
         if (wheelEvent->angleDelta().y() > 0) {
-            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) - 1, displayItem->pics.size());
+            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) - 1, metadataItem->picCount);
         } else {
-            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) + 1, displayItem->pics.size());
+            previewingIndex = wrapIndex(static_cast<int>(previewingIndex) + 1, metadataItem->picCount);
         }
         displayPreviewImage();
         showPicInfo(previewingIndex);
@@ -215,25 +219,25 @@ bool PictureFrame::eventFilter(QObject* watched, QEvent* event) {
     return QFrame::eventFilter(watched, event);
 }
 void PictureFrame::loadPreviewImage() const {
-    if (!displayItem || displayItem->pics.empty()) return;
+    if (!picItem || !metadataItem) return;
 
-    const size_t count = displayItem->pics.size();
+    const size_t count = metadataItem ? metadataItem->picCount : 0;
     const size_t center = wrapIndex(static_cast<int>(previewingIndex), count);
 
-    imageLoader.getImage(displayItem->pics[center], LoadType::Preview);
+    imageLoader.getImage((picItem + center)->info, LoadType::Preview);
 
     for (size_t offset = 1; offset <= PRELOAD_PREVIEW_COUNT; ++offset) {
         const size_t left = wrapIndex(static_cast<int>(center) - static_cast<int>(offset), count);
         const size_t right = wrapIndex(static_cast<int>(center) + static_cast<int>(offset), count);
 
-        imageLoader.getImage(displayItem->pics[left], LoadType::Preview);
+        imageLoader.getImage((picItem + left)->info, LoadType::Preview);
         if (right != left) {
-            imageLoader.getImage(displayItem->pics[right], LoadType::Preview);
+            imageLoader.getImage((picItem + right)->info, LoadType::Preview);
         }
     }
 }
 void PictureFrame::displayPreviewImage(size_t index) {
-    if (auto img = imageLoader.getImage(displayItem->pics[index], LoadType::Preview)) { // cache hit
+    if (auto img = imageLoader.getImage((picItem + index)->info, LoadType::Preview)) { // cache hit
         QPixmap pixmap = QPixmap::fromImage(*img);
         previewer.setPixmap(pixmap);
         const QPoint topLeft = mapToGlobal(QPoint(0, 0));
@@ -268,7 +272,7 @@ void PictureFrame::hidePreview() {
 // shortcuts
 
 void PictureFrame::openFileWithDefaultApp() const {
-    for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
+    for (const auto& path : picItem->info.filePaths) {
         try {
             QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
             break;
@@ -278,7 +282,7 @@ void PictureFrame::openFileWithDefaultApp() const {
     }
 }
 void PictureFrame::openFileLocation() const {
-    for (const auto& path : displayItem->pics[previewingIndex].filePaths) {
+    for (const auto& path : picItem->info.filePaths) {
         try {
             std::wstring command = L"explorer /select,\"";
             std::wstring winPath = path.wstring();
@@ -297,20 +301,20 @@ void PictureFrame::openFileLocation() const {
     }
 }
 void PictureFrame::openIllustratorUrl() const {
-    if (displayItem->metadata.empty()) return;
-    if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
+    if (!metadataItem) return;
+    if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(
-            QUrl(QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(displayItem->metadata[0].authorID))));
-    } else if (displayItem->metadata[0].platformType == PlatformType::Twitter) {
+            QUrl(QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(metadataItem->metadata.authorID))));
+    } else if (metadataItem->metadata.platformType == PlatformType::Twitter) {
         QDesktopServices::openUrl(
-            QUrl(QString::fromStdString(TWITTER_AUTHOR_URL + std::to_string(displayItem->metadata[0].authorID))));
+            QUrl(QString::fromStdString(TWITTER_AUTHOR_URL + std::to_string(metadataItem->metadata.authorID))));
     }
 }
 void PictureFrame::openIdUrl() const {
-    if (displayItem->metadata.empty()) return;
-    if (displayItem->metadata[0].platformType == PlatformType::Pixiv) {
-        QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(displayItem->metadata[0].id))));
-    } else if (displayItem->metadata[0].platformType == PlatformType::Twitter) {
-        QDesktopServices::openUrl(QUrl(QString::fromStdString(TWITTER_BASE_URL + std::to_string(displayItem->metadata[0].id))));
+    if (!metadataItem) return;
+    if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(metadataItem->metadata.id))));
+    } else if (metadataItem->metadata.platformType == PlatformType::Twitter) {
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(TWITTER_BASE_URL + std::to_string(metadataItem->metadata.id))));
     }
 }

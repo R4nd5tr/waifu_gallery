@@ -23,14 +23,16 @@
 DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent), database{DbMode::Query} { // search worker
 }
 DatabaseWorker::~DatabaseWorker() {}
-void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags,
-                                const std::unordered_set<uint32_t>& excludedTags,
-                                const std::unordered_set<uint32_t>& includedPlatformTags,
-                                const std::unordered_set<uint32_t>& excludedPlatformTags,
-                                PlatformType platform,
-                                SearchField searchField,
-                                const std::string& searchText,
-                                size_t requestId) { // TODO: support display metadata instead of pics directly in the future
+void DatabaseWorker::searchPics(const SearchContext& searchCtx, size_t requestId) {
+
+    const std::unordered_set<uint32_t>& includedTags = searchCtx.includedTags;
+    const std::unordered_set<uint32_t>& excludedTags = searchCtx.excludedTags;
+    const std::unordered_set<uint32_t>& includedPlatformTags = searchCtx.includedPlatformTags;
+    const std::unordered_set<uint32_t>& excludedPlatformTags = searchCtx.excludedPlatformTags;
+    PlatformType platform = searchCtx.searchPlatform;
+    SearchField searchField = searchCtx.searchField;
+    const std::string& searchText = searchCtx.searchText;
+
     bool tagSearchApplied = !includedTags.empty() || !excludedTags.empty();
     bool platformTagSearchApplied = !includedPlatformTags.empty() || !excludedPlatformTags.empty();
     bool textSearchApplied = !searchText.empty() && searchField != SearchField::None;
@@ -64,7 +66,7 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
     }
 
     // intersect all search results
-    std::vector<DisplayItem> resultItems;
+    std::unique_ptr<DisplayItems> displayItems = std::make_unique<DisplayItems>();
     if (displayType == DisplayItemType::Metadata) {
         std::vector<PlatformID> intersectedResult;
         if (textSearchApplied && platformTagSearchApplied) {
@@ -86,14 +88,21 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
                 intersectedResult.push_back(id);
             }
         }
-        for (const auto& platformID : intersectedResult) {
-            DisplayItem item;
-            item.type = DisplayItemType::Metadata;
-            item.metadata.push_back(database.getMetadata(platformID));
-            item.pics = database.getMetadataPicInfos(platformID);
-            resultItems.push_back(item);
-        }
 
+        displayItems->type = DisplayItemType::Metadata;
+        displayItems->metadataItems.reserve(intersectedResult.size());
+        displayItems->picItems.reserve(intersectedResult.size());
+        size_t metadataIdx = 0;
+        size_t picIdx = 0;
+        for (const auto& platformID : intersectedResult) {
+            auto picIds = database.getMetadataPicIds(platformID);
+            displayItems->metadataItems.emplace_back(MetadataItem{database.getMetadata(platformID), picIdx, picIds.size()});
+            for (const auto& picId : picIds) {
+                displayItems->picItems.emplace_back(PicItem{database.getPicInfo(picId), metadataIdx, 1});
+                picIdx++;
+            }
+            metadataIdx++;
+        }
     } else if (displayType == DisplayItemType::Pic) { // tag search is always applied
         std::vector<uint64_t> intersectedResult;
         std::unordered_set<uint64_t> platformTagSearchIntersectedResult;
@@ -159,16 +168,19 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
                 intersectedResult.push_back(id);
             }
         }
-
+        displayItems->type = DisplayItemType::Pic;
+        displayItems->picItems.reserve(intersectedResult.size());
+        displayItems->metadataItems.reserve(intersectedResult.size());
+        size_t picIdx = 0;
+        size_t metadataIdx = 0;
         for (const auto& id : intersectedResult) {
-            DisplayItem item;
-            item.type = DisplayItemType::Pic;
             PicInfo picInfo = database.getPicInfo(id);
-            item.pics.push_back(picInfo);
+            displayItems->picItems.emplace_back(PicItem{picInfo, metadataIdx, picInfo.sourceIdentifiers.size()});
             for (const auto& identifier : picInfo.sourceIdentifiers) {
-                item.metadata.push_back(database.getMetadata(identifier));
+                displayItems->metadataItems.emplace_back(MetadataItem{database.getMetadata(identifier), picIdx, 1});
+                metadataIdx++;
             }
-            resultItems.push_back(item);
+            picIdx++;
         }
     }
 
@@ -177,20 +189,20 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
     std::unordered_map<uint32_t, int> platformTagCount;
     std::unordered_set<PlatformID> countedMetadata; // to avoid double counting metadata tags
     std::unordered_set<uint64_t> countedPics;       // to avoid double counting pic tags
-    for (const auto& item : resultItems) {
-        for (const auto& pic : item.pics) {
-            if (countedPics.find(pic.id) != countedPics.end()) continue;
-            countedPics.insert(pic.id);
-            for (const auto& picTag : pic.tags) {
-                tagCount[picTag.tagId]++;
-            }
+    for (const auto& item : displayItems->picItems) {
+        const auto& pic = item.info;
+        if (countedPics.find(pic.id) != countedPics.end()) continue;
+        countedPics.insert(pic.id);
+        for (const auto& picTag : pic.tags) {
+            tagCount[picTag.tagId]++;
         }
-        for (const auto& metadata : item.metadata) {
-            if (countedMetadata.find(metadata.getPlatformID()) != countedMetadata.end()) continue;
-            countedMetadata.insert(metadata.getPlatformID());
-            for (const auto& tagId : metadata.tagIds) {
-                platformTagCount[tagId]++;
-            }
+    }
+    for (const auto& metadataItem : displayItems->metadataItems) {
+        const auto& metadata = metadataItem.metadata;
+        if (countedMetadata.find(metadata.getPlatformID()) != countedMetadata.end()) continue;
+        countedMetadata.insert(metadata.getPlatformID());
+        for (const auto& tagId : metadata.tagIds) {
+            platformTagCount[tagId]++;
         }
     }
 
@@ -223,5 +235,5 @@ void DatabaseWorker::searchPics(const std::unordered_set<uint32_t>& includedTags
               availablePlatformTags.end(),
               [](const PlatformTagCount& a, const PlatformTagCount& b) { return b.count < a.count; });
 
-    emit searchComplete(resultItems, availableTags, availablePlatformTags, requestId);
+    emit searchComplete(std::move(displayItems), availableTags, availablePlatformTags, requestId);
 }

@@ -41,7 +41,8 @@ class PictureFrame : public QFrame {
     Q_OBJECT
 public:
     explicit PictureFrame(QWidget* parent,
-                          const DisplayItem* displayItem,
+                          const PicItem* picItem,
+                          const MetadataItem* metadataItem,
                           ImageLoader& imageLoader,
                           SearchField searchField = SearchField::None);
     ~PictureFrame();
@@ -49,8 +50,9 @@ public:
     void displayImage(uint64_t picId, LoadType loadType); // asynchronous loaded image will be displayed through this function
 
     void reset();
-    void updateDisplayItem(const DisplayItem* newDisplayItem, SearchField searchField) {
-        displayItem = newDisplayItem;
+    void updateDisplayItem(const PicItem* newPicItem, const MetadataItem* newMetadataItem, SearchField searchField) {
+        picItem = newPicItem;
+        metadataItem = newMetadataItem;
         showInfo(searchField);
         showThumbnail();
     }
@@ -65,7 +67,8 @@ protected:
 
 private:
     Ui::PictureFrame* ui;
-    const DisplayItem* displayItem = nullptr;
+    const PicItem* picItem;
+    const MetadataItem* metadataItem;
     ImageLoader& imageLoader;
     void connectSignals();
 

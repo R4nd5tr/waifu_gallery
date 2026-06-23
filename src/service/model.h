@@ -146,8 +146,18 @@ struct PicInfo {     // represents one image file
 };
 
 enum class DisplayItemType { Pic, Metadata };
-struct DisplayItem {
-    DisplayItemType type;
-    std::vector<Metadata> metadata;
-    std::vector<PicInfo> pics;
+struct PicItem {
+    PicInfo info;
+    size_t metadataStartIndex = 0;
+    size_t metadataCount = 0;
+};
+struct MetadataItem {
+    Metadata metadata;
+    size_t picStartIndex = 0;
+    size_t picCount = 0;
+};
+struct DisplayItems {
+    DisplayItemType type = DisplayItemType::Pic;
+    std::vector<PicItem> picItems;
+    std::vector<MetadataItem> metadataItems;
 };
