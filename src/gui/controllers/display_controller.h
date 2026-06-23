@@ -73,8 +73,8 @@ private:
     std::vector<int> displayingItemIndices; // indices of displayItems filtered and currently being displayed
 
     std::vector<PictureFrame*> picFrames; // displaying PictureFrames, corresponds to displayingIndices
-    int startDisplayIndex = 0;
-    int endDisplayIndex = 0;
+    int startDisplayIndex = 0;            // [start, end) is the range of displaying PictureFrames in picFrames
+    int endDisplayIndex = 0;              // index of the last displaying PictureFrame + 1, exclusive
     std::unordered_map<uint64_t, int> picIdToFrameIdxMap;
 
     FilterContext filterCtx;

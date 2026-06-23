@@ -53,7 +53,7 @@ public:
     void updateDisplayItem(const PicItem* newPicItem, const MetadataItem* newMetadataItem, SearchField searchField) {
         picItem = newPicItem;
         metadataItem = newMetadataItem;
-        released = false;
+        released = true;
         showInfo(searchField);
         showThumbnail();
     }
