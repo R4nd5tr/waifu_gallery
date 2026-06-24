@@ -50,6 +50,7 @@ void DisplayController::refreshDisplay() {
     // update totalHeight to max possible height, will be updated when displaying items
     this->totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (this->sortedItemIndices.size() / this->picsPerRow + 1);
     this->ui->picBrowseWidget->setMinimumHeight(this->totalHeight);
+    displaying = false;
 }
 
 void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField searchField) {
@@ -97,7 +98,7 @@ void DisplayController::displayPicFrames() {
     int newStartDisplayIndex = std::max(0, viewportTopRow - PRE_LOAD_ROWS) * picsPerRow;
     int newEndDisplayIndex = (viewportBottomRow + PRE_LOAD_ROWS) * picsPerRow;
 
-    if (newStartDisplayIndex == startDisplayIndex && newEndDisplayIndex == endDisplayIndex) return; // no change
+    if (displaying && newStartDisplayIndex == startDisplayIndex && newEndDisplayIndex == endDisplayIndex) return; // no change
 
     if (newStartDisplayIndex < startDisplayIndex) { // load new frames at the top
         for (int i = std::min(startDisplayIndex - 1, newEndDisplayIndex - 1); i >= newStartDisplayIndex; i--) {
@@ -208,7 +209,7 @@ void DisplayController::displayPicFrames() {
 void DisplayController::handleWindowResize() {
     this->totalWidth = ui->picBrowseScrollArea->width();
     this->viewportHeight = ui->picBrowseScrollArea->height();
-    this->picsPerRow = ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING)) + 1;
+    this->picsPerRow = std::max(0, ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING))) + 1;
     if (displayItems) {
         displayPicFrames();
         for (int i = startDisplayIndex; i < endDisplayIndex; i++) {

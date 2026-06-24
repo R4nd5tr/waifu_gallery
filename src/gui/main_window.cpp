@@ -381,9 +381,11 @@ void MainWindow::updateEnableRatioSort(bool checked) {
     if (ratioSortEnabled) {
         ui->sortComboBox->setDisabled(true);
         ui->orderComboBox->setDisabled(true);
+        sortCtx.sortBy = SortBy::Ratio;
     } else {
         ui->sortComboBox->setEnabled(true);
         ui->orderComboBox->setEnabled(true);
+        sortCtx.sortBy = static_cast<SortBy>(ui->sortComboBox->currentIndex());
     }
     displayController.sortDisplayItems(sortCtx);
     displayController.setFilterContext(filterCtx);
