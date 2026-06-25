@@ -212,9 +212,8 @@ bool DisplayController::fillFilteredItemUntil(int displayIndex) {
 // Event handlers
 
 void DisplayController::handleWindowResize() {
+    resizing = true; // ignore scroll events during resizing
     int currentDisplayOffset = std::max(0, (scrollBarValue - MARGIN)) % (PIC_FRAME_HEIGHT + SPACING);
-    int col = currentDisplayOffset / ((PIC_FRAME_WIDTH + SPACING) / picsPerRow);
-    int currentDisplayIdxLocation = picsPerRow * (std::max(0, (scrollBarValue - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING)) + col;
 
     totalWidth = ui->picBrowseScrollArea->width();
     viewportHeight = ui->picBrowseScrollArea->height();
@@ -222,8 +221,7 @@ void DisplayController::handleWindowResize() {
     int newPicsPerRow = std::max(0, ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING))) + 1;
     if (newPicsPerRow != picsPerRow) { // make sure resizing does not change or shift displaying content
         picsPerRow = newPicsPerRow;
-        scrollBarValue = MARGIN + (currentDisplayIdxLocation / picsPerRow) * (PIC_FRAME_HEIGHT + SPACING) +
-                         (currentDisplayIdxLocation % picsPerRow) * ((PIC_FRAME_WIDTH + SPACING) / picsPerRow);
+        scrollBarValue = MARGIN + (lookingAt / picsPerRow) * (PIC_FRAME_HEIGHT + SPACING) + currentDisplayOffset;
         totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
         ui->picBrowseWidget->setMinimumHeight(totalHeight);
         ui->picBrowseScrollArea->verticalScrollBar()->setValue(scrollBarValue);
@@ -235,9 +233,14 @@ void DisplayController::handleWindowResize() {
             picFrames[i]->move(pos.x, pos.y);
         }
     }
+    resizing = false;
 }
 void DisplayController::handleScrollBarValueChanged(int value) {
+    if (resizing) return; // ignore scroll events during resizing
     scrollBarValue = value;
+    int currentDisplayOffset = std::max(0, (scrollBarValue - MARGIN)) % (PIC_FRAME_HEIGHT + SPACING);
+    int col = currentDisplayOffset / ((PIC_FRAME_WIDTH + SPACING) / picsPerRow);
+    lookingAt = picsPerRow * (std::max(0, (scrollBarValue - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING)) + col;
     displayPicFrames();
 }
 
