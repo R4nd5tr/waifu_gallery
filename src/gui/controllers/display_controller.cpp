@@ -48,8 +48,6 @@ void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField 
     totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
     ui->picBrowseWidget->setMinimumHeight(totalHeight);
     resizing = false;
-
-    displayPicFrames();
 }
 
 // helper functions
@@ -67,10 +65,9 @@ void DisplayController::clearDisplay() {
     std::fill(picFrames.begin(), picFrames.end(), nullptr);
     startDisplayIndex = 0;
     endDisplayIndex = 0;
+    resizing = true; // ignore scroll events during resizing
     ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
     // update totalHeight to max possible height, will be updated when displaying items
-
-    resizing = true; // ignore scroll events during resizing
     totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
     ui->picBrowseWidget->setMinimumHeight(totalHeight);
     resizing = false;

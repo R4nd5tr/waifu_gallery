@@ -70,6 +70,7 @@ private:
     std::vector<int> sortedItemIndices; // index of displayItems in sorted order
     int nextMatchSortedIndex = 0;
 
+    bool displaying = false;                // when displaying, everything below should be valid
     std::vector<int> displayingItemIndices; // indices of displayItems filtered and currently being displayed
     std::vector<PictureFrame*> picFrames;   // displaying PictureFrames, corresponds to displayingIndices
     int startDisplayIndex = 0;              // [start, end) is the range of displaying PictureFrames in picFrames
@@ -87,7 +88,6 @@ private:
 
     int lookingAt = 0;
     bool resizing = false;
-    bool displaying = false;
 
     Vec2 getPicFramePosition(int displayIndex) const;
     void displayPicFrames();
