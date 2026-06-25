@@ -68,13 +68,12 @@ private:
     DisplayItemType displayMode = DisplayItemType::Pic;
     DisplayItems* displayItems = nullptr;
     std::vector<int> sortedItemIndices; // index of displayItems in sorted order
-
     int nextMatchSortedIndex = 0;
-    std::vector<int> displayingItemIndices; // indices of displayItems filtered and currently being displayed
 
-    std::vector<PictureFrame*> picFrames; // displaying PictureFrames, corresponds to displayingIndices
-    int startDisplayIndex = 0;            // [start, end) is the range of displaying PictureFrames in picFrames
-    int endDisplayIndex = 0;              // index of the last displaying PictureFrame + 1, exclusive
+    std::vector<int> displayingItemIndices; // indices of displayItems filtered and currently being displayed
+    std::vector<PictureFrame*> picFrames;   // displaying PictureFrames, corresponds to displayingIndices
+    int startDisplayIndex = 0;              // [start, end) is the range of displaying PictureFrames in picFrames
+    int endDisplayIndex = 0;                // and indices in displayingItemIndices currently being displayed
     std::unordered_map<uint64_t, int> picIdToFrameIdxMap;
 
     FilterContext filterCtx;
@@ -89,5 +88,6 @@ private:
 
     Vec2 getPicFramePosition(int displayIndex) const;
     void displayPicFrames();
-    void refreshDisplay();
+    void clearDisplay();
+    bool fillFilteredItemUntil(int count);
 };

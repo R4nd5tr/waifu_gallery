@@ -78,11 +78,12 @@ void PictureFrame::connectSignals() {
 }
 void PictureFrame::reset() {
     ui->imageLabel->clear();
-    ui->titleLabel->clear();
-    ui->illustratorLabel->clear();
-    ui->idLabel->clear();
-    ui->resolutionLabel->clear();
-    ui->fileTypeAndSizeLabel->clear();
+
+    ui->titleLabel->reset();
+    ui->illustratorLabel->reset();
+    ui->idLabel->reset();
+    ui->resolutionLabel->reset();
+    ui->fileTypeAndSizeLabel->reset();
 
     hidePreview();
 
@@ -261,6 +262,7 @@ void PictureFrame::displayPreviewImage(size_t index) {
         const int yPos = upperHalf ? topLeft.y() : (topLeft.y() + height() - previewer.height());
 
         previewer.move(x, yPos);
+        previewer.show();
         showPicInfo(index);
     }
     // cache miss, the preview image will be loaded asynchronously and
@@ -272,7 +274,6 @@ void PictureFrame::displayPreviewImage() {
 void PictureFrame::showPreview() {
     if (released) return;
     displayPreviewImage();
-    previewer.show();
     displayingPreview = true;
 }
 void PictureFrame::hidePreview() {
@@ -284,7 +285,7 @@ void PictureFrame::hidePreview() {
 // shortcuts
 
 void PictureFrame::openFileWithDefaultApp() const {
-    if (released) return;
+    if (released || !picItem) return;
     for (const auto& path : picItem->info.filePaths) {
         try {
             QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(path.string())));
@@ -295,7 +296,7 @@ void PictureFrame::openFileWithDefaultApp() const {
     }
 }
 void PictureFrame::openFileLocation() const {
-    if (released) return;
+    if (released || !picItem) return;
     for (const auto& path : picItem->info.filePaths) {
         try {
             std::wstring command = L"explorer /select,\"";
@@ -315,8 +316,7 @@ void PictureFrame::openFileLocation() const {
     }
 }
 void PictureFrame::openIllustratorUrl() const {
-    if (released) return;
-    if (!metadataItem) return;
+    if (released || !metadataItem) return;
     if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(
             QUrl(QString::fromStdString(PIXIV_AUTHOR_URL + std::to_string(metadataItem->metadata.authorID))));
@@ -326,8 +326,7 @@ void PictureFrame::openIllustratorUrl() const {
     }
 }
 void PictureFrame::openIdUrl() const {
-    if (released) return;
-    if (!metadataItem) return;
+    if (released || !metadataItem) return;
     if (metadataItem->metadata.platformType == PlatformType::Pixiv) {
         QDesktopServices::openUrl(QUrl(QString::fromStdString(PIXIV_BASE_URL + std::to_string(metadataItem->metadata.id))));
     } else if (metadataItem->metadata.platformType == PlatformType::Twitter) {

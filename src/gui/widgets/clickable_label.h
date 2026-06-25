@@ -44,6 +44,13 @@ public:
             setFont(originalFont_);
         }
     }
+    void reset() {
+        clear();
+        setResponsive(true);
+        setHighlighted(false);
+        setFont(originalFont_);
+        setPalette(originalPalette_);
+    }
 signals:
     void clicked();
     void hovered(bool entered);

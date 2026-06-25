@@ -34,6 +34,9 @@ class MainWindow;
 
 enum class LoadType { Thumbnail, Preview };
 
+const size_t THUMBNAIL_CACHE_CAPACITY = 200;
+const size_t PREVIEW_CACHE_CAPACITY = 50;
+
 struct ImageLoadTask {
     LoadType loadType;
     uint64_t id;
@@ -54,7 +57,8 @@ public:
 
 class ImageLoader {
 public:
-    ImageLoader(MainWindow* mainWindow, size_t numThreads = std::thread::hardware_concurrency());
+    ImageLoader(MainWindow* mainWindow,
+                size_t numThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) / 2));
     ~ImageLoader();
 
     QImage* getImage(const PicInfo& picInfo, LoadType loadType);
@@ -74,6 +78,6 @@ private:
     std::unordered_set<uint64_t> loadingThumbnailIds;
     std::unordered_set<uint64_t> loadingPreviewIds;
 
-    ImageCache thumbnailCache{200}; // LRU cache for thumbnails
-    ImageCache previewCache{50};    // LRU cache for previews
+    ImageCache thumbnailCache{THUMBNAIL_CACHE_CAPACITY};
+    ImageCache previewCache{PREVIEW_CACHE_CAPACITY};
 };

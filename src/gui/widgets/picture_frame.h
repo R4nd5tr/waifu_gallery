@@ -62,6 +62,7 @@ protected:
     void leaveEvent(QEvent* event) override {
         QFrame::leaveEvent(event);
         hidePreview();
+        previewingIndex = 0;
         showPicInfo();
     }
     bool eventFilter(QObject* obj, QEvent* event) override;

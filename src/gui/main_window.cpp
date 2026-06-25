@@ -592,8 +592,8 @@ void MainWindow::handleSearchResults(DisplayItems* displayItems,
                                      size_t requestId) {
     if (requestId != searchRequestId) return;
     displayController.setDisplayItems(displayItems, searchCtx.searchField);
-    displayTags(availableTags, availablePlatformTags);
     displayController.sortDisplayItems(sortCtx);
+    displayTags(availableTags, availablePlatformTags);
 }
 
 // Functions for window resizing and layout
