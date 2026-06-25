@@ -103,6 +103,9 @@ private:
     void initTagger();
 
     FilterContext filterCtx;
+    void updateShowUnknowPlatform(bool checked);
+    void updateShowPixiv(bool checked);
+    void updateShowTwitter(bool checked);
     void updateShowPNG(bool checked);
     void updateShowJPG(bool checked);
     void updateShowGIF(bool checked);

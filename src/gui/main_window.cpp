@@ -105,6 +105,9 @@ void MainWindow::connectSignalSlots() {
     tagSearchTimer.setSingleShot(true);
 
     // filter checkboxes
+    connect(ui->unknowPlatformCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowUnknowPlatform);
+    connect(ui->pixivPlatformCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowPixiv);
+    connect(ui->twitterPlatformCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowTwitter);
     connect(ui->jpgCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowJPG);
     connect(ui->pngCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowPNG);
     connect(ui->gifCheckBox, &QCheckBox::toggled, this, &MainWindow::updateShowGIF);
@@ -264,6 +267,18 @@ void MainWindow::initTagger() {
 
 // Functions for filters and sorting
 
+void MainWindow::updateShowUnknowPlatform(bool checked) {
+    filterCtx.showUnknowPlatform = checked;
+    displayController.setFilterContext(filterCtx);
+}
+void MainWindow::updateShowPixiv(bool checked) {
+    filterCtx.showPixiv = checked;
+    displayController.setFilterContext(filterCtx);
+}
+void MainWindow::updateShowTwitter(bool checked) {
+    filterCtx.showTwitter = checked;
+    displayController.setFilterContext(filterCtx);
+}
 void MainWindow::updateShowJPG(bool checked) {
     filterCtx.showJPG = checked;
     displayController.setFilterContext(filterCtx);
