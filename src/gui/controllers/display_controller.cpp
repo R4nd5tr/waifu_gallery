@@ -33,10 +33,6 @@ void DisplayController::setup() {
     picFramePool = std::make_unique<PicFramePool>(ui->picBrowseWidget, imageLoader);
 }
 void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField searchField) {
-    Debug() << "Setting display items, count: "
-            << (displayItems ? (displayItems->type == DisplayItemType::Metadata ? displayItems->metadataItems.size()
-                                                                                : displayItems->picItems.size())
-                             : 0);
     clearDisplay();
     if (this->displayItems) delete this->displayItems; // delete previous displayItems
     this->displayItems = displayItems;
@@ -55,13 +51,11 @@ void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField 
 // helper functions
 
 void DisplayController::clearDisplay() {
-    Debug() << "Clearing display";
     displayingItemIndices.clear();
     scrollBarValue = 0;
     picIdToFrameIdxMap.clear();
     nextMatchSortedIndex = 0;
     if (displaying) {
-        Debug() << "Releasing displayed PictureFrames from " << startDisplayIndex << " to " << endDisplayIndex;
         for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
             picFramePool->release(picFrames[i]);
         }
@@ -146,8 +140,8 @@ void DisplayController::displayPicFrames() {
                 // no more items to display
                 newEndDisplayIndex = displayingItemIndices.size();
                 // update totalHeight to reflect the actual number of items that match the filter
-                totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (displayingItemIndices.size() / this->picsPerRow + 1);
-                ui->picBrowseWidget->setMinimumHeight(this->totalHeight);
+                totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (displayingItemIndices.size() / picsPerRow + 1);
+                ui->picBrowseWidget->setMinimumHeight(totalHeight);
                 break;
             }
 
@@ -218,9 +212,22 @@ bool DisplayController::fillFilteredItemUntil(int displayIndex) {
 // Event handlers
 
 void DisplayController::handleWindowResize() {
-    this->totalWidth = ui->picBrowseScrollArea->width();
-    this->viewportHeight = ui->picBrowseScrollArea->height();
-    this->picsPerRow = std::max(0, ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING))) + 1;
+    int currentDisplayOffset = std::max(0, (scrollBarValue - MARGIN)) % (PIC_FRAME_HEIGHT + SPACING);
+    int col = currentDisplayOffset / ((PIC_FRAME_WIDTH + SPACING) / picsPerRow);
+    int currentDisplayIdxLocation = picsPerRow * (std::max(0, (scrollBarValue - MARGIN)) / (PIC_FRAME_HEIGHT + SPACING)) + col;
+
+    totalWidth = ui->picBrowseScrollArea->width();
+    viewportHeight = ui->picBrowseScrollArea->height();
+
+    int newPicsPerRow = std::max(0, ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING))) + 1;
+    if (newPicsPerRow != picsPerRow) { // make sure resizing does not change or shift displaying content
+        picsPerRow = newPicsPerRow;
+        scrollBarValue = MARGIN + (currentDisplayIdxLocation / picsPerRow) * (PIC_FRAME_HEIGHT + SPACING) +
+                         (currentDisplayIdxLocation % picsPerRow) * ((PIC_FRAME_WIDTH + SPACING) / picsPerRow);
+        totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
+        ui->picBrowseWidget->setMinimumHeight(totalHeight);
+        ui->picBrowseScrollArea->verticalScrollBar()->setValue(scrollBarValue);
+    }
     if (displayItems) {
         displayPicFrames();
         for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
@@ -230,7 +237,7 @@ void DisplayController::handleWindowResize() {
     }
 }
 void DisplayController::handleScrollBarValueChanged(int value) {
-    this->scrollBarValue = value;
+    scrollBarValue = value;
     displayPicFrames();
 }
 
@@ -238,10 +245,6 @@ void DisplayController::handleScrollBarValueChanged(int value) {
 
 void DisplayController::sortDisplayItems(const SortContext& sortContext) {
     if (!displayItems) return; // no display items to display
-    Debug() << "Sorting display items, count: "
-            << (displayItems ? (displayItems->type == DisplayItemType::Metadata ? displayItems->metadataItems.size()
-                                                                                : displayItems->picItems.size())
-                             : 0);
 
     if (displayMode == DisplayItemType::Pic) {
         std::sort(sortedItemIndices.begin(), sortedItemIndices.end(), [&](int a, int b) {

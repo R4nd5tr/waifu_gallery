@@ -83,7 +83,7 @@ private:
     int totalHeight = 0;
     int viewportHeight = 0;
     int scrollBarValue = 0;
-    int picsPerRow = 0;
+    int picsPerRow = 1;
     bool displaying = false;
 
     Vec2 getPicFramePosition(int displayIndex) const;

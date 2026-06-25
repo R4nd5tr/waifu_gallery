@@ -594,6 +594,10 @@ void MainWindow::handleSearchResults(DisplayItems* displayItems,
     displayController.setDisplayItems(displayItems, searchCtx.searchField);
     displayController.sortDisplayItems(sortCtx);
     displayTags(availableTags, availablePlatformTags);
+    ui->statusbar->showMessage("搜索完成，共找到 " +
+                               QString::number(displayItems->type == DisplayItemType::Pic ? displayItems->picItems.size()
+                                                                                          : displayItems->metadataItems.size()) +
+                               " 个结果");
 }
 
 // Functions for window resizing and layout
