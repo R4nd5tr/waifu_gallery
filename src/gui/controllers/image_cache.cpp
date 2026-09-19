@@ -76,3 +76,13 @@ QImage* ImageCache::get(uint64_t id) {
     }
     return nodeArray[index].img.get();
 }
+
+void ImageCache::clear() {
+    std::lock_guard<std::mutex> lock(mutex);
+    for (size_t i = 0; i < size; ++i) {
+        nodeArray[i].img.reset();
+    }
+    size = 0;
+    idToIndexMap.clear();
+    headIndex = tailIndex = 0;
+};

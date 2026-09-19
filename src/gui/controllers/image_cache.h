@@ -40,15 +40,7 @@ public:
     void put(uint64_t id, std::unique_ptr<QImage> img);
     QImage* get(uint64_t id);
 
-    void clear() {
-        std::lock_guard<std::mutex> lock(mutex);
-        for (size_t i = 0; i < size; ++i) {
-            nodeArray[i].img.reset();
-        }
-        size = 0;
-        idToIndexMap.clear();
-        headIndex = tailIndex = 0;
-    };
+    void clear();
 
 private:
     size_t capacity;
