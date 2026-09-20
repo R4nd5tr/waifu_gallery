@@ -54,7 +54,7 @@ Waifu Gallery is a desktop application developed based on Qt6, specifically desi
 
 ## Project Scale
 
-- About 30 C++ source files, about 4000 lines
+- About 40 C++ source files, about 5400 lines
 - 11 database tables, including foreign keys and indexes
 - Automatic tag classification, including 9176 tags
 
