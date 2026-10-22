@@ -18,8 +18,8 @@
 
 #pragma once
 #include "about_dialog.h"
-#include "controllers/context_controller.h"
 #include "controllers/display_controller.h"
+#include "controllers/support/context.h"
 #include "controllers/support/image_loader.h"
 #include "controllers/support/worker.h"
 #include "service/database.h"

@@ -18,8 +18,8 @@
 
 #pragma once
 #include "../widgets/picture_frame.h"
-#include "context_controller.h"
 #include "service/model.h"
+#include "support/context.h"
 #include "support/image_loader.h"
 #include "support/picture_frame_pool.h"
 #include <queue>

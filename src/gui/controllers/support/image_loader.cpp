@@ -17,7 +17,6 @@
  */
 
 #include "image_loader.h"
-#include "../main_window.h"
 #include "utils/logger.h"
 #include <QCoreApplication>
 #include <QImageReader>

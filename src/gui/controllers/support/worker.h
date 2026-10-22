@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "context_controller.h"
+#include "context.h"
 #include "service/database.h"
 #include <QObject>
 #include <QPixmap>
