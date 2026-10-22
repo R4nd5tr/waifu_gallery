@@ -17,7 +17,7 @@
  */
 
 #include "main_window.h"
-#include "controllers/utils.h"
+#include "controllers/support/utils.h"
 #include "service/database.h"
 #include "ui_main_window.h"
 #include "utils/settings.h"

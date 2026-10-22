@@ -19,9 +19,9 @@
 #pragma once
 #include "../widgets/picture_frame.h"
 #include "context_controller.h"
-#include "image_loader.h"
-#include "picture_frame_pool.h"
 #include "service/model.h"
+#include "support/image_loader.h"
+#include "support/picture_frame_pool.h"
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
