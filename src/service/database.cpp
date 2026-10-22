@@ -334,6 +334,17 @@ void PicDatabase::initImportedFiles() const {
 
 bool PicDatabase::insertPicture(const ParsedPicture& picInfo) const {
     SQLiteStatement stmt;
+    // Check if the picture already exists
+    stmt = prepare("SELECT size FROM pictures WHERE id = ?");
+    sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(picInfo.id));
+    if (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        auto existingSize = sqlite3_column_int(stmt.get(), 0);
+        if (existingSize != picInfo.size) {
+            Error() << "Picture ID conflict. ID: " << picInfo.id << " existing size: " << existingSize
+                    << " new size: " << picInfo.size << " file: " << picInfo.filePath;
+        }
+    }
+
     // insert into pictures table
     stmt = prepare(R"(
         INSERT OR IGNORE INTO pictures(
@@ -345,7 +356,7 @@ bool PicDatabase::insertPicture(const ParsedPicture& picInfo) const {
     sqlite3_bind_int64(stmt.get(), 1, uint64_to_int64(picInfo.id));
     sqlite3_bind_int(stmt.get(), 2, picInfo.width);
     sqlite3_bind_int(stmt.get(), 3, picInfo.height);
-    sqlite3_bind_int64(stmt.get(), 4, picInfo.size);
+    sqlite3_bind_int(stmt.get(), 4, picInfo.size);
     sqlite3_bind_int(stmt.get(), 5, static_cast<int>(picInfo.fileType));
     sqlite3_bind_text(stmt.get(), 6, picInfo.editTime.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt.get(), 7, picInfo.downloadTime.c_str(), -1, SQLITE_TRANSIENT);
