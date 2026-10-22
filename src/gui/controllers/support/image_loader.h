@@ -24,6 +24,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -48,16 +49,11 @@ struct ImageLoadResult {
     uint64_t id;
 };
 
-class ImageLoadCompleteEvent : public QEvent {
-public:
-    static const QEvent::Type EventType;
-    ImageLoadCompleteEvent(ImageLoadResult result) : QEvent(EventType), result(result) {}
-    ImageLoadResult result;
-};
+using ImageLoadCompleteCallback = std::function<void(const ImageLoadResult&)>;
 
 class ImageLoader {
 public:
-    ImageLoader(MainWindow* mainWindow,
+    ImageLoader(ImageLoadCompleteCallback callback,
                 size_t numThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) / 2));
     ~ImageLoader();
 
@@ -68,7 +64,7 @@ public:
 private:
     void stop();
     void workerFunction();
-    MainWindow* mainWindow;
+    ImageLoadCompleteCallback imageLoadCompleteCallback;
     std::vector<std::thread> workers;
     std::queue<ImageLoadTask> taskQueue;
     std::mutex mutex;

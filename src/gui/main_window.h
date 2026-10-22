@@ -61,6 +61,12 @@ public:
     size_t progress;
     size_t total;
 };
+class ImageLoadCompleteEvent : public QEvent {
+public:
+    static const QEvent::Type EventType;
+    ImageLoadCompleteEvent(ImageLoadResult result) : QEvent(EventType), result(result) {}
+    ImageLoadResult result;
+};
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -73,6 +79,9 @@ public:
     };
     ProgressCallback reportTaggingProgress = [this](size_t progress, size_t total) {
         QCoreApplication::postEvent(this, new TaggingProgressReportEvent(progress, total));
+    };
+    ImageLoadCompleteCallback imageLoadComplete = [this](const ImageLoadResult& result) {
+        QCoreApplication::postEvent(this, new ImageLoadCompleteEvent(result));
     };
 
 signals:
@@ -89,8 +98,8 @@ private:
     Ui::MainWindow* ui;
     PicDatabase database;
     QThread* searchWorkerThread = nullptr;
-    ImageLoader imageLoader{this};           // Blazing fast!!!
-    Importer importer{reportImportProgress}; // Blazing fast!!!
+    ImageLoader imageLoader{imageLoadComplete}; // Blazing fast!!!
+    Importer importer{reportImportProgress};    // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
     DisplayController displayController;
     void initInterface();

@@ -25,9 +25,7 @@
 constexpr size_t THUMBNAIL_RESOLUTION_LIMIT = 256;
 constexpr size_t PREVIEW_RESOLUTION_LIMIT = 512;
 
-const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
-
-ImageLoader::ImageLoader(MainWindow* mainWindow, size_t numThreads) : mainWindow(mainWindow) {
+ImageLoader::ImageLoader(ImageLoadCompleteCallback callback, size_t numThreads) : imageLoadCompleteCallback(callback) {
     for (size_t i = 0; i < numThreads; ++i) {
         workers.emplace_back(&ImageLoader::workerFunction, this);
     }
@@ -155,6 +153,6 @@ void ImageLoader::workerFunction() {
             loadingSet.erase(task.id);
         }
 
-        QCoreApplication::postEvent(mainWindow, new ImageLoadCompleteEvent({task.loadType, task.id}));
+        if (imageLoadCompleteCallback) imageLoadCompleteCallback({task.loadType, task.id});
     }
 }

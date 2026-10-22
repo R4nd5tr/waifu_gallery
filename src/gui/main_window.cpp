@@ -27,6 +27,7 @@
 
 const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 const QEvent::Type TaggingProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
+const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 
 // MainWindow implementation
 
