@@ -63,13 +63,12 @@ private:
     size_t importedCount = 0;
     std::atomic<size_t> supportedFileCount = 0;
 
-    std::queue<ParsedPicture> parsedPictureQueue; // one ParsedPicture represents one image file
-    std::mutex parsedPicQueueMutex;
+    std::mutex queueMutex;
+    std::condition_variable cv;
+    std::queue<ParsedPicture> parsedPictureQueue;             // one ParsedPicture represents one image file
     std::queue<std::vector<ParsedMetadata>> metadataVecQueue; // one vector represents one metadata file
-    std::mutex parsedMetadataQueueMutex;
 
     std::atomic<bool> stopFlag = false;
-    std::condition_variable cv;
 
     void workerThreadFunc();
     void insertThreadFunc();

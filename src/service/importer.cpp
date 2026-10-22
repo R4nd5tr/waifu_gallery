@@ -64,16 +64,13 @@ bool Importer::finish() {
     importedCount = 0;
     supportedFileCount.store(0);
 
-    parsedPicQueueMutex.lock();
+    std::lock_guard<std::mutex> lock(queueMutex);
     while (!parsedPictureQueue.empty()) {
         parsedPictureQueue.pop();
     }
-    parsedPicQueueMutex.unlock();
-    parsedMetadataQueueMutex.lock();
     while (!metadataVecQueue.empty()) {
         metadataVecQueue.pop();
     }
-    parsedMetadataQueueMutex.unlock();
 
     stopFlag.store(false);
 
@@ -127,29 +124,29 @@ void Importer::workerThreadFunc() {
 
     // Wait until files are collected
     while (!readyFlag.load() && !stopFlag.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     if (stopFlag.load()) return;
 
     while ((index = nextFileIndex.fetch_add(1)) < files.size()) {
         if (parsedPictures.size() >= 100) {
-            if (parsedPicQueueMutex.try_lock()) {
+            if (queueMutex.try_lock()) {
                 while (!parsedPictures.empty()) {
                     parsedPictureQueue.push(std::move(parsedPictures.back()));
                     parsedPictures.pop_back();
                 }
-                parsedPicQueueMutex.unlock();
+                queueMutex.unlock();
                 parsedPictures.clear();
                 cv.notify_one();
             }
         }
         if (ParsedMetadataVecs.size() >= 100) {
-            if (parsedMetadataQueueMutex.try_lock()) {
+            if (queueMutex.try_lock()) {
                 while (!ParsedMetadataVecs.empty()) {
                     metadataVecQueue.push(std::move(ParsedMetadataVecs.back()));
                     ParsedMetadataVecs.pop_back();
                 }
-                parsedMetadataQueueMutex.unlock();
+                queueMutex.unlock();
                 ParsedMetadataVecs.clear();
                 cv.notify_one();
             }
@@ -159,7 +156,7 @@ void Importer::workerThreadFunc() {
         if (!processSingleFile(filePath, parserType, parsedPictures, ParsedMetadataVecs)) supportedFileCount.fetch_sub(1);
     }
     if (!parsedPictures.empty()) {
-        std::lock_guard<std::mutex> lock(parsedPicQueueMutex);
+        std::lock_guard<std::mutex> lock(queueMutex);
         while (!parsedPictures.empty()) {
             parsedPictureQueue.push(std::move(parsedPictures.back()));
             parsedPictures.pop_back();
@@ -168,7 +165,7 @@ void Importer::workerThreadFunc() {
         cv.notify_one();
     }
     if (!ParsedMetadataVecs.empty()) {
-        std::lock_guard<std::mutex> lock(parsedMetadataQueueMutex);
+        std::lock_guard<std::mutex> lock(queueMutex);
         while (!ParsedMetadataVecs.empty()) {
             metadataVecQueue.push(std::move(ParsedMetadataVecs.back()));
             ParsedMetadataVecs.pop_back();
@@ -179,7 +176,6 @@ void Importer::workerThreadFunc() {
 }
 void Importer::insertThreadFunc() {
     PicDatabase threadDb(dbFile, DbMode::Import);
-    std::mutex conditionMutex;
     std::vector<ParsedPicture> picsToInsert;
     picsToInsert.reserve(1000);
     std::vector<std::vector<ParsedMetadata>> metadataVecsToInsert;
@@ -199,43 +195,42 @@ void Importer::insertThreadFunc() {
     threadDb.beginTransaction();
     while (!stopFlag.load() && importedCount < supportedFileCount.load()) {
         if (progressCallback) progressCallback(importedCount, supportedFileCount.load());
-        std::unique_lock<std::mutex> lock(conditionMutex);
-        cv.wait(lock, [this]() { return !parsedPictureQueue.empty() || !metadataVecQueue.empty() || stopFlag.load(); });
-        if (stopFlag.load()) break;
-        if (!parsedPictureQueue.empty()) {
-            if (parsedPicQueueMutex.try_lock()) {
+        {
+            std::unique_lock<std::mutex> lock(queueMutex);
+            cv.wait(lock, [this]() { return !parsedPictureQueue.empty() || !metadataVecQueue.empty() || stopFlag.load(); });
+            if (stopFlag.load()) break;
+
+            if (!parsedPictureQueue.empty()) {
                 while (!parsedPictureQueue.empty()) {
-                    picsToInsert.push_back(std::move(parsedPictureQueue.front()));
+                    picsToInsert.emplace_back(std::move(parsedPictureQueue.front()));
                     parsedPictureQueue.pop();
                 }
-                parsedPicQueueMutex.unlock();
-                for (const auto& picInfo : picsToInsert) {
-                    threadDb.insertPicture(picInfo);
-                    importedCount++;
-                }
-                picsToInsert.clear();
             }
-        }
-        if (!metadataVecQueue.empty()) {
-            if (parsedMetadataQueueMutex.try_lock()) {
+            if (!metadataVecQueue.empty()) {
                 while (!metadataVecQueue.empty()) {
-                    metadataVecsToInsert.push_back(std::move(metadataVecQueue.front()));
+                    metadataVecsToInsert.emplace_back(std::move(metadataVecQueue.front()));
                     metadataVecQueue.pop();
                 }
-                parsedMetadataQueueMutex.unlock();
-                for (const auto& metadataVec : metadataVecsToInsert) {
-                    for (const auto& metadataInfo : metadataVec) {
-                        if (metadataInfo.updateIfExists) {
-                            threadDb.updateMetadata(metadataInfo);
-                        } else {
-                            threadDb.insertMetadata(metadataInfo);
-                        }
-                    }
-                    importedCount++;
-                }
-                metadataVecsToInsert.clear();
             }
         }
+
+        for (const auto& picInfo : picsToInsert) {
+            threadDb.insertPicture(picInfo);
+            importedCount++;
+        }
+        picsToInsert.clear();
+
+        for (const auto& metadataVec : metadataVecsToInsert) {
+            for (const auto& metadataInfo : metadataVec) {
+                if (metadataInfo.updateIfExists) {
+                    threadDb.updateMetadata(metadataInfo);
+                } else {
+                    threadDb.insertMetadata(metadataInfo);
+                }
+            }
+            importedCount++;
+        }
+        metadataVecsToInsert.clear();
     }
     Info() << "Finalizing import";
     if (stopFlag.load()) {
