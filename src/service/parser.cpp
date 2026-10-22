@@ -161,7 +161,7 @@ ParsedMetadata parsePixivMetadata(const std::filesystem::path& pixivMetadataFile
             }
             if (line == "Tags") {              // This logic handles two formats of metadata files:
                 std::getline(file, line);      // 1. The description section is at the end of the file.
-                while (!line.empty()) {           // 2. The description section is followed by the tags section.
+                while (!line.empty()) {        // 2. The description section is followed by the tags section.
                     info.tags.push_back(line); // This approach ensures all line breaks in the description are
                     std::getline(file, line);  // preserved and both formats are supported.
                 }
@@ -219,42 +219,51 @@ std::vector<ParsedMetadata> parsePixivCsv(const std::filesystem::path& pixivCsvF
     }
     return result;
 }
+ParsedMetadata pixivJsonToMetadata(const nlohmann::json& obj) {
+    ParsedMetadata info;
+    info.platformType = PlatformType::Pixiv;
+    info.updateIfExists = true;
+    info.id = obj.value("idNum", 0LL);
+    info.title = obj.value("title", "");
+    info.description = obj.value("description", "");
+    info.authorName = obj.value("user", "");
+    info.authorID = std::stoul(obj.value("userId", ""));
+    info.likeCount = obj.value("likeCount", 0);
+    info.viewCount = obj.value("viewCount", 0);
+    info.restrictType = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
+    info.aiType = static_cast<AIType>(obj.value("aiType", 0));
+    info.date = replacePlusZeroWithZ(obj.value("date", ""));
+
+    // tags
+    if (obj.contains("tags") && obj["tags"].is_array()) {
+        for (const auto& tag : obj["tags"]) {
+            info.tags.push_back(tag.get<std::string>());
+        }
+    }
+    // tagsWithTransl
+    if (obj.contains("tagsWithTransl") && obj["tagsWithTransl"].is_array()) {
+        for (const auto& tag : obj["tagsWithTransl"]) {
+            info.tagsTransl.push_back(tag.get<std::string>());
+        }
+    }
+    return info;
+}
 std::vector<ParsedMetadata> parsePixivJson(const std::filesystem::path& pixivJsonFilePath) {
     std::vector<ParsedMetadata> result;
     std::vector<uint8_t> data = readFileToBuffer(pixivJsonFilePath);
     auto json = nlohmann::json::parse(data, nullptr, false);
-    if (json.is_discarded() || !json.is_array()) {
-        Error() << "Failed to parse JSON or JSON is not an array.";
+    if (json.is_discarded()) {
+        Error() << "Failed to parse JSON. File: " << pixivJsonFilePath;
         return result;
     }
-    for (const auto& obj : json) {
-        ParsedMetadata info;
-        info.platformType = PlatformType::Pixiv;
-        info.updateIfExists = true;
-        info.id = obj.value("idNum", 0LL);
-        info.title = obj.value("title", "");
-        info.description = obj.value("description", "");
-        info.authorName = obj.value("user", "");
-        info.authorID = std::stoul(obj.value("userId", ""));
-        info.likeCount = obj.value("likeCount", 0);
-        info.viewCount = obj.value("viewCount", 0);
-        info.restrictType = static_cast<RestrictType>(obj.value("xRestrict", 0) + 1);
-        info.aiType = static_cast<AIType>(obj.value("aiType", 0));
-        info.date = replacePlusZeroWithZ(obj.value("date", ""));
-
-        // tags
-        if (obj.contains("tags") && obj["tags"].is_array()) {
-            for (const auto& tag : obj["tags"]) {
-                info.tags.push_back(tag.get<std::string>());
-            }
+    if (json.is_array()) {
+        for (const auto& obj : json) {
+            result.emplace_back(pixivJsonToMetadata(obj));
         }
-        // tagsWithTransl
-        if (obj.contains("tagsWithTransl") && obj["tagsWithTransl"].is_array()) {
-            for (const auto& tag : obj["tagsWithTransl"]) {
-                info.tagsTransl.push_back(tag.get<std::string>());
-            }
-        }
-        result.push_back(info);
+    } else if (json.is_object()) {
+        result.emplace_back(pixivJsonToMetadata(json));
+    } else {
+        Error() << "Unexpected JSON format. File: " << pixivJsonFilePath;
     }
     return result;
 }
