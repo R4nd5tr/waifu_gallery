@@ -20,16 +20,6 @@
 
 // initialization
 
-DisplayController::DisplayController(DisplayUi ui, ImageLoader& imageLoader)
-    : ui(ui), imageLoader(imageLoader), picFramePool(ui.picBrowseWidget, imageLoader) {
-    connectSignalSlots();
-}
-DisplayController::~DisplayController() {
-    if (displayItems) {
-        delete displayItems;
-        displayItems = nullptr;
-    }
-}
 void DisplayController::connectSignalSlots() {
     connect(ui.picBrowseScrollBar, &QScrollBar::valueChanged, this, &DisplayController::handleScrollBarValueChanged);
 }

@@ -24,7 +24,7 @@
 
 class PicFramePool {
 public:
-    PicFramePool(QWidget* parentWidget, ImageLoader& imageLoader) : parentWidget(parentWidget), imageLoader(imageLoader) {};
+    PicFramePool(ImageLoader& imageLoader) : imageLoader(imageLoader) {};
     ~PicFramePool() {
         while (!availableFrames.empty()) {
             delete availableFrames.front();
@@ -34,6 +34,7 @@ public:
             delete frame;
         }
     };
+    void setParentWidget(QWidget* parent) { parentWidget = parent; }
     PictureFrame* acquire(const PicItem* picItem, const MetadataItem* metadataItem, SearchField searchField) {
         PictureFrame* frame;
         if (!availableFrames.empty()) {

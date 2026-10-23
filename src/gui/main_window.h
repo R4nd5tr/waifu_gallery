@@ -83,21 +83,21 @@ protected:
     bool event(QEvent* event) override;
 
 private:
-    // initialize
     Ui::MainWindow* ui;
     PicDatabase database;
     ImageLoader imageLoader{imageLoadComplete}; // Blazing fast!!!
     Importer importer{reportImportProgress};    // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
-    std::unique_ptr<DisplayController> displayController;
-    std::unique_ptr<FilterSortController> filterSortController;
-    std::unique_ptr<SearchController> searchController;
-    std::unique_ptr<TaskController> taskController;
+    DisplayController displayController{imageLoader};
+    FilterSortController filterSortController{displayController};
+    SearchController searchController{displayController, filterSortController};
+    TaskController taskController{importer, tagger, searchController};
+
     void connectSignalSlots();
     void initTagger();
 
     AboutDialog* aboutDialog = nullptr;
-    void handleShowAboutAction();
     SettingsDialog* settingsDialog = nullptr;
+    void handleShowAboutAction();
     void handleShowSettingsAction();
 };

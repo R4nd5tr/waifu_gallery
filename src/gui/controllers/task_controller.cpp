@@ -21,11 +21,6 @@
 #include <QFileDialog>
 #include <QMessageBox>
 
-TaskController::TaskController(TaskUi ui, Importer& importer, Tagger& tagger, SearchController& searchController)
-    : ui(ui), importer(importer), tagger(tagger), searchController(searchController) {
-    connectSignalSlots();
-}
-
 void TaskController::connectSignalSlots() {
     ui.progressWidget->hide();
     connect(ui.importNewPicsAction, &QAction::triggered, this, &TaskController::handleImportNewPicsAction);

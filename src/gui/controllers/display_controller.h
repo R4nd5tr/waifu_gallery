@@ -49,8 +49,18 @@ struct Vec2 {
 class DisplayController : public QObject {
     Q_OBJECT
 public:
-    DisplayController(DisplayUi ui, ImageLoader& imageLoader);
-    ~DisplayController();
+    DisplayController(ImageLoader& imageLoader) : imageLoader(imageLoader) {}
+    ~DisplayController() {
+        if (displayItems) {
+            delete displayItems;
+            displayItems = nullptr;
+        }
+    }
+    void setupUi(DisplayUi displayUi) {
+        ui = displayUi;
+        picFramePool.setParentWidget(ui.picBrowseWidget);
+        connectSignalSlots();
+    }
 
     void setDisplayItems(DisplayItems* displayItems, SearchField searchField);
 
@@ -65,7 +75,7 @@ public:
 private:
     DisplayUi ui;
     ImageLoader& imageLoader;
-    PicFramePool picFramePool;
+    PicFramePool picFramePool{imageLoader};
 
     DisplayItemType displayMode = DisplayItemType::Pic;
     DisplayItems* displayItems = nullptr;

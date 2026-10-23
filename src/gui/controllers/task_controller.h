@@ -48,12 +48,17 @@ struct TaskUi {
 class TaskController : public QObject {
     Q_OBJECT
 public:
-    explicit TaskController(TaskUi ui, Importer& importer, Tagger& tagger, SearchController& searchController);
+    explicit TaskController(Importer& importer, Tagger& tagger, SearchController& searchController)
+        : importer(importer), tagger(tagger), searchController(searchController) {}
+
+    void setupUi(TaskUi taskUi) {
+        ui = taskUi;
+        connectSignalSlots();
+    }
 
     void displayImportProgress(size_t progress, size_t total);
     void displayTaggingProgress(size_t progress, size_t total);
     void handleImportExistingDirectoriesAction();
-signals:
 
 private:
     TaskUi ui;

@@ -56,18 +56,21 @@ struct SearchUi {
 class SearchController : public QObject {
     Q_OBJECT
 public:
-    SearchController(SearchUi searchUi, DisplayController& displayController, FilterSortController& filterSortController)
-        : ui(searchUi), displayController(displayController), filterSortController(filterSortController) {
+    SearchController(DisplayController& displayController, FilterSortController& filterSortController)
+        : displayController(displayController), filterSortController(filterSortController) {
         initWorkerThreads();
-        connectSignalSlots();
-        fillComboBoxes();
-        loadTags();
-        displayTags();
     }
     ~SearchController() {
         if (!searchWorkerThread) return;
         searchWorkerThread->quit();
         searchWorkerThread->wait();
+    }
+    void setupUi(SearchUi searchUi) {
+        ui = searchUi;
+        connectSignalSlots();
+        fillComboBoxes();
+        loadTags();
+        displayTags();
     }
 
     void loadTags();

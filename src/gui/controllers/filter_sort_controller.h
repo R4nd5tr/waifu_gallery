@@ -66,11 +66,13 @@ struct FilterSortUi {
 class FilterSortController : public QObject {
     Q_OBJECT
 public:
-    FilterSortController(FilterSortUi ui, DisplayController& displayController) : ui(ui), displayController(displayController) {
+    FilterSortController(DisplayController& displayController) : displayController(displayController) {}
+    ~FilterSortController() = default;
+    void setupUi(FilterSortUi filterSortUi) {
+        ui = filterSortUi;
         connectSignalSlots();
         fillComboBoxes();
     }
-    ~FilterSortController() = default;
 
     SortContext getSortContext() const { return sortCtx; }
 
