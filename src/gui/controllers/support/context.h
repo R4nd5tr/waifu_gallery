@@ -24,6 +24,10 @@
 #include <string>
 #include <unordered_set>
 
+constexpr int DEBOUNCE_DELAY = 300;       // ms for debouncing text input
+constexpr int SLIDER_DEBOUNCE_DELAY = 50; // ms for debouncing slider input
+constexpr int DOUBLE_CLICK_DELAY = 200;   // ms for double click detection
+
 enum class SortBy { None, ID, DownloadDate, EditDate, Size, Filename, Width, Height, Ratio };
 
 enum class SortOrder { Ascending, Descending };

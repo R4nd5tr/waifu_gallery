@@ -22,15 +22,16 @@
 
 // initialization
 
-DisplayController::DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader) : ui(ui), imageLoader(imageLoader) {}
+DisplayController::DisplayController(DisplayUi ui, ImageLoader& imageLoader)
+    : ui(ui), imageLoader(imageLoader), picFramePool(ui.picBrowseWidget, imageLoader) {}
 DisplayController::~DisplayController() {
     if (displayItems) {
         delete displayItems;
         displayItems = nullptr;
     }
 }
-void DisplayController::setup() {
-    picFramePool = std::make_unique<PicFramePool>(ui->picBrowseWidget, imageLoader);
+void DisplayController::connectSignalSlots() {
+    connect(ui.picBrowseScrollBar, &QScrollBar::valueChanged, this, &DisplayController::handleScrollBarValueChanged);
 }
 void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField searchField) {
     clearDisplay();
@@ -46,7 +47,7 @@ void DisplayController::setDisplayItems(DisplayItems* displayItems, SearchField 
 
     resizing = true; // ignore scroll events during resizing
     totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
-    ui->picBrowseWidget->setMinimumHeight(totalHeight);
+    ui.picBrowseWidget->setMinimumHeight(totalHeight);
     resizing = false;
 }
 
@@ -59,17 +60,17 @@ void DisplayController::clearDisplay() {
     nextMatchSortedIndex = 0;
     if (displaying) {
         for (int i = startDisplayIndex; i < endDisplayIndex; i++) {
-            picFramePool->release(picFrames[i]);
+            picFramePool.release(picFrames[i]);
         }
     }
     std::fill(picFrames.begin(), picFrames.end(), nullptr);
     startDisplayIndex = 0;
     endDisplayIndex = 0;
     resizing = true; // ignore scroll events during resizing
-    ui->picBrowseScrollArea->verticalScrollBar()->setValue(0);
+    ui.picBrowseScrollArea->verticalScrollBar()->setValue(0);
     // update totalHeight to max possible height, will be updated when displaying items
     totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
-    ui->picBrowseWidget->setMinimumHeight(totalHeight);
+    ui.picBrowseWidget->setMinimumHeight(totalHeight);
     resizing = false;
 
     displaying = false;
@@ -122,7 +123,7 @@ void DisplayController::displayPicFrames() {
 
                 resizing = true; // ignore scroll events during resizing
                 totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (displayingItemIndices.size() / picsPerRow + 1);
-                ui->picBrowseWidget->setMinimumHeight(totalHeight);
+                ui.picBrowseWidget->setMinimumHeight(totalHeight);
                 resizing = false;
 
                 if (i >= newEndDisplayIndex) break; // no more items to display
@@ -149,7 +150,7 @@ void DisplayController::displayPicFrames() {
                 }
                 break;
             }
-            PictureFrame* picFrame = picFramePool->acquire(picItem, metadataItem, searchField);
+            PictureFrame* picFrame = picFramePool.acquire(picItem, metadataItem, searchField);
             while (picFrames.size() <= i)
                 picFrames.push_back(nullptr);
 
@@ -160,7 +161,7 @@ void DisplayController::displayPicFrames() {
         }
     } else if (newEndDisplayIndex < endDisplayIndex) { // release frames at the bottom
         for (int i = endDisplayIndex - 1; i >= std::max(newEndDisplayIndex, startDisplayIndex); i--) {
-            picFramePool->release(picFrames[i]);
+            picFramePool.release(picFrames[i]);
             picFrames[i] = nullptr;
         }
     }
@@ -184,14 +185,14 @@ void DisplayController::displayPicFrames() {
                 picItem = &displayItems->picItems[metadataItem->picStartIndex];
                 break;
             }
-            PictureFrame* picFrame = picFramePool->acquire(picItem, metadataItem, searchField);
+            PictureFrame* picFrame = picFramePool.acquire(picItem, metadataItem, searchField);
             picFrames[i] = picFrame;
             Vec2 pos = getPicFramePosition(i);
             picFrame->move(pos.x, pos.y);
         }
     } else if (newStartDisplayIndex > startDisplayIndex) { // release frames at the top
         for (int i = startDisplayIndex; i < std::min(newStartDisplayIndex, endDisplayIndex); i++) {
-            picFramePool->release(picFrames[i]);
+            picFramePool.release(picFrames[i]);
             picFrames[i] = nullptr;
         }
     }
@@ -229,16 +230,16 @@ void DisplayController::handleWindowResize() {
     resizing = true; // ignore scroll events during resizing
     int currentDisplayOffset = std::max(0, (scrollBarValue - MARGIN)) % (PIC_FRAME_HEIGHT + SPACING);
 
-    totalWidth = ui->picBrowseScrollArea->width();
-    viewportHeight = ui->picBrowseScrollArea->height();
+    totalWidth = ui.picBrowseScrollArea->width();
+    viewportHeight = ui.picBrowseScrollArea->height();
 
     int newPicsPerRow = std::max(0, ((totalWidth - 2 * MARGIN - PIC_FRAME_WIDTH) / (PIC_FRAME_WIDTH + SPACING))) + 1;
     if (newPicsPerRow != picsPerRow) { // make sure resizing does not change or shift displaying content
         picsPerRow = newPicsPerRow;
         scrollBarValue = MARGIN + (lookingAt / picsPerRow) * (PIC_FRAME_HEIGHT + SPACING) + currentDisplayOffset;
         totalHeight = MARGIN * 2 + (PIC_FRAME_HEIGHT + SPACING) * (sortedItemIndices.size() / picsPerRow + 1);
-        ui->picBrowseWidget->setMinimumHeight(totalHeight);
-        ui->picBrowseScrollArea->verticalScrollBar()->setValue(scrollBarValue);
+        ui.picBrowseWidget->setMinimumHeight(totalHeight);
+        ui.picBrowseScrollArea->verticalScrollBar()->setValue(scrollBarValue);
     }
     if (displayItems) {
         displayPicFrames();

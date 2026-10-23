@@ -22,15 +22,19 @@
 #include "support/context.h"
 #include "support/image_loader.h"
 #include "support/picture_frame_pool.h"
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QWidget>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-namespace Ui {
-class MainWindow;
-}
-
+struct DisplayUi {
+    QWidget* picBrowseWidget;
+    QScrollBar* picBrowseScrollBar;
+    QScrollArea* picBrowseScrollArea;
+};
 const int MARGIN = 20;
 const int SPACING = 10;
 
@@ -44,11 +48,11 @@ struct Vec2 {
     int y;
 };
 
-class DisplayController {
+class DisplayController : public QObject {
+    Q_OBJECT
 public:
-    DisplayController(Ui::MainWindow* ui, ImageLoader* imageLoader);
+    DisplayController(DisplayUi ui, ImageLoader& imageLoader);
     ~DisplayController();
-    void setup();
 
     void setDisplayItems(DisplayItems* displayItems, SearchField searchField);
 
@@ -61,9 +65,9 @@ public:
     void displayImage(uint64_t picId, LoadType loadType); // asynchronous loaded image will be displayed through this function
 
 private:
-    Ui::MainWindow* ui;
-    std::unique_ptr<PicFramePool> picFramePool = nullptr;
-    ImageLoader* imageLoader = nullptr;
+    DisplayUi ui;
+    ImageLoader& imageLoader;
+    PicFramePool picFramePool;
 
     DisplayItemType displayMode = DisplayItemType::Pic;
     DisplayItems* displayItems = nullptr;
@@ -88,6 +92,8 @@ private:
 
     int lookingAt = 0;
     bool resizing = false;
+
+    void connectSignalSlots();
 
     Vec2 getPicFramePosition(int displayIndex) const;
     void displayPicFrames();

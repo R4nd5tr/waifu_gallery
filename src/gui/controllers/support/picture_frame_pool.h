@@ -24,7 +24,7 @@
 
 class PicFramePool {
 public:
-    PicFramePool(QWidget* parentWidget, ImageLoader* imageLoader) : parentWidget(parentWidget), imageLoader(imageLoader) {};
+    PicFramePool(QWidget* parentWidget, ImageLoader& imageLoader) : parentWidget(parentWidget), imageLoader(imageLoader) {};
     ~PicFramePool() {
         while (!availableFrames.empty()) {
             delete availableFrames.front();
@@ -41,7 +41,7 @@ public:
             availableFrames.pop();
             frame->updateDisplayItem(picItem, metadataItem, searchField);
         } else {
-            frame = new PictureFrame(parentWidget, picItem, metadataItem, *imageLoader, searchField);
+            frame = new PictureFrame(parentWidget, picItem, metadataItem, imageLoader, searchField);
         }
         occupiedFrames.insert(frame);
         frame->show();
@@ -61,5 +61,5 @@ private:
     std::queue<PictureFrame*> availableFrames;
 
     QWidget* parentWidget = nullptr;
-    ImageLoader* imageLoader = nullptr;
+    ImageLoader& imageLoader;
 };
