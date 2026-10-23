@@ -67,10 +67,17 @@ ParsedPicture parsePicture(const std::filesystem::path& pictureFilePath, ParserT
     std::string fileName = pictureFilePath.filename().string();
     std::string fileTypeStr = pictureFilePath.extension().string().substr(1);
     std::transform(fileTypeStr.begin(), fileTypeStr.end(), fileTypeStr.begin(), ::toupper);
-    ImageFormat fileType = fileTypeMap.at(fileTypeStr);
+    ImageFormat fileExtensionType = ImageFormat::Unknown;
+    auto it = fileTypeMap.find(fileTypeStr);
+    if (it != fileTypeMap.end()) fileExtensionType = it->second;
 
     int width, height;
+    ImageFormat fileType = ImageFormat::Unknown;
     std::tie(width, height, fileType) = getImageResolutionOptimized(buffer, fileType);
+    if (fileType != fileExtensionType)
+        Warn() << "File extension does not match actual file type for file:" << pictureFilePath.string()
+               << "Extension type:" << ImageFormatStr[static_cast<int>(fileExtensionType)]
+               << "Actual type:" << ImageFormatStr[static_cast<int>(fileType)];
 
     std::string creationTime, lastModifiedTime;
     std::tie(creationTime, lastModifiedTime) = getFileTimestamps(pictureFilePath);

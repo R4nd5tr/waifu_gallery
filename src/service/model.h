@@ -37,6 +37,7 @@ enum class RestrictType { // keep in sync with autotagger module
 };
 enum class AIType { Unknown, NotAI, AI };
 enum class ImageFormat { Unknown, JPG, PNG, GIF, WebP };
+static const std::array<std::string, 5> ImageFormatStr = {"Unknown", "JPG", "PNG", "GIF", "WebP"};
 
 struct PicTag {
     uint32_t tagId;
