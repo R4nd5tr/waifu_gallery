@@ -31,73 +31,73 @@ const QEvent::Type ImageLoadCompleteEvent::EventType = static_cast<QEvent::Type>
 
 // MainWindow implementation
 
-MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow),
-      displayController(DisplayUi{ui->picBrowseWidget, ui->picBrowseScrollArea->verticalScrollBar(), ui->picBrowseScrollArea},
-                        imageLoader),
-      filterSortController(FilterSortUi{ui->unknowPlatformCheckBox,
-                                        ui->pixivPlatformCheckBox,
-                                        ui->twitterPlatformCheckBox,
-                                        ui->jpgCheckBox,
-                                        ui->pngCheckBox,
-                                        ui->gifCheckBox,
-                                        ui->webpCheckBox,
-                                        ui->unknowRestrictCheckBox,
-                                        ui->allAgeCheckBox,
-                                        ui->sensitiveCheckBox,
-                                        ui->questionableCheckBox,
-                                        ui->r18CheckBox,
-                                        ui->r18gCheckBox,
-                                        ui->unknowAICheckBox,
-                                        ui->aiCheckBox,
-                                        ui->noAICheckBox,
-                                        ui->maxWidthEdit,
-                                        ui->maxHeightEdit,
-                                        ui->minWidthEdit,
-                                        ui->minHeightEdit,
-                                        ui->clearResolutionFilterButton,
-                                        ui->enableRatioCheckBox,
-                                        ui->sortComboBox,
-                                        ui->orderComboBox,
-                                        ui->ratioSlider,
-                                        ui->widthRatioSpinBox,
-                                        ui->heightRatioSpinBox},
-                           displayController),
-      searchController(SearchUi{ui->searchPlatformComboBox,
-                                ui->searchComboBox,
-                                ui->searchLineEdit,
-                                ui->generalTagList,
-                                ui->characterTagList,
-                                ui->platformTagList,
-                                ui->clearTextSearchButton,
-                                ui->statusbar,
-                                ui->selectedTagScrollArea,
-                                ui->selectedTagWidget,
-                                ui->tagListTabWidget,
-                                ui->selectedTagLayout,
-                                ui->clearTextSearchButton,
-                                ui->searchTagTextEdit},
-                       displayController,
-                       filterSortController),
-      taskController(TaskUi{ui->importNewPicsAction,
-                            ui->importPowerfulPixivDownloaderAction,
-                            ui->importGallery_dlTwitterAction,
-                            ui->importExistingDirectoriesAction,
-                            ui->startTaggingAction,
-                            ui->progressWidget,
-                            ui->progressBar,
-                            ui->progressLabel,
-                            ui->progressStatusLabel,
-                            ui->statusbar,
-                            ui->cancelProgressButton},
-                     importer,
-                     tagger,
-                     searchController) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow) {
     ui->setupUi(this);
+
+    displayController = std::make_unique<DisplayController>(
+        DisplayUi{ui->picBrowseWidget, ui->picBrowseScrollArea->verticalScrollBar(), ui->picBrowseScrollArea}, imageLoader);
+    filterSortController = std::make_unique<FilterSortController>(FilterSortUi{ui->unknowPlatformCheckBox,
+                                                                               ui->pixivPlatformCheckBox,
+                                                                               ui->twitterPlatformCheckBox,
+                                                                               ui->jpgCheckBox,
+                                                                               ui->pngCheckBox,
+                                                                               ui->gifCheckBox,
+                                                                               ui->webpCheckBox,
+                                                                               ui->unknowRestrictCheckBox,
+                                                                               ui->allAgeCheckBox,
+                                                                               ui->sensitiveCheckBox,
+                                                                               ui->questionableCheckBox,
+                                                                               ui->r18CheckBox,
+                                                                               ui->r18gCheckBox,
+                                                                               ui->unknowAICheckBox,
+                                                                               ui->aiCheckBox,
+                                                                               ui->noAICheckBox,
+                                                                               ui->maxWidthEdit,
+                                                                               ui->maxHeightEdit,
+                                                                               ui->minWidthEdit,
+                                                                               ui->minHeightEdit,
+                                                                               ui->clearResolutionFilterButton,
+                                                                               ui->enableRatioCheckBox,
+                                                                               ui->sortComboBox,
+                                                                               ui->orderComboBox,
+                                                                               ui->ratioSlider,
+                                                                               ui->widthRatioSpinBox,
+                                                                               ui->heightRatioSpinBox},
+                                                                  *displayController);
+    searchController = std::make_unique<SearchController>(SearchUi{ui->searchPlatformComboBox,
+                                                                   ui->searchComboBox,
+                                                                   ui->searchLineEdit,
+                                                                   ui->generalTagList,
+                                                                   ui->characterTagList,
+                                                                   ui->platformTagList,
+                                                                   ui->clearTextSearchButton,
+                                                                   ui->statusbar,
+                                                                   ui->selectedTagScrollArea,
+                                                                   ui->selectedTagWidget,
+                                                                   ui->tagListTabWidget,
+                                                                   ui->selectedTagLayout,
+                                                                   ui->clearTextSearchButton,
+                                                                   ui->searchTagTextEdit},
+                                                          *displayController,
+                                                          *filterSortController);
+    taskController = std::make_unique<TaskController>(TaskUi{ui->importNewPicsAction,
+                                                             ui->importPowerfulPixivDownloaderAction,
+                                                             ui->importGallery_dlTwitterAction,
+                                                             ui->importExistingDirectoriesAction,
+                                                             ui->startTaggingAction,
+                                                             ui->progressWidget,
+                                                             ui->progressBar,
+                                                             ui->progressLabel,
+                                                             ui->progressStatusLabel,
+                                                             ui->statusbar,
+                                                             ui->cancelProgressButton},
+                                                      importer,
+                                                      tagger,
+                                                      *searchController);
 
     Settings::loadSettings();
     resize(Settings::windowWidth, Settings::windowHeight);
-    if (Settings::autoImportOnStartup) taskController.handleImportExistingDirectoriesAction();
+    if (Settings::autoImportOnStartup) taskController->handleImportExistingDirectoriesAction();
 
     initInterface();
     initWorkerThreads();
@@ -105,10 +105,10 @@ MainWindow::MainWindow(QWidget* parent)
     initTagger();
 }
 MainWindow::~MainWindow() {
-    delete ui;
     searchWorkerThread->quit();
     searchWorkerThread->wait();
     Settings::saveSettings();
+    delete ui;
 }
 
 // Initialize functions
@@ -122,8 +122,8 @@ void MainWindow::initWorkerThreads() {
     searchWorkerThread = new QThread(this);
     DatabaseWorker* searchWorker = new DatabaseWorker();
     searchWorker->moveToThread(searchWorkerThread);
-    connect(this, &MainWindow::searchPics, searchWorker, &DatabaseWorker::searchPics);
-    connect(searchWorker, &DatabaseWorker::searchComplete, &searchController, &SearchController::handleSearchResults);
+    connect(searchController.get(), &SearchController::searchPics, searchWorker, &DatabaseWorker::searchPics);
+    connect(searchWorker, &DatabaseWorker::searchComplete, searchController.get(), &SearchController::handleSearchResults);
     connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
     searchWorkerThread->start();
 }
@@ -153,13 +153,13 @@ void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     if (firstShow_) {
         firstShow_ = false;
-        displayController.handleWindowResize();
+        displayController->handleWindowResize();
     }
 }
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     Settings::setWidthHeight(width(), height());
-    displayController.handleWindowResize();
+    displayController->handleWindowResize();
 }
 
 // Custom event handling for image loading and import progress
@@ -167,15 +167,15 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
 bool MainWindow::event(QEvent* event) {
     if (event->type() == ImageLoadCompleteEvent::EventType) {
         auto* imageEvent = static_cast<ImageLoadCompleteEvent*>(event);
-        displayController.displayImage(imageEvent->result.id, imageEvent->result.loadType);
+        displayController->displayImage(imageEvent->result.id, imageEvent->result.loadType);
         return true;
     } else if (event->type() == ImportProgressReportEvent::EventType) {
         auto* importProgressEvent = static_cast<ImportProgressReportEvent*>(event);
-        taskController.displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
+        taskController->displayImportProgress(importProgressEvent->progress, importProgressEvent->total);
         return true;
     } else if (event->type() == TaggingProgressReportEvent::EventType) {
         auto* taggingProgressEvent = static_cast<TaggingProgressReportEvent*>(event);
-        taskController.displayTaggingProgress(taggingProgressEvent->progress, taggingProgressEvent->total);
+        taskController->displayTaggingProgress(taggingProgressEvent->progress, taggingProgressEvent->total);
         return true;
     }
     return QMainWindow::event(event);

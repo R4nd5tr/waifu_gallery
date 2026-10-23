@@ -63,6 +63,7 @@ public:
         connectSignalSlots();
         fillComboBoxes();
         loadTags();
+        displayTags();
     }
     ~SearchController() = default;
 

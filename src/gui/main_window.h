@@ -21,7 +21,6 @@
 #include "controllers/display_controller.h"
 #include "controllers/filter_sort_controller.h"
 #include "controllers/search_controller.h"
-#include "controllers/support/context.h"
 #include "controllers/support/image_loader.h"
 #include "controllers/support/worker.h"
 #include "controllers/task_controller.h"
@@ -30,7 +29,6 @@
 #include "service/model.h"
 #include "service/tagger.h"
 #include "settings_dialog.h"
-#include "widgets/picture_frame.h"
 #include <QCoreApplication>
 #include <QListWidgetItem>
 #include <QMainWindow>
@@ -40,6 +38,7 @@
 #include <QTimer>
 #include <QWidget>
 #include <chrono>
+#include <memory>
 
 namespace Ui {
 class MainWindow;
@@ -99,10 +98,10 @@ private:
     ImageLoader imageLoader{imageLoadComplete}; // Blazing fast!!!
     Importer importer{reportImportProgress};    // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
-    DisplayController displayController;
-    FilterSortController filterSortController;
-    SearchController searchController;
-    TaskController taskController;
+    std::unique_ptr<DisplayController> displayController;
+    std::unique_ptr<FilterSortController> filterSortController;
+    std::unique_ptr<SearchController> searchController;
+    std::unique_ptr<TaskController> taskController;
     void initInterface();
     void initWorkerThreads();
     void connectSignalSlots();
