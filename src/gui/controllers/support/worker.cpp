@@ -17,7 +17,6 @@
  */
 
 #include "worker.h"
-#include "service/database.h"
 #include <QImageReader>
 
 DatabaseWorker::DatabaseWorker(QObject* parent) : QObject(parent), database{DbMode::Query} { // search worker

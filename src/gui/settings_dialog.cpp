@@ -20,6 +20,7 @@
 #include "controllers/support/utils.h"
 #include "ui_settings_dialog.h"
 #include <QComboBox>
+#include <QFileDialog>
 #include <QMessageBox>
 
 QComboBox* createParserComboBox(ParserType type) {

@@ -19,7 +19,6 @@
 #pragma once
 #include "image_cache.h"
 #include "service/model.h"
-#include <QEvent>
 #include <QImage>
 #include <atomic>
 #include <condition_variable>

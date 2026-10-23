@@ -21,6 +21,7 @@
 #include "filter_sort_controller.h"
 #include "service/model.h"
 #include "support/context.h"
+#include "support/worker.h"
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLineEdit>
@@ -34,8 +35,6 @@
 #include <QThread>
 #include <QTimer>
 #include <QWidget>
-#include <chrono>
-#include <string>
 #include <vector>
 
 struct SearchUi {
@@ -45,7 +44,6 @@ struct SearchUi {
     QListWidget* generalTagList;
     QListWidget* characterTagList;
     QListWidget* platformTagList;
-    QPushButton* clearSearchTextButton;
     QStatusBar* statusbar;
     QScrollArea* selectedTagScrollArea;
     QWidget* selectedTagWidget;
@@ -60,12 +58,17 @@ class SearchController : public QObject {
 public:
     SearchController(SearchUi searchUi, DisplayController& displayController, FilterSortController& filterSortController)
         : ui(searchUi), displayController(displayController), filterSortController(filterSortController) {
+        initWorkerThreads();
         connectSignalSlots();
         fillComboBoxes();
         loadTags();
         displayTags();
     }
-    ~SearchController() = default;
+    ~SearchController() {
+        if (!searchWorkerThread) return;
+        searchWorkerThread->quit();
+        searchWorkerThread->wait();
+    }
 
     void loadTags();
     void picSearch();
@@ -88,6 +91,7 @@ private:
     std::vector<PlatformTagCount> allPlatformTags;
     void connectSignalSlots();
     void fillComboBoxes();
+    void initWorkerThreads();
     // pic text search handlers
     void updateSearchPlatform(int index);
     void updateSearchField(int index);

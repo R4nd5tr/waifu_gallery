@@ -17,8 +17,6 @@
  */
 
 #include "display_controller.h"
-#include "ui_main_window.h"
-#include <QScrollBar>
 
 // initialization
 

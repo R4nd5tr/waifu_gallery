@@ -25,9 +25,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QWidget>
-#include <queue>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 struct DisplayUi {

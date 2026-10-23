@@ -19,7 +19,6 @@
 #pragma once
 #include "utils/settings.h"
 #include <QDialog>
-#include <QFileDialog>
 
 namespace Ui {
 class SettingsDialog;

@@ -22,7 +22,6 @@
 #include "controllers/filter_sort_controller.h"
 #include "controllers/search_controller.h"
 #include "controllers/support/image_loader.h"
-#include "controllers/support/worker.h"
 #include "controllers/task_controller.h"
 #include "service/database.h"
 #include "service/importer.h"
@@ -30,14 +29,7 @@
 #include "service/tagger.h"
 #include "settings_dialog.h"
 #include <QCoreApplication>
-#include <QListWidgetItem>
 #include <QMainWindow>
-#include <QPixmap>
-#include <QPushButton>
-#include <QThread>
-#include <QTimer>
-#include <QWidget>
-#include <chrono>
 #include <memory>
 
 namespace Ui {
@@ -94,7 +86,6 @@ private:
     // initialize
     Ui::MainWindow* ui;
     PicDatabase database;
-    QThread* searchWorkerThread = nullptr;
     ImageLoader imageLoader{imageLoadComplete}; // Blazing fast!!!
     Importer importer{reportImportProgress};    // Blazing fast!!!
     Tagger tagger{reportTaggingProgress};
@@ -102,11 +93,7 @@ private:
     std::unique_ptr<FilterSortController> filterSortController;
     std::unique_ptr<SearchController> searchController;
     std::unique_ptr<TaskController> taskController;
-    void initInterface();
-    void initWorkerThreads();
     void connectSignalSlots();
-    std::vector<TagCount> allTags;
-    std::vector<PlatformTagCount> allPlatformTags;
     void initTagger();
 
     AboutDialog* aboutDialog = nullptr;

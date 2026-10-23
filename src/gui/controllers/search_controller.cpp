@@ -28,6 +28,15 @@ QString getTagString(const PlatformTagCount& tagCount) {
         .arg(QString::fromStdString(tagCount.tag.tag))
         .arg(tagCount.count);
 }
+void SearchController::initWorkerThreads() {
+    searchWorkerThread = new QThread(this);
+    DatabaseWorker* searchWorker = new DatabaseWorker();
+    searchWorker->moveToThread(searchWorkerThread);
+    connect(this, &SearchController::searchPics, searchWorker, &DatabaseWorker::searchPics);
+    connect(searchWorker, &DatabaseWorker::searchComplete, this, &SearchController::handleSearchResults);
+    connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
+    searchWorkerThread->start();
+}
 void SearchController::connectSignalSlots() {
     ui.selectedTagScrollArea->hide();
     tagClickTimer.setSingleShot(true);

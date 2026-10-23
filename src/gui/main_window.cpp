@@ -18,12 +18,8 @@
 
 #include "main_window.h"
 #include "controllers/support/utils.h"
-#include "service/database.h"
 #include "ui_main_window.h"
 #include "utils/settings.h"
-#include <QFileDialog>
-#include <QScrollBar>
-#include <QString>
 
 const QEvent::Type ImportProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
 const QEvent::Type TaggingProgressReportEvent::EventType = static_cast<QEvent::Type>(QEvent::registerEventType());
@@ -70,7 +66,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
                                                                    ui->generalTagList,
                                                                    ui->characterTagList,
                                                                    ui->platformTagList,
-                                                                   ui->clearTextSearchButton,
                                                                    ui->statusbar,
                                                                    ui->selectedTagScrollArea,
                                                                    ui->selectedTagWidget,
@@ -97,41 +92,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     Settings::loadSettings();
     resize(Settings::windowWidth, Settings::windowHeight);
-    if (Settings::autoImportOnStartup) taskController->handleImportExistingDirectoriesAction();
 
-    initInterface();
-    initWorkerThreads();
     connectSignalSlots();
     initTagger();
+
+    if (Settings::autoImportOnStartup) taskController->handleImportExistingDirectoriesAction();
 }
 MainWindow::~MainWindow() {
-    searchWorkerThread->quit();
-    searchWorkerThread->wait();
     Settings::saveSettings();
     delete ui;
 }
 
 // Initialize functions
 
-void MainWindow::initInterface() {
-    ui->selectedTagScrollArea->hide();
-    ui->progressWidget->hide();
-}
-
-void MainWindow::initWorkerThreads() {
-    searchWorkerThread = new QThread(this);
-    DatabaseWorker* searchWorker = new DatabaseWorker();
-    searchWorker->moveToThread(searchWorkerThread);
-    connect(searchController.get(), &SearchController::searchPics, searchWorker, &DatabaseWorker::searchPics);
-    connect(searchWorker, &DatabaseWorker::searchComplete, searchController.get(), &SearchController::handleSearchResults);
-    connect(searchWorkerThread, &QThread::finished, searchWorker, &QObject::deleteLater);
-    searchWorkerThread->start();
-}
 void MainWindow::connectSignalSlots() {
     connect(ui->showAboutAction, &QAction::triggered, this, &MainWindow::handleShowAboutAction);
     connect(ui->showSettingsAction, &QAction::triggered, this, &MainWindow::handleShowSettingsAction);
 }
-
 void MainWindow::initTagger() {
     std::vector<std::filesystem::path> taggerPaths = tagger.getExistingTaggerDLLs();
     if (taggerPaths.empty()) {

@@ -27,7 +27,6 @@
 #include <QSpinBox>
 #include <QString>
 #include <QTimer>
-#include <QWidget>
 
 struct FilterSortUi {
     // filter checkboxes
